@@ -48,3 +48,8 @@ legacy-auto-crm/data/*.db*
 
 # Local env files (apps/*/.env)
 apps/*/.env
+
+# CDK synth output
+infra/cdk/cdk.out/
+infra/cdk/dist/
+infra/cdk/cdk.context.json

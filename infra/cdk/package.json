@@ -1,0 +1,27 @@
+{
+  "name": "@legalmene/infra-cdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LegalChile PSL — Infraestructura AWS (CDK)",
+  "bin": {
+    "cdk-app": "dist/bin/app.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy --all --require-approval never",
+    "diff": "cdk diff",
+    "destroy": "cdk destroy --all"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.173.2",
+    "constructs": "^10.4.2",
+    "source-map-support": "^0.5.21"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "aws-cdk": "^2.173.2",
+    "typescript": "^5.7.2"
+  }
+}

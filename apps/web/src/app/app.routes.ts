@@ -21,5 +21,17 @@ export const routes: Routes = [
         (m) => m.AtencionesListComponent,
       ),
   },
+  {
+    path: "atenciones/nueva",
+    loadComponent: () =>
+      import("./features/atenciones/atencion-form.component").then((m) => m.AtencionFormComponent),
+  },
+  {
+    path: "atenciones/:id",
+    loadComponent: () =>
+      import("./features/atenciones/atencion-detail.component").then(
+        (m) => m.AtencionDetailComponent,
+      ),
+  },
   { path: "**", redirectTo: "dashboard" },
 ];
