@@ -9,7 +9,7 @@ import {
   Query,
   UseGuards,
 } from "@nestjs/common";
-import { AuthGuard } from "@nestjs/passport";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ApiBearerAuth, ApiTags, ApiHeader } from "@nestjs/swagger";
 import { AfiliadosService } from "./afiliados.service";
 import { CreateAfiliadoDto, UpdateAfiliadoDto, FiltroAfiliadosDto } from "./dto";
@@ -20,7 +20,7 @@ import { RolesGuard } from "../../common/guards/roles.guard";
 @ApiTags("afiliados")
 @ApiBearerAuth("EntraID")
 @ApiHeader({ name: "X-Cod-Plan", required: true, description: "Plan/Tenant del cliente" })
-@UseGuards(AuthGuard("jwt-entra"), RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("afiliados")
 export class AfiliadosController {
   constructor(private readonly service: AfiliadosService) {}

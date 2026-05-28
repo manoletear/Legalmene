@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
-import { AuthGuard } from "@nestjs/passport";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ApiBearerAuth, ApiHeader, ApiTags } from "@nestjs/swagger";
 import { ComitesService } from "./comites.service";
 import { CodPlan } from "../../common/decorators/cod-plan.decorator";
@@ -11,7 +11,7 @@ import type { ConvocarComite } from "@legalmene/shared";
 @ApiTags("comites")
 @ApiBearerAuth("EntraID")
 @ApiHeader({ name: "X-Cod-Plan", required: true })
-@UseGuards(AuthGuard("jwt-entra"), RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
 export class ComitesController {
   constructor(private readonly service: ComitesService) {}

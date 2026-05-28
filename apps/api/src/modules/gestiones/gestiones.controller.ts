@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Put, UseGuards } from "@nestjs/common";
-import { AuthGuard } from "@nestjs/passport";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ApiBearerAuth, ApiHeader, ApiTags } from "@nestjs/swagger";
 import { GestionesService } from "./gestiones.service";
 import { CodPlan } from "../../common/decorators/cod-plan.decorator";
@@ -10,7 +10,7 @@ import type { CreateGestion, CompletarGestion } from "@legalmene/shared";
 @ApiTags("gestiones")
 @ApiBearerAuth("EntraID")
 @ApiHeader({ name: "X-Cod-Plan", required: true })
-@UseGuards(AuthGuard("jwt-entra"), RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
 export class GestionesController {
   constructor(private readonly service: GestionesService) {}

@@ -2,9 +2,7 @@ node_modules/
 dist/
 build/
 .next/
-out/
-
-.env
+out/.env
 .env.local
 .env.*.local
 !.env.example
@@ -44,3 +42,6 @@ legacy-auto-crm/data/*.db*
 .vercel
 .idea/
 .vscode/
+
+# Local env files (apps/*/.env)
+apps/*/.env

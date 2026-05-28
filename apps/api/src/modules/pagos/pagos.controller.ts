@@ -1,5 +1,5 @@
 import { Body, Controller, Post, UseGuards } from "@nestjs/common";
-import { AuthGuard } from "@nestjs/passport";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ApiBearerAuth, ApiHeader, ApiTags } from "@nestjs/swagger";
 import { PagosService } from "./pagos.service";
 import { CodPlan } from "../../common/decorators/cod-plan.decorator";
@@ -10,7 +10,7 @@ import type { IniciarPago } from "@legalmene/shared";
 @ApiTags("pagos")
 @ApiBearerAuth("EntraID")
 @ApiHeader({ name: "X-Cod-Plan", required: true })
-@UseGuards(AuthGuard("jwt-entra"), RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("pagos")
 export class PagosController {
   constructor(private readonly service: PagosService) {}

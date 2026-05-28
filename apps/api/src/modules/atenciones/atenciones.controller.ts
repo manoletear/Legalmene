@@ -8,7 +8,7 @@ import {
   Query,
   UseGuards,
 } from "@nestjs/common";
-import { AuthGuard } from "@nestjs/passport";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ApiBearerAuth, ApiHeader, ApiTags } from "@nestjs/swagger";
 import { AtencionesService } from "./atenciones.service";
 import {
@@ -24,7 +24,7 @@ import { RolesGuard } from "../../common/guards/roles.guard";
 @ApiTags("atenciones")
 @ApiBearerAuth("EntraID")
 @ApiHeader({ name: "X-Cod-Plan", required: true })
-@UseGuards(AuthGuard("jwt-entra"), RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("atenciones")
 export class AtencionesController {
   constructor(private readonly service: AtencionesService) {}

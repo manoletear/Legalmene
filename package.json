@@ -8,9 +8,11 @@
     "packages/*"
   ],
   "scripts": {
-    "api:dev": "pnpm --filter @legalmene/api dev",
-    "api:build": "pnpm --filter @legalmene/api build",
+    "api:dev": "pnpm --filter @legalmene/shared build && pnpm --filter @legalmene/api dev",
+    "api:build": "pnpm --filter @legalmene/shared build && pnpm --filter @legalmene/api build",
     "api:start": "pnpm --filter @legalmene/api start:prod",
+    "shared:build": "pnpm --filter @legalmene/shared build",
+    "shared:dev": "pnpm --filter @legalmene/shared dev",
     "web:dev": "pnpm --filter @legalmene/web dev",
     "web:build": "pnpm --filter @legalmene/web build",
     "db:generate": "pnpm --filter @legalmene/api db:generate",

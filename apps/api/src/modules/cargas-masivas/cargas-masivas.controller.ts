@@ -8,7 +8,7 @@ import {
   UseInterceptors,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { AuthGuard } from "@nestjs/passport";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags, ApiHeader } from "@nestjs/swagger";
 import { CargasMasivasService } from "./cargas-masivas.service";
 import { CodPlan } from "../../common/decorators/cod-plan.decorator";
@@ -19,7 +19,7 @@ import type { TipoCargaMasiva } from "@legalmene/shared";
 @ApiTags("cargas-masivas")
 @ApiBearerAuth("EntraID")
 @ApiHeader({ name: "X-Cod-Plan", required: true })
-@UseGuards(AuthGuard("jwt-entra"), RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("cargas-masivas")
 export class CargasMasivasController {
   constructor(private readonly service: CargasMasivasService) {}

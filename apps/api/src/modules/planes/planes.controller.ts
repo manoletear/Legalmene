@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
-import { AuthGuard } from "@nestjs/passport";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { PlanesService } from "./planes.service";
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -7,7 +7,7 @@ import { RolesGuard } from "../../common/guards/roles.guard";
 
 @ApiTags("planes")
 @ApiBearerAuth("EntraID")
-@UseGuards(AuthGuard("jwt-entra"), RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("planes")
 export class PlanesController {
   constructor(private readonly service: PlanesService) {}
