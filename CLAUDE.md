@@ -1,154 +1,121 @@
-# CLAUDE.md — Auto-CRM
+# CLAUDE.md — Legalmene (LegalChile PSL)
 
-> Este es un CRM completo y local que se personaliza a cada negocio.
-> Cuando un usuario abre este proyecto con Claude Code, tu trabajo es ayudarle a configurarlo,
-> usarlo, y expandirlo segun sus necesidades. Todo corre en su maquina — sin servicios externos.
+Sistema de gestión legal SaaS para LegalChile. Reemplaza el sistema legado en SQL Server 2008 / Windows Server por una plataforma cloud-native en AWS.
 
-## Inicio rapido para el usuario
+La arquitectura completa, plan de migración y justificación están en
+[`docs/propuesta-arquitectura-legalchile.md`](./docs/propuesta-arquitectura-legalchile.md).
 
-Si es la primera vez que el usuario abre el proyecto, guialo con estos pasos:
+## Estado del proyecto
 
-1. `npm install` — Instalar dependencias
-2. `npm run init:seed` — Inicializar base de datos con datos demo
-3. `npm run dev` — Iniciar servidor en http://localhost:3000
-4. Ejecutar `/setup` para personalizar el CRM a su negocio
+| Componente | Estado |
+|------------|--------|
+| Modelo de datos (Drizzle / Postgres) | ✅ Implementado |
+| Backend NestJS — auth + módulos core | ✅ Esqueleto funcional |
+| Módulos Afiliados / Atenciones / Gestiones / Comités / Pagos | ✅ CRUD base + flujos clave |
+| Cargas masivas FLUJO/STOCK | ✅ Implementado |
+| Frontend Angular 19 | ✅ Shell + Dashboard + Afiliados |
+| Infraestructura AWS (CDK) | ⏳ Pendiente |
+| Migración SQL Server → Postgres | ⏳ Pendiente |
+| WebPay producción | ⏳ Stub (esperar SDK Transbank) |
+| Auditoría / S3 / OpenSearch | ⏳ Esquema definido, lógica pendiente |
+
+## Stack
+
+- **Backend**: NestJS 10 · TypeScript estricto · Drizzle ORM · PostgreSQL 16
+- **Frontend**: Angular 19 (standalone components) · Angular Material · MSAL.js para Entra ID
+- **Auth**: Microsoft Entra ID (OIDC) — JWT verificado vía JWKS
+- **Multi-tenancy**: columna `cod_plan` en cada tabla operacional. Header `X-Cod-Plan` filtra acceso.
+- **Compute** (objetivo): ECS Fargate (monolito modular) + Lambda para tareas event-driven
+- **Storage** (objetivo): Aurora PostgreSQL Multi-AZ + S3 + OpenSearch
+- **Local**: Docker Compose (Postgres + Adminer)
+
+## Estructura del repo
+
+```
+apps/
+  api/                # Backend NestJS
+    src/
+      db/             # Drizzle schema + migrate + seed
+      common/         # Decorators (CodPlan, CurrentUser, Roles), guards, utils
+      modules/        # auth, planes, afiliados, atenciones, gestiones,
+                      # comites, pagos, cargas-masivas, health
+  web/                # Frontend Angular 19
+    src/app/
+      core/           # Interceptors, services compartidos
+      features/       # Vistas por dominio
+packages/
+  shared/             # Tipos + esquemas Zod compartidos entre API y web
+infra/
+  docker-compose.yml  # Postgres + Adminer local
+docs/
+  propuesta-arquitectura-legalchile.md
+legacy-auto-crm/      # CRM Next.js incorporado como referencia (Hainrixz/auto-crm)
+```
 
 ## Comandos
 
 ```bash
-npm run dev          # Servidor de desarrollo (http://localhost:3000)
-npm run build        # Build de produccion
-npm start            # Servidor de produccion
-npm run local        # Build + init + start (despliegue local en un comando)
-npm run init         # Inicializar base de datos
-npm run init:seed    # Inicializar + datos demo
-npm run seed         # Solo datos demo
-npm run lint         # ESLint
-npm run mcp          # Iniciar servidor MCP (para Claude Desktop/Web)
+# Setup inicial
+pnpm install
+
+# Levantar Postgres local
+docker compose -f infra/docker-compose.yml up -d
+
+# Configurar env
+cp apps/api/.env.example apps/api/.env
+
+# DB
+pnpm db:generate     # genera migraciones desde el schema
+pnpm db:migrate      # las aplica
+pnpm db:seed         # planes + usuarios + afiliados demo
+
+# Dev
+pnpm api:dev         # NestJS en :3001 con watch (Swagger en /api/docs)
+pnpm web:dev         # Angular en :4200
+
+# Build
+pnpm api:build
+pnpm web:build
 ```
 
-## Comandos interactivos disponibles
+## Modelo de datos (resumen)
 
-| Comando | Que hace |
-|---------|----------|
-| `/setup` | Personalizar CRM: pipeline, fuentes de leads, industria, idioma, tema |
-| `/add-lead` | Agregar un lead conversacionalmente — describe al prospecto y se crea automaticamente |
-| `/analyze-pipeline` | Analisis completo del pipeline con recomendaciones accionables |
-| `/daily-briefing` | Resumen ejecutivo del dia: follow-ups, deals calientes, prioridades |
-| `/import-contacts` | Importar contactos desde un archivo CSV |
-| `/customize` | Cambiar configuracion sin reiniciar todo |
-| `/connect` | Conectar CRM con Gmail, Calendar, Sheets, WhatsApp via MCP |
-| `/digest` | Enviar resumen diario por email (requiere Resend) |
+`planes` (catálogo de tenants) → `afiliados` (RUT chileno validado) → `atenciones`
+(Consulta/Asesoría/Juicio con correlativo `TIPO-AÑO-NNNNNN`) → `gestiones` (timeline
+de acciones por atención) → `comites` + `participantes_comite` (toma de decisiones
+multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `auditoria`
+(append-only para cumplimiento Ley 19.628).
 
-## Arquitectura
+## Reglas de código
 
-**Stack**: Next.js 16 (App Router) · React 19 · TypeScript (strict) · Tailwind CSS v4 · shadcn/ui · SQLite + Drizzle ORM · @dnd-kit (kanban)
+- **Idioma UI**: Español. Identificadores también (Atencion, Gestion, Comite) — coincide
+  con el lenguaje del Anexo del cliente.
+- **Tipos compartidos** entre API y web viven en `packages/shared` (Zod schemas + types
+  inferidos). Nunca duplicar tipos entre apps.
+- **Multi-tenancy**: TODO endpoint que toque datos de un plan debe usar el decorator
+  `@CodPlan()` y verificar que el usuario tiene acceso a ese plan.
+- **RUTs**: siempre normalizar con `formatearRut()` antes de comparar/insertar.
+- **Soft-delete**: marcar `vigencia: "Eliminado"` en vez de `DELETE` (Ley 19.628 exige
+  trazabilidad).
+- **Correlativos**: generar con `siguienteCorrelativo()` — usa UPSERT atómico en
+  `correlativos` para evitar duplicados bajo concurrencia.
+- **Auditoría**: cualquier mutación importante debe escribir un registro en `auditoria`
+  (interceptor por implementar).
+- **Montos**: enteros (centavos para USD/EUR; pesos chilenos son enteros nativos).
+- **Drizzle**: no usar `db.execute(raw)` salvo para casos atómicos (correlativo, upsert
+  con xmax). Preferir el query builder tipado.
+- **NestJS**: un módulo por bounded context. Sin imports circulares entre módulos
+  (exportar servicios cuando se requiera).
+- **Tests**: Vitest. Cada servicio con un test happy-path mínimo (pendiente — ver
+  TODO en cada módulo).
 
-**100% local**: SQLite como base de datos (archivo en `data/crm.db`). No requiere ningun servicio externo.
+## TODOs prioritarios
 
-**Alias**: `@/*` → `./src/*`
-
-### Directorios clave
-
-- `src/app/` — Paginas y API routes (App Router)
-- `src/components/` — Componentes React organizados por feature
-- `src/db/` — Schema Drizzle, cliente DB, seeder
-- `src/lib/` — Utilidades: claude.ts (AI), scoring.ts, constants.ts
-- `src/types/` — TypeScript types para entidades CRM
-- `.claude/commands/` — Comandos interactivos (los de la tabla arriba)
-- `mcp/` — Servidor MCP para integracion con Claude Desktop/Web
-- `scripts/` — Scripts de inicializacion y utilidades
-
-### Modelo de datos
-
-- **Contacts**: Leads con temperatura (frio/tibio/caliente), score, fuente, historial
-- **Deals**: Oportunidades de venta con valor (en centavos), etapa, probabilidad
-- **Activities**: Interacciones (llamada/email/reunion/nota/follow-up) con fechas
-- **Pipeline Stages**: Etapas configurables del pipeline de ventas
-- **CRM Settings**: Configuracion key-value
-
-### API Routes
-
-| Endpoint | Metodos | Descripcion |
-|----------|---------|-------------|
-| `/api/contacts` | GET, POST | Listar (con busqueda/filtro) y crear contactos |
-| `/api/contacts/[id]` | GET, PUT, DELETE | CRUD individual de contacto |
-| `/api/deals` | GET, POST | Listar y crear deals |
-| `/api/deals/[id]` | GET, PUT, DELETE | CRUD individual de deal |
-| `/api/activities` | GET, POST | Listar y registrar actividades |
-| `/api/activities/[id]` | PUT, DELETE | Completar o eliminar actividad |
-| `/api/pipeline` | GET, PUT | Pipeline completo; mover deals entre etapas |
-| `/api/classify` | POST | Clasificar lead (IA o reglas) |
-| `/api/followups` | GET | Follow-ups pendientes (vencidos, hoy, proximos) |
-| `/api/import` | POST | Importacion masiva de contactos |
-| `/api/webhook` | POST | Recibir leads de formularios externos (Typeform, Tally, etc.) |
-| `/api/export` | GET | Exportar contactos o deals como CSV (?type=contacts o deals) |
-| `/api/digest` | POST | Enviar resumen diario por email (requiere RESEND_API_KEY) |
-
-## Configuracion del negocio
-
-El archivo `crm-config.json` (raiz del proyecto) tiene la configuracion personalizada.
-Se genera con `/setup` y se modifica con `/customize`.
-
-El archivo en `public/crm-config.json` es la copia por defecto (template).
-
-## Reglas de codigo
-
-- **Idioma UI**: Espanol por defecto. Soporte bilingue con `const t = { en: {...}, es: {...} }`
-- **Max ~300 lineas por componente**. Dividir si crece mas
-- **No emojis como iconos** — usar Lucide React (SVG)
-- **Valores monetarios**: Centavos (integer). Usar `formatCurrency()` para mostrar
-- **Fechas**: `date-fns` para formateo. SQLite almacena como integer timestamps
-- **Forms**: react-hook-form + zod
-- **Drag & drop**: @dnd-kit (NO react-beautiful-dnd)
-- **Estilos**: Tailwind CSS v4 (config via CSS, no tailwind.config.ts)
-
-## Modos de IA
-
-1. **Terminal Mode** (default, sin API key): Toda la IA via tus comandos de Claude Code.
-   El usuario describe lo que necesita, tu lees/escribes datos via `curl` a los API routes.
-
-2. **API Mode** (opcional): Si el usuario pone `ANTHROPIC_API_KEY` en `.env.local`,
-   la web tiene clasificacion automatica de leads inline.
-
-3. **MCP Mode**: El usuario puede conectar Claude Desktop/Web al CRM via el servidor MCP.
-   Config: `npm run mcp` o agregar a `claude_desktop_config.json`.
-
-**Sin API key, el CRM funciona 100%.** La IA es un extra, no un requisito.
-
-## Despliegue
-
-### Local (desarrollo)
-```bash
-npm run dev
-```
-
-### Local (produccion)
-```bash
-npm run local  # build + init + start en puerto 3000
-```
-
-### Docker
-```bash
-docker compose up -d  # Corre en puerto 3000, datos persisten en ./data/
-```
-
-### MCP (Claude Desktop/Web)
-Agregar a `~/.claude/claude_desktop_config.json`:
-```json
-{
-  "mcpServers": {
-    "auto-crm": {
-      "command": "npx",
-      "args": ["tsx", "/ruta/al/proyecto/mcp/crm-server.ts"]
-    }
-  }
-}
-```
-
-## Variables de entorno
-
-- `ANTHROPIC_API_KEY` — Opcional. Para IA en la interfaz web (clasificacion de leads)
-- `RESEND_API_KEY` — Opcional. Para enviar digest diario por email (resend.com, gratis)
-- `DIGEST_EMAIL` — Opcional. Email donde recibir el digest
-- `DIGEST_FROM` — Opcional. Email remitente del digest (default: onboarding@resend.dev)
+1. Generar primera migración Drizzle (`pnpm db:generate`) y commitear.
+2. Implementar interceptor de auditoría que escriba `auditoria` automáticamente.
+3. Resolver `usuarios.id` real al validar JWT (upsert por `entraOid` en login).
+4. Integración real Transbank WebPay (reemplazar stub en `pagos.service.ts`).
+5. Upload presigned URL para S3 en módulo de documentos.
+6. Notificaciones de vencimiento de gestiones/comités (EventBridge + SES).
+7. AWS CDK en `infra/` para Aurora + ECS + ALB + S3 + OpenSearch.
+8. Migración SQL Server 2008 → Aurora (AWS DMS + SCT) — ver plan en `docs/`.

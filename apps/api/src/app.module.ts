@@ -1,0 +1,29 @@
+import { Module } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
+import { DatabaseModule } from "./db/database.module";
+import { AuthModule } from "./modules/auth/auth.module";
+import { PlanesModule } from "./modules/planes/planes.module";
+import { AfiliadosModule } from "./modules/afiliados/afiliados.module";
+import { AtencionesModule } from "./modules/atenciones/atenciones.module";
+import { GestionesModule } from "./modules/gestiones/gestiones.module";
+import { ComitesModule } from "./modules/comites/comites.module";
+import { PagosModule } from "./modules/pagos/pagos.module";
+import { CargasMasivasModule } from "./modules/cargas-masivas/cargas-masivas.module";
+import { HealthModule } from "./modules/health/health.module";
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true, cache: true }),
+    DatabaseModule,
+    AuthModule,
+    HealthModule,
+    PlanesModule,
+    AfiliadosModule,
+    AtencionesModule,
+    GestionesModule,
+    ComitesModule,
+    PagosModule,
+    CargasMasivasModule,
+  ],
+})
+export class AppModule {}
