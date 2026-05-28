@@ -43,5 +43,8 @@ legacy-auto-crm/data/*.db*
 .idea/
 .vscode/
 
+# Angular CLI cache
+.angular/
+
 # Local env files (apps/*/.env)
 apps/*/.env

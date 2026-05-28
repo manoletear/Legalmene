@@ -26,8 +26,10 @@ export const AfiliadoSchema = z.object({
 });
 export type Afiliado = z.infer<typeof AfiliadoSchema>;
 
+// codPlan se inyecta desde el header X-Cod-Plan en el controller, no en el body.
 export const CreateAfiliadoSchema = AfiliadoSchema.omit({
   id: true,
+  codPlan: true,
   createdAt: true,
   updatedAt: true,
 }).extend({

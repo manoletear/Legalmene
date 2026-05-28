@@ -48,9 +48,13 @@ export const AtencionSchema = z.object({
 });
 export type Atencion = z.infer<typeof AtencionSchema>;
 
+// codPlan se inyecta desde el header X-Cod-Plan en el controller.
+// tipo se setea por el path (/consultas, /asesorias, /juicios).
 export const CreateAtencionSchema = AtencionSchema.omit({
   id: true,
+  codPlan: true,
   correlativo: true,
+  tipo: true,
   estado: true,
   fechaApertura: true,
   fechaCierre: true,
@@ -59,6 +63,7 @@ export const CreateAtencionSchema = AtencionSchema.omit({
   updatedAt: true,
 }).extend({
   estado: EstadoAtencionEnum.optional(),
+  tipo: TipoAtencionEnum.optional(),
 });
 export type CreateAtencion = z.infer<typeof CreateAtencionSchema>;
 

@@ -1,7 +1,10 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { APP_INTERCEPTOR } from "@nestjs/core";
 import { DatabaseModule } from "./db/database.module";
 import { AuthModule } from "./modules/auth/auth.module";
+import { AuditModule } from "./modules/audit/audit.module";
+import { AuditInterceptor } from "./modules/audit/audit.interceptor";
 import { PlanesModule } from "./modules/planes/planes.module";
 import { AfiliadosModule } from "./modules/afiliados/afiliados.module";
 import { AtencionesModule } from "./modules/atenciones/atenciones.module";
@@ -16,6 +19,7 @@ import { HealthModule } from "./modules/health/health.module";
     ConfigModule.forRoot({ isGlobal: true, cache: true }),
     DatabaseModule,
     AuthModule,
+    AuditModule,
     HealthModule,
     PlanesModule,
     AfiliadosModule,
@@ -25,5 +29,6 @@ import { HealthModule } from "./modules/health/health.module";
     PagosModule,
     CargasMasivasModule,
   ],
+  providers: [{ provide: APP_INTERCEPTOR, useClass: AuditInterceptor }],
 })
 export class AppModule {}

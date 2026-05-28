@@ -59,7 +59,10 @@ export class AtencionesService {
     return row;
   }
 
-  async crear(codPlan: string, input: CreateAtencionDto): Promise<Atencion> {
+  async crear(
+    codPlan: string,
+    input: CreateAtencionDto & { tipo: "Consulta" | "Asesoria" | "Juicio" },
+  ): Promise<Atencion> {
     // Verifica que el afiliado exista en el plan.
     const [afi] = await this.db
       .select({ id: afiliados.id, vigencia: afiliados.vigencia })
@@ -75,6 +78,7 @@ export class AtencionesService {
     const correlativo = await siguienteCorrelativo(this.db, codPlan, input.tipo);
     const payload: NuevaAtencion = {
       ...input,
+      tipo: input.tipo,
       codPlan,
       correlativo,
       estado: input.estado ?? "Abierta",
