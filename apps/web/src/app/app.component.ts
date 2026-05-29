@@ -30,7 +30,10 @@ import { CodPlanService } from "./core/services/cod-plan.service";
   template: `
     <mat-sidenav-container style="height: 100vh">
       <mat-sidenav mode="side" opened style="width: 220px">
-        <mat-toolbar color="primary">LegalChile</mat-toolbar>
+        <mat-toolbar color="primary" style="gap:10px; align-items:center;">
+          <img src="assets/logo.svg" alt="LegalChile" style="width:32px; height:32px;" />
+          <span>LegalChile</span>
+        </mat-toolbar>
         <mat-nav-list>
           <a mat-list-item routerLink="/dashboard" routerLinkActive="active">
             <mat-icon matListItemIcon>dashboard</mat-icon> Dashboard

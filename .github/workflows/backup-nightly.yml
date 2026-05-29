@@ -1,0 +1,38 @@
+name: Nightly DB backup
+
+# Plantilla para correr backups desde GitHub Actions con OIDC role en AWS.
+# Activar setteando los secrets DB_URL_PROD y AWS_BACKUP_ROLE_ARN.
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # 06:00 UTC = 03:00 Santiago
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    if: ${{ vars.BACKUP_ENABLED == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pg client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_BACKUP_ROLE_ARN }}
+          aws-region: sa-east-1
+
+      - name: Run backup
+        env:
+          DATABASE_URL: ${{ secrets.DB_URL_PROD }}
+          S3_BACKUP_BUCKET: ${{ vars.BACKUP_BUCKET }}
+          S3_BACKUP_PREFIX: prod
+          BACKUP_DIR: ${{ runner.temp }}/backups
+          RETENTION_DAYS: "30"
+        run: ./infra/scripts/backup.sh

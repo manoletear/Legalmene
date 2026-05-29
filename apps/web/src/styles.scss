@@ -1,0 +1,43 @@
+@use "@angular/material" as mat;
+@include mat.core();
+
+// Paleta LegalChile: azul institucional + acento dorado.
+$legal-primary: mat.m2-define-palette(mat.$m2-blue-palette, 800, 700, 900);
+$legal-accent: mat.m2-define-palette(mat.$m2-amber-palette, 700);
+$legal-warn: mat.m2-define-palette(mat.$m2-red-palette, 700);
+
+$legal-theme: mat.m2-define-light-theme(
+  (
+    color: (
+      primary: $legal-primary,
+      accent: $legal-accent,
+      warn: $legal-warn,
+    ),
+    typography: mat.m2-define-typography-config(
+      $font-family: 'Roboto, "Helvetica Neue", sans-serif',
+    ),
+    density: 0,
+  )
+);
+
+@include mat.all-component-themes($legal-theme);
+
+html, body { height: 100%; margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; background: #f5f7fa; color: #1c2733; }
+* { box-sizing: border-box; }
+.page { padding: 24px; max-width: 1280px; margin: 0 auto; }
+
+// Sidebar/branding overrides
+.mat-toolbar.mat-primary {
+  background: linear-gradient(135deg, #0d3b66 0%, #1976d2 100%);
+  color: #fff;
+}
+
+mat-card {
+  box-shadow: 0 1px 3px rgba(13, 59, 102, 0.08), 0 1px 2px rgba(13, 59, 102, 0.06) !important;
+  border-radius: 8px !important;
+}
+
+mat-toolbar:not(.mat-primary) {
+  background: #fff;
+  border-bottom: 1px solid #e1e7ed;
+}
