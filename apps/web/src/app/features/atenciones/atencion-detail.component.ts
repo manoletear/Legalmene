@@ -16,6 +16,7 @@ import { MatSnackBar, MatSnackBarModule } from "@angular/material/snack-bar";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { GestionesApiService } from "../../core/services/gestiones.service";
 import { ComitesApiService } from "../../core/services/comites.service";
+import { DocumentosApiService, DocumentoMeta } from "../../core/services/documentos.service";
 import type { Atencion, Comite, Gestion } from "@legalmene/shared";
 
 @Component({
@@ -121,6 +122,30 @@ import type { Atencion, Comite, Gestion } from "@legalmene/shared";
             </div>
           </div>
         </mat-tab>
+
+        <mat-tab label="Documentos ({{ documentos().length }})">
+          <div style="padding:16px 0;">
+            <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px;">
+              <input #fileInput type="file" (change)="onFileSelected(a.id, $event)" style="display:none" />
+              <button mat-stroked-button (click)="fileInput.click()" [disabled]="uploading()">
+                <mat-icon>upload</mat-icon> {{ uploading() ? 'Subiendo…' : 'Subir documento' }}
+              </button>
+              <small *ngIf="uploadProgress()" style="opacity:0.7;">{{ uploadProgress() }}</small>
+            </div>
+
+            <div *ngFor="let d of documentos()" style="display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid #eee;">
+              <mat-icon>description</mat-icon>
+              <div style="flex:1;">
+                <div>{{ d.nombre }}</div>
+                <small style="opacity:0.6;">{{ formatBytes(d.tamanoBytes) }} · {{ d.mimeType }} · {{ d.fechaSubida | date: 'short' }}</small>
+              </div>
+              <button mat-icon-button (click)="descargar(d)" title="Descargar">
+                <mat-icon>download</mat-icon>
+              </button>
+            </div>
+            <p *ngIf="!documentos().length" style="opacity:0.5;">Sin documentos.</p>
+          </div>
+        </mat-tab>
       </mat-tab-group>
     </ng-container>
   `,
@@ -131,11 +156,15 @@ export class AtencionDetailComponent implements OnInit {
   private api = inject(AtencionesApiService);
   private gestionesApi = inject(GestionesApiService);
   private comitesApi = inject(ComitesApiService);
+  private documentosApi = inject(DocumentosApiService);
   private snack = inject(MatSnackBar);
 
   protected atencion = signal<Atencion | null>(null);
   protected gestiones = signal<Gestion[]>([]);
   protected comites = signal<Comite[]>([]);
+  protected documentos = signal<DocumentoMeta[]>([]);
+  protected uploading = signal(false);
+  protected uploadProgress = signal<string>("");
   protected tiposGestion = [
     "LlamadaTelefonica",
     "Email",
@@ -167,6 +196,44 @@ export class AtencionDetailComponent implements OnInit {
     this.api.obtener(id).subscribe((a) => this.atencion.set(a));
     this.gestionesApi.listar(id).subscribe((g) => this.gestiones.set(g));
     this.comitesApi.listar(id).subscribe((c) => this.comites.set(c));
+    this.documentosApi.listar(id).subscribe((d) => this.documentos.set(d));
+  }
+
+  onFileSelected(atencionId: string, ev: Event) {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    this.uploading.set(true);
+    this.uploadProgress.set(`Subiendo ${file.name}…`);
+    this.documentosApi.upload(atencionId, file).subscribe({
+      next: () => {
+        this.uploading.set(false);
+        this.uploadProgress.set("");
+        input.value = "";
+        this.snack.open(`${file.name} subido`, "OK", { duration: 2000 });
+        this.cargar(atencionId);
+      },
+      error: (err) => {
+        this.uploading.set(false);
+        this.uploadProgress.set("");
+        this.snack.open(`Error: ${err.error?.message ?? err.message}`, "Cerrar", { duration: 5000 });
+      },
+    });
+  }
+
+  descargar(doc: DocumentoMeta) {
+    this.documentosApi.getDownloadUrl(doc.id).subscribe(({ url }) => {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = doc.nombre;
+      a.click();
+    });
+  }
+
+  formatBytes(b: number): string {
+    if (b < 1024) return `${b} B`;
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+    return `${(b / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   crearGestion(atencionId: string) {

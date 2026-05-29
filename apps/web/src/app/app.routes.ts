@@ -33,5 +33,10 @@ export const routes: Routes = [
         (m) => m.AtencionDetailComponent,
       ),
   },
+  {
+    path: "auditoria",
+    loadComponent: () =>
+      import("./features/auditoria/auditoria.component").then((m) => m.AuditoriaComponent),
+  },
   { path: "**", redirectTo: "dashboard" },
 ];
