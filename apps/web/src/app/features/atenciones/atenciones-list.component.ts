@@ -12,6 +12,7 @@ import { MatSelectModule } from "@angular/material/select";
 import { MatInputModule } from "@angular/material/input";
 import { MatPaginatorModule, PageEvent } from "@angular/material/paginator";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
+import { environment } from "../../../environments/environment";
 import type { Atencion } from "@legalmene/shared";
 
 @Component({
@@ -36,6 +37,9 @@ import type { Atencion } from "@legalmene/shared";
       <mat-card-header>
         <mat-card-title>Atenciones</mat-card-title>
         <span style="flex:1"></span>
+        <button mat-stroked-button (click)="exportarCsv()" style="margin-right:8px;">
+          <mat-icon>download</mat-icon> Exportar CSV
+        </button>
         <button mat-flat-button color="primary" routerLink="/atenciones/nueva">
           <mat-icon>add</mat-icon> Nueva consulta
         </button>
@@ -63,9 +67,13 @@ import type { Atencion } from "@legalmene/shared";
               <mat-option value="Cerrada">Cerrada</mat-option>
             </mat-select>
           </mat-form-field>
-          <mat-form-field appearance="outline" style="flex:1">
+          <mat-form-field appearance="outline" style="min-width:180px">
             <mat-label>Correlativo</mat-label>
             <input matInput [(ngModel)]="filtroCorrelativo" (keyup.enter)="recargar()" placeholder="CONS-2026-..." />
+          </mat-form-field>
+          <mat-form-field appearance="outline" style="flex:1">
+            <mat-label>Buscar (materia, descripción)</mat-label>
+            <input matInput [(ngModel)]="filtroQ" (keyup.enter)="recargar()" placeholder="ej. despido, alimentos…" />
           </mat-form-field>
         </div>
 
@@ -121,6 +129,7 @@ export class AtencionesListComponent implements OnInit {
   protected filtroTipo: "Consulta" | "Asesoria" | "Juicio" | undefined;
   protected filtroEstado: string | undefined;
   protected filtroCorrelativo = "";
+  protected filtroQ = "";
 
   ngOnInit() {
     this.recargar();
@@ -135,6 +144,7 @@ export class AtencionesListComponent implements OnInit {
         tipo: this.filtroTipo,
         estado: this.filtroEstado,
         correlativo: this.filtroCorrelativo || undefined,
+        q: this.filtroQ.trim() || undefined,
       })
       .subscribe({
         next: (res) => {
@@ -161,5 +171,21 @@ export class AtencionesListComponent implements OnInit {
     if (e === "EnComite") return "warn";
     if (e === "Suspendida") return "warn";
     return "primary";
+  }
+
+  // Export: navega al endpoint en una nueva tab (browser maneja download).
+  exportarCsv() {
+    const codPlan = localStorage.getItem("cod_plan") ?? "DEMO";
+    const url = `${environment.apiBaseUrl}/exports/atenciones.csv`;
+    // Necesita header X-Cod-Plan, así que fetch + blob en vez de window.open.
+    fetch(url, { headers: { "X-Cod-Plan": codPlan } })
+      .then((r) => r.blob())
+      .then((blob) => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `atenciones-${codPlan}-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
   }
 }

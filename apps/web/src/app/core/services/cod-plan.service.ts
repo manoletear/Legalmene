@@ -10,7 +10,10 @@ export class CodPlanService {
   readonly codPlan = this._codPlan.asReadonly();
 
   set(codPlan: string) {
+    if (codPlan === this._codPlan()) return;
     localStorage.setItem("cod_plan", codPlan);
     this._codPlan.set(codPlan);
+    // Hard reload para que todas las pantallas re-fetch sus datos con el nuevo tenant.
+    if (typeof window !== "undefined") window.location.reload();
   }
 }

@@ -6,8 +6,10 @@ import { MatTableModule } from "@angular/material/table";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatInputModule } from "@angular/material/input";
 import { MatButtonModule } from "@angular/material/button";
+import { MatIconModule } from "@angular/material/icon";
 import { MatPaginatorModule, PageEvent } from "@angular/material/paginator";
 import { AfiliadosApiService } from "../../core/services/afiliados.service";
+import { environment } from "../../../environments/environment";
 import type { Afiliado } from "@legalmene/shared";
 
 @Component({
@@ -21,12 +23,17 @@ import type { Afiliado } from "@legalmene/shared";
     MatFormFieldModule,
     MatInputModule,
     MatButtonModule,
+    MatIconModule,
     MatPaginatorModule,
   ],
   template: `
     <mat-card>
       <mat-card-header>
         <mat-card-title>Afiliados</mat-card-title>
+        <span style="flex:1"></span>
+        <button mat-stroked-button (click)="exportarCsv()">
+          <mat-icon>download</mat-icon> Exportar CSV
+        </button>
       </mat-card-header>
       <mat-card-content>
         <mat-form-field appearance="outline" style="width: 100%; margin-bottom: 16px;">
@@ -103,5 +110,19 @@ export class AfiliadosListComponent implements OnInit {
     this.page.set(ev.pageIndex + 1);
     this.pageSize.set(ev.pageSize);
     this.recargar();
+  }
+
+  exportarCsv() {
+    const codPlan = localStorage.getItem("cod_plan") ?? "DEMO";
+    const url = `${environment.apiBaseUrl}/exports/afiliados.csv`;
+    fetch(url, { headers: { "X-Cod-Plan": codPlan } })
+      .then((r) => r.blob())
+      .then((blob) => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `afiliados-${codPlan}-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
   }
 }

@@ -16,6 +16,7 @@ export interface BuscarAtencionesOpts {
   estado?: string;
   correlativo?: string;
   afiliadoId?: string;
+  q?: string;
 }
 
 @Injectable({ providedIn: "root" })
