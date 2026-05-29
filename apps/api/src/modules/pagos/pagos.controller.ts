@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Post, Query, UseGuards } from "@nestjs/common";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ApiBearerAuth, ApiHeader, ApiTags } from "@nestjs/swagger";
 import { PagosService } from "./pagos.service";
@@ -14,6 +14,20 @@ import type { IniciarPago } from "@legalmene/shared";
 @Controller("pagos")
 export class PagosController {
   constructor(private readonly service: PagosService) {}
+
+  @Get()
+  listar(
+    @CodPlan() codPlan: string,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string,
+    @Query("estado") estado?: string,
+  ) {
+    return this.service.listar(codPlan, {
+      page: page ? parseInt(page, 10) : undefined,
+      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+      estado,
+    });
+  }
 
   @Post("iniciar")
   @Roles("Administrador", "Supervisor", "Operador")

@@ -1,4 +1,6 @@
-import { Controller, Get, Query, UseGuards } from "@nestjs/common";
+import { Controller, Get, Inject, Query, UseGuards, UseInterceptors } from "@nestjs/common";
+import { CACHE_MANAGER, CacheInterceptor, CacheKey, CacheTTL } from "@nestjs/cache-manager";
+import { Cache } from "cache-manager";
 import { ApiBearerAuth, ApiHeader, ApiTags } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { DashboardService } from "./dashboard.service";
@@ -11,15 +13,31 @@ import { RolesGuard } from "../../common/guards/roles.guard";
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("dashboard")
 export class DashboardController {
-  constructor(private readonly service: DashboardService) {}
+  constructor(
+    private readonly service: DashboardService,
+    @Inject(CACHE_MANAGER) private readonly cache: Cache,
+  ) {}
 
+  // CacheInterceptor de Nest no compone bien con headers tenant-scoped, así
+  // que armamos la key manualmente con codPlan para mantener aislamiento.
   @Get("kpis")
-  kpis(@CodPlan() codPlan: string) {
-    return this.service.kpis(codPlan);
+  async kpis(@CodPlan() codPlan: string) {
+    const key = `dashboard:kpis:${codPlan}`;
+    const cached = await this.cache.get(key);
+    if (cached) return cached;
+    const fresh = await this.service.kpis(codPlan);
+    await this.cache.set(key, fresh, 60_000);
+    return fresh;
   }
 
   @Get("timeline-atenciones")
-  timeline(@CodPlan() codPlan: string, @Query("dias") dias?: string) {
-    return this.service.timelineAtenciones(codPlan, dias ? parseInt(dias, 10) : 30);
+  async timeline(@CodPlan() codPlan: string, @Query("dias") dias?: string) {
+    const d = dias ? parseInt(dias, 10) : 30;
+    const key = `dashboard:timeline:${codPlan}:${d}`;
+    const cached = await this.cache.get(key);
+    if (cached) return cached;
+    const fresh = await this.service.timelineAtenciones(codPlan, d);
+    await this.cache.set(key, fresh, 60_000);
+    return fresh;
   }
 }

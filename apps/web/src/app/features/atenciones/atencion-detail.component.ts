@@ -2,6 +2,7 @@ import { Component, OnInit, computed, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormBuilder, ReactiveFormsModule, Validators } from "@angular/forms";
 import { ActivatedRoute } from "@angular/router";
+import { environment } from "../../../environments/environment";
 import { MatCardModule } from "@angular/material/card";
 import { MatChipsModule } from "@angular/material/chips";
 import { MatButtonModule } from "@angular/material/button";
@@ -55,6 +56,10 @@ import type { Atencion, Comite, Gestion } from "@legalmene/shared";
         <mat-card-actions>
           <button mat-stroked-button *ngIf="a.tipo === 'Consulta'" (click)="derivar('Asesoria')">Derivar a Asesoría</button>
           <button mat-stroked-button *ngIf="a.tipo !== 'Juicio'" (click)="derivar('Juicio')">Derivar a Juicio</button>
+          <span style="flex:1"></span>
+          <button mat-stroked-button (click)="descargarPdf(a.id)">
+            <mat-icon>picture_as_pdf</mat-icon> Descargar PDF
+          </button>
         </mat-card-actions>
       </mat-card>
 
@@ -240,6 +245,21 @@ export class AtencionDetailComponent implements OnInit {
     if (b < 1024) return `${b} B`;
     if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
     return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  descargarPdf(atencionId: string) {
+    const codPlan = localStorage.getItem("cod_plan") ?? "DEMO";
+    fetch(`${environment.apiBaseUrl}/exports/atenciones/${atencionId}.pdf`, {
+      headers: { "X-Cod-Plan": codPlan },
+    })
+      .then((r) => r.blob())
+      .then((blob) => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `atencion-${atencionId}.pdf`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
   }
 
   crearGestion(atencionId: string) {

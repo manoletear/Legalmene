@@ -1,8 +1,9 @@
-import { Controller, Get, Header, Res, UseGuards } from "@nestjs/common";
+import { Controller, Get, Header, Param, Res, UseGuards } from "@nestjs/common";
 import { Response } from "express";
 import { ApiBearerAuth, ApiHeader, ApiTags } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ExportsService } from "./exports.service";
+import { AtencionPdfService } from "./atencion-pdf.service";
 import { CodPlan } from "../../common/decorators/cod-plan.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -13,7 +14,10 @@ import { RolesGuard } from "../../common/guards/roles.guard";
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("exports")
 export class ExportsController {
-  constructor(private readonly service: ExportsService) {}
+  constructor(
+    private readonly service: ExportsService,
+    private readonly pdf: AtencionPdfService,
+  ) {}
 
   @Get("afiliados.csv")
   @Roles("Administrador", "Supervisor", "Auditor")
@@ -38,5 +42,16 @@ export class ExportsController {
       `attachment; filename="atenciones-${codPlan}-${new Date().toISOString().slice(0, 10)}.csv"`,
     );
     res.send("﻿" + csv);
+  }
+
+  @Get("atenciones/:id.pdf")
+  @Header("Content-Type", "application/pdf")
+  async atencionPdf(
+    @CodPlan() codPlan: string,
+    @Param("id") id: string,
+    @Res() res: Response,
+  ) {
+    res.setHeader("Content-Disposition", `attachment; filename="atencion-${id}.pdf"`);
+    await this.pdf.generar(codPlan, id, res);
   }
 }

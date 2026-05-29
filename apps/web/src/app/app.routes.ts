@@ -48,6 +48,11 @@ export const routes: Routes = [
       ),
   },
   {
+    path: "pagos",
+    loadComponent: () =>
+      import("./features/pagos/pagos.component").then((m) => m.PagosComponent),
+  },
+  {
     path: "auditoria",
     loadComponent: () =>
       import("./features/auditoria/auditoria.component").then((m) => m.AuditoriaComponent),
