@@ -41,6 +41,9 @@ import { CodPlanService } from "./core/services/cod-plan.service";
           <a mat-list-item routerLink="/atenciones" routerLinkActive="active">
             <mat-icon matListItemIcon>gavel</mat-icon> Atenciones
           </a>
+          <a mat-list-item routerLink="/gestiones" routerLinkActive="active">
+            <mat-icon matListItemIcon>task_alt</mat-icon> Gestiones
+          </a>
           <a mat-list-item routerLink="/cargas-masivas" routerLinkActive="active">
             <mat-icon matListItemIcon>cloud_upload</mat-icon> Cargas masivas
           </a>

@@ -1,7 +1,7 @@
-import { Body, Controller, Get, Param, Post, Put, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from "@nestjs/common";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ApiBearerAuth, ApiHeader, ApiTags } from "@nestjs/swagger";
-import { GestionesService } from "./gestiones.service";
+import { GestionesService, FiltroGestiones } from "./gestiones.service";
 import { CodPlan } from "../../common/decorators/cod-plan.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -14,6 +14,27 @@ import type { CreateGestion, CompletarGestion } from "@legalmene/shared";
 @Controller()
 export class GestionesController {
   constructor(private readonly service: GestionesService) {}
+
+  // Listado global per tenant para vista operacional.
+  @Get("gestiones")
+  listarGlobal(
+    @CodPlan() codPlan: string,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string,
+    @Query("estado") estado?: FiltroGestiones["estado"],
+    @Query("tipo") tipo?: string,
+    @Query("responsableId") responsableId?: string,
+    @Query("soloVencidas") soloVencidas?: string,
+  ) {
+    return this.service.listarPorPlan(codPlan, {
+      page: page ? parseInt(page, 10) : undefined,
+      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+      estado,
+      tipo,
+      responsableId,
+      soloVencidas: soloVencidas === "true",
+    });
+  }
 
   @Get("atenciones/:atencionId/gestiones")
   listar(@CodPlan() codPlan: string, @Param("atencionId") atencionId: string) {

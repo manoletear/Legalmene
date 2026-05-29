@@ -34,6 +34,13 @@ export const routes: Routes = [
       ),
   },
   {
+    path: "gestiones",
+    loadComponent: () =>
+      import("./features/gestiones/gestiones-global.component").then(
+        (m) => m.GestionesGlobalComponent,
+      ),
+  },
+  {
     path: "cargas-masivas",
     loadComponent: () =>
       import("./features/cargas-masivas/cargas-masivas.component").then(
