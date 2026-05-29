@@ -16,5 +16,7 @@ export const FiltroAtencionesSchema = z.object({
   abogadoId: z.string().uuid().optional(),
   afiliadoId: z.string().uuid().optional(),
   correlativo: z.string().optional(),
+  // Búsqueda full-text en materia/descripcion/correlativo/competencia.
+  q: z.string().min(2).optional(),
 });
 export class FiltroAtencionesDto extends createZodDto(FiltroAtencionesSchema) {}

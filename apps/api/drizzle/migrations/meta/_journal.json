@@ -8,6 +8,13 @@
       "when": 1779966855596,
       "tag": "0000_grey_lord_hawal",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1780000000000,
+      "tag": "0001_search_indexes",
+      "breakpoints": false
     }
   ]
 }

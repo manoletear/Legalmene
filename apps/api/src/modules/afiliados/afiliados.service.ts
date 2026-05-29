@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { and, eq, ilike, or, sql, count } from "drizzle-orm";
+import { and, eq, ilike, or, sql, count, desc } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { afiliados, Afiliado, NuevoAfiliado } from "../../db/schema/afiliados";
 import { formatearRut, rutValido } from "../../common/utils/rut";
@@ -10,10 +10,15 @@ export class AfiliadosService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
   async buscar(codPlan: string, filtro: FiltroAfiliadosDto) {
+    // q: si parece RUT/email/término corto usa ILIKE (más predecible para
+    // prefix match); si tiene 2+ palabras usa full-text search con ranking.
+    const useFts = filtro.q && /\s/.test(filtro.q.trim());
+    const ftQuery = useFts ? sql`plainto_tsquery('spanish', ${filtro.q})` : null;
+
     const where = and(
       eq(afiliados.codPlan, codPlan),
       filtro.vigencia ? eq(afiliados.vigencia, filtro.vigencia) : undefined,
-      filtro.q
+      filtro.q && !useFts
         ? or(
             ilike(afiliados.rut, `%${filtro.q}%`),
             ilike(afiliados.nombres, `%${filtro.q}%`),
@@ -21,16 +26,20 @@ export class AfiliadosService {
             ilike(afiliados.email, `%${filtro.q}%`),
           )
         : undefined,
+      ftQuery ? sql`search_vector @@ ${ftQuery}` : undefined,
     );
 
     const offset = (filtro.page - 1) * filtro.pageSize;
+    const orderBy = ftQuery
+      ? desc(sql`ts_rank(search_vector, ${ftQuery})`)
+      : [afiliados.apellidoPaterno, afiliados.nombres];
 
     const [rows, [{ value: total }]] = await Promise.all([
       this.db
         .select()
         .from(afiliados)
         .where(where)
-        .orderBy(afiliados.apellidoPaterno, afiliados.nombres)
+        .orderBy(...(Array.isArray(orderBy) ? orderBy : [orderBy]))
         .limit(filtro.pageSize)
         .offset(offset),
       this.db.select({ value: count() }).from(afiliados).where(where),

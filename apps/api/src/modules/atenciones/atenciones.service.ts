@@ -5,7 +5,7 @@ import {
   BadRequestException,
   ConflictException,
 } from "@nestjs/common";
-import { and, eq, count, ilike } from "drizzle-orm";
+import { and, eq, count, ilike, sql, desc } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { atenciones, Atencion, NuevaAtencion } from "../../db/schema/atenciones";
 import { afiliados } from "../../db/schema/afiliados";
@@ -22,6 +22,10 @@ export class AtencionesService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
   async buscar(codPlan: string, filtro: FiltroAtencionesDto) {
+    // q usa full-text search (tsvector + spanish dict) con ranking;
+    // ordena por relevancia cuando hay query, sino por fechaApertura.
+    const ftQuery = filtro.q ? sql`plainto_tsquery('spanish', ${filtro.q})` : null;
+
     const where = and(
       eq(atenciones.codPlan, codPlan),
       filtro.estado ? eq(atenciones.estado, filtro.estado) : undefined,
@@ -29,14 +33,20 @@ export class AtencionesService {
       filtro.abogadoId ? eq(atenciones.abogadoAsignadoId, filtro.abogadoId) : undefined,
       filtro.afiliadoId ? eq(atenciones.afiliadoId, filtro.afiliadoId) : undefined,
       filtro.correlativo ? ilike(atenciones.correlativo, `%${filtro.correlativo}%`) : undefined,
+      ftQuery ? sql`search_vector @@ ${ftQuery}` : undefined,
     );
     const offset = (filtro.page - 1) * filtro.pageSize;
+
+    const orderBy = ftQuery
+      ? desc(sql`ts_rank(search_vector, ${ftQuery})`)
+      : desc(atenciones.fechaApertura);
+
     const [rows, [{ value: total }]] = await Promise.all([
       this.db
         .select()
         .from(atenciones)
         .where(where)
-        .orderBy(atenciones.fechaApertura)
+        .orderBy(orderBy)
         .limit(filtro.pageSize)
         .offset(offset),
       this.db.select({ value: count() }).from(atenciones).where(where),

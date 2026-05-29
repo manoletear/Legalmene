@@ -15,6 +15,8 @@ import { PagosModule } from "./modules/pagos/pagos.module";
 import { CargasMasivasModule } from "./modules/cargas-masivas/cargas-masivas.module";
 import { DocumentosModule } from "./modules/documentos/documentos.module";
 import { NotificacionesModule } from "./modules/notificaciones/notificaciones.module";
+import { DashboardModule } from "./modules/dashboard/dashboard.module";
+import { ExportsModule } from "./modules/exports/exports.module";
 import { HealthModule } from "./modules/health/health.module";
 
 @Module({
@@ -34,6 +36,8 @@ import { HealthModule } from "./modules/health/health.module";
     CargasMasivasModule,
     DocumentosModule,
     NotificacionesModule,
+    DashboardModule,
+    ExportsModule,
   ],
   providers: [{ provide: APP_INTERCEPTOR, useClass: AuditInterceptor }],
 })
