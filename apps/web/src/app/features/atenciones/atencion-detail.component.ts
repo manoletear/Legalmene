@@ -106,18 +106,24 @@ import type { Atencion, Comite, Gestion } from "@legalmene/shared";
             <div *ngFor="let c of comites()" style="margin-top:16px;">
               <mat-card>
                 <mat-card-header>
-                  <mat-card-title>
-                    Comité del {{ c.fechaConvocatoria | date: 'short' }}
-                  </mat-card-title>
+                  <mat-card-title>Comité del {{ c.fechaConvocatoria | date: 'short' }}</mat-card-title>
                   <mat-card-subtitle>
                     <mat-chip>{{ c.estado }}</mat-chip>
-                    <mat-chip [color]="c.decision === 'Aprobado' ? 'primary' : 'warn'" highlighted>{{ c.decision }}</mat-chip>
+                    <mat-chip [color]="c.decision === 'Aprobado' ? 'primary' : c.decision === 'Rechazado' ? 'warn' : 'accent'" highlighted>{{ c.decision }}</mat-chip>
                   </mat-card-subtitle>
                 </mat-card-header>
                 <mat-card-content>
                   <p><strong>Motivo:</strong> {{ c.motivo }}</p>
                   <p *ngIf="c.acta"><strong>Acta:</strong> {{ c.acta }}</p>
                 </mat-card-content>
+                <mat-card-actions *ngIf="c.estado !== 'Cerrado' && c.estado !== 'Cancelado'">
+                  <button mat-button color="primary" (click)="votar(c.id, 'AFavor')">Votar a favor</button>
+                  <button mat-button color="warn" (click)="votar(c.id, 'EnContra')">Votar en contra</button>
+                  <button mat-button (click)="votar(c.id, 'Abstencion')">Abstención</button>
+                  <span style="flex:1"></span>
+                  <button mat-stroked-button color="primary" (click)="cerrarComite(c.id, 'Aprobado')">Cerrar Aprobado</button>
+                  <button mat-stroked-button color="warn" (click)="cerrarComite(c.id, 'Rechazado')">Cerrar Rechazado</button>
+                </mat-card-actions>
               </mat-card>
             </div>
           </div>
@@ -276,6 +282,31 @@ export class AtencionDetailComponent implements OnInit {
         this.snack.open("Comité convocado", "OK", { duration: 2000 });
         this.cargar(atencionId);
       });
+  }
+
+  votar(comiteId: string, voto: "AFavor" | "EnContra" | "Abstencion") {
+    const comentario = window.prompt(`Comentario (${voto}):`) ?? undefined;
+    this.comitesApi.votar(comiteId, { voto, comentario }).subscribe({
+      next: () => {
+        this.snack.open(`Voto ${voto} registrado`, "OK", { duration: 2000 });
+        if (this.atencion()) this.cargar(this.atencion()!.id);
+      },
+      error: (err) =>
+        this.snack.open(`Error: ${err.error?.message ?? err.message}`, "Cerrar", { duration: 4000 }),
+    });
+  }
+
+  cerrarComite(comiteId: string, decision: "Aprobado" | "Rechazado" | "Diferido") {
+    const acta = window.prompt(`Acta de cierre (${decision}):`);
+    if (!acta) return;
+    this.comitesApi.cerrar(comiteId, { decision, acta }).subscribe({
+      next: () => {
+        this.snack.open(`Comité cerrado: ${decision}`, "OK", { duration: 2500 });
+        if (this.atencion()) this.cargar(this.atencion()!.id);
+      },
+      error: (err) =>
+        this.snack.open(`Error: ${err.error?.message ?? err.message}`, "Cerrar", { duration: 4000 }),
+    });
   }
 
   derivar(nuevoTipo: "Asesoria" | "Juicio") {

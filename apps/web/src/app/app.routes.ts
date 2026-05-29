@@ -34,6 +34,13 @@ export const routes: Routes = [
       ),
   },
   {
+    path: "cargas-masivas",
+    loadComponent: () =>
+      import("./features/cargas-masivas/cargas-masivas.component").then(
+        (m) => m.CargasMasivasComponent,
+      ),
+  },
+  {
     path: "auditoria",
     loadComponent: () =>
       import("./features/auditoria/auditoria.component").then((m) => m.AuditoriaComponent),
