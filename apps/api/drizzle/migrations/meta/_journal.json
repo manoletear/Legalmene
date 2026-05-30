@@ -15,6 +15,13 @@
       "when": 1780000000000,
       "tag": "0001_search_indexes",
       "breakpoints": false
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780100000000,
+      "tag": "0002_correlativo_per_plan",
+      "breakpoints": false
     }
   ]
 }

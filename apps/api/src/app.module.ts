@@ -5,6 +5,8 @@ import { DatabaseModule } from "./db/database.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { AuditModule } from "./modules/audit/audit.module";
 import { AuditInterceptor } from "./modules/audit/audit.interceptor";
+import { MetricsModule } from "./modules/metrics/metrics.module";
+import { MetricsInterceptor } from "./modules/metrics/metrics.interceptor";
 import { UsuariosModule } from "./modules/usuarios/usuarios.module";
 import { PlanesModule } from "./modules/planes/planes.module";
 import { AfiliadosModule } from "./modules/afiliados/afiliados.module";
@@ -26,6 +28,7 @@ import { HealthModule } from "./modules/health/health.module";
     UsuariosModule,
     AuthModule,
     AuditModule,
+    MetricsModule,
     HealthModule,
     PlanesModule,
     AfiliadosModule,
@@ -39,6 +42,9 @@ import { HealthModule } from "./modules/health/health.module";
     DashboardModule,
     ExportsModule,
   ],
-  providers: [{ provide: APP_INTERCEPTOR, useClass: AuditInterceptor }],
+  providers: [
+    { provide: APP_INTERCEPTOR, useClass: MetricsInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
+  ],
 })
 export class AppModule {}

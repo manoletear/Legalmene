@@ -40,7 +40,9 @@ export const atenciones = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     // Correlativo legible al usuario: ej. "CONS-2026-000123".
-    correlativo: varchar("correlativo", { length: 32 }).notNull().unique(),
+    // Sin unique global: el generador per-plan colisiona entre tenants.
+    // Unicidad real garantizada por índice compuesto (cod_plan, correlativo).
+    correlativo: varchar("correlativo", { length: 32 }).notNull(),
     codPlan: varchar("cod_plan", { length: 20 })
       .notNull()
       .references(() => planes.codPlan, { onDelete: "restrict" }),
@@ -65,6 +67,7 @@ export const atenciones = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    planCorrelativoUq: uniqueIndex("atenciones_plan_correlativo_uq").on(t.codPlan, t.correlativo),
     planEstadoIdx: index("atenciones_plan_estado_idx").on(t.codPlan, t.estado),
     afiliadoIdx: index("atenciones_afiliado_idx").on(t.afiliadoId),
     abogadoIdx: index("atenciones_abogado_idx").on(t.abogadoAsignadoId),
