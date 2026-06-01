@@ -67,4 +67,10 @@ export class WebhooksController {
       estado,
     });
   }
+
+  @Post("entregas/:id/reintentar")
+  @Roles("Administrador", "Supervisor")
+  reintentar(@CodPlan() codPlan: string, @Param("id") id: string) {
+    return this.service.reintentar(codPlan, id);
+  }
 }

@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
-import { and, asc, eq, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, lte, or } from "drizzle-orm";
 import { createHmac } from "crypto";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { webhookEntregas, webhooksSuscripciones } from "../../db/schema/webhooks";

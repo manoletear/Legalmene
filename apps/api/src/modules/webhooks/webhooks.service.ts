@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { DRIZZLE, Database } from "../../db/database.module";
 import {
@@ -110,5 +110,23 @@ export class WebhooksService {
       this.db.select({ value: count() }).from(webhookEntregas).where(where),
     ]);
     return { data: rows, page, pageSize, total: Number(total), totalPages: Math.ceil(Number(total) / pageSize) };
+  }
+
+  // Reintento manual: vuelve a marcar Pendiente con proximoReintento=now,
+  // sin resetear el contador. El dispatcher la recoge en el próximo tick.
+  async reintentar(codPlan: string, entregaId: string) {
+    const [row] = await this.db
+      .update(webhookEntregas)
+      .set({
+        estado: "Pendiente",
+        proximoReintento: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(eq(webhookEntregas.id, entregaId), eq(webhookEntregas.codPlan, codPlan)),
+      )
+      .returning();
+    if (!row) throw new NotFoundException(`Entrega ${entregaId} no existe`);
+    return row;
   }
 }

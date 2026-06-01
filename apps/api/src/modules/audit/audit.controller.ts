@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Query, UseGuards } from "@nestjs/common";
+import { Controller, Get, Inject, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { and, count, desc, eq } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
@@ -6,13 +6,17 @@ import { auditoria } from "../../db/schema/auditoria";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
+import { AuditArchiveService } from "./audit-archive.service";
 
 @ApiTags("auditoria")
 @ApiBearerAuth("EntraID")
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("auditoria")
 export class AuditController {
-  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: Database,
+    @Inject(AuditArchiveService) private readonly archive: AuditArchiveService,
+  ) {}
 
   // Solo Administrador y Auditor pueden ver el log (cumplimiento Ley 19.628).
   @Get()
@@ -42,5 +46,13 @@ export class AuditController {
       this.db.select({ value: count() }).from(auditoria).where(where),
     ]);
     return { data: rows, page: p, pageSize: ps, total, totalPages: Math.ceil(total / ps) };
+  }
+
+  // Manual: archiva auditoría > 1 año a JSONL.gz, devuelve cantidad + archivo.
+  // El cron mensual ejecuta el mismo método.
+  @Post("archive")
+  @Roles("Administrador")
+  archivar() {
+    return this.archive.archivar();
   }
 }

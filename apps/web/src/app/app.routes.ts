@@ -62,5 +62,10 @@ export const routes: Routes = [
     loadComponent: () =>
       import("./features/admin/admin-usuarios.component").then((m) => m.AdminUsuariosComponent),
   },
+  {
+    path: "admin/webhooks",
+    loadComponent: () =>
+      import("./features/admin/admin-webhooks.component").then((m) => m.AdminWebhooksComponent),
+  },
   { path: "**", redirectTo: "dashboard" },
 ];

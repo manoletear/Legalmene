@@ -73,7 +73,15 @@ import { signal } from "@angular/core";
             routerLinkActive="active"
             *ngIf="me.user()?.rol === 'Administrador'"
           >
-            <mat-icon matListItemIcon>admin_panel_settings</mat-icon> Admin
+            <mat-icon matListItemIcon>admin_panel_settings</mat-icon> Usuarios
+          </a>
+          <a
+            mat-list-item
+            routerLink="/admin/webhooks"
+            routerLinkActive="active"
+            *ngIf="me.user()?.rol === 'Administrador'"
+          >
+            <mat-icon matListItemIcon>webhook</mat-icon> Webhooks
           </a>
         </mat-nav-list>
       </mat-sidenav>
