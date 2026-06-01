@@ -7,3 +7,4 @@ export * from "./comites";
 export * from "./pagos";
 export * from "./documentos";
 export * from "./auditoria";
+export * from "./webhooks";

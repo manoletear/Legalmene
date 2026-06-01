@@ -9,6 +9,7 @@ import { DatabaseModule, PG_POOL } from "../../src/db/database.module";
 import { planes } from "../../src/db/schema/planes";
 import { AfiliadosService } from "../../src/modules/afiliados/afiliados.service";
 import { AtencionesService } from "../../src/modules/atenciones/atenciones.service";
+import { WebhooksService } from "../../src/modules/webhooks/webhooks.service";
 
 const RUN = !!process.env.DATABASE_URL;
 
@@ -23,7 +24,13 @@ const RUN = !!process.env.DATABASE_URL;
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true }), DatabaseModule],
-      providers: [AtencionesService, AfiliadosService],
+      providers: [
+        AtencionesService,
+        AfiliadosService,
+        // Stub: el test no verifica entrega real de webhooks; basta con la
+        // promesa resolviendo para no romper la pipeline.
+        { provide: WebhooksService, useValue: { emitir: async () => undefined } },
+      ],
     }).compile();
     atenciones = moduleRef.get(AtencionesService);
     afiliadosSrv = moduleRef.get(AfiliadosService);

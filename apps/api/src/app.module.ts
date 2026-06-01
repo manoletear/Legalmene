@@ -22,6 +22,7 @@ import { DocumentosModule } from "./modules/documentos/documentos.module";
 import { NotificacionesModule } from "./modules/notificaciones/notificaciones.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { ExportsModule } from "./modules/exports/exports.module";
+import { WebhooksModule } from "./modules/webhooks/webhooks.module";
 import { HealthModule } from "./modules/health/health.module";
 
 @Module({
@@ -51,6 +52,7 @@ import { HealthModule } from "./modules/health/health.module";
     NotificacionesModule,
     DashboardModule,
     ExportsModule,
+    WebhooksModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantThrottlerGuard },

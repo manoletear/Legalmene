@@ -10,6 +10,7 @@ import { DRIZZLE, Database } from "../../db/database.module";
 import { atenciones, Atencion, NuevaAtencion } from "../../db/schema/atenciones";
 import { afiliados } from "../../db/schema/afiliados";
 import { siguienteCorrelativo } from "../../common/utils/correlativo";
+import { WebhooksService } from "../webhooks/webhooks.service";
 import type {
   CreateAtencionDto,
   UpdateAtencionDto,
@@ -19,7 +20,10 @@ import type {
 
 @Injectable()
 export class AtencionesService {
-  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: Database,
+    @Inject(WebhooksService) private readonly webhooks: WebhooksService,
+  ) {}
 
   async buscar(codPlan: string, filtro: FiltroAtencionesDto) {
     // q usa full-text search (tsvector + spanish dict) con ranking;
@@ -94,6 +98,7 @@ export class AtencionesService {
       estado: input.estado ?? "Abierta",
     };
     const [row] = await this.db.insert(atenciones).values(payload).returning();
+    await this.webhooks.emitir(codPlan, "atencion.creada", { atencion: row });
     return row;
   }
 
@@ -140,6 +145,7 @@ export class AtencionesService {
       .set({ estado: "Cerrada", fechaCierre: new Date(), updatedAt: new Date() })
       .where(eq(atenciones.id, origen.id));
 
+    await this.webhooks.emitir(codPlan, "atencion.derivada", { origen, nueva });
     return nueva;
   }
 }
