@@ -20,11 +20,20 @@
     "db:seed": "pnpm --filter @legalmene/api db:seed",
     "db:studio": "pnpm --filter @legalmene/api db:studio",
     "e2e": "pnpm --filter @legalmene/e2e test",
-    "lint": "pnpm -r lint",
+    "lint": "eslint . --max-warnings 100",
+    "lint:fix": "eslint . --fix",
+    "lint:strict": "eslint . --max-warnings 0",
+    "typecheck": "pnpm -r --parallel exec tsc --noEmit",
     "test": "pnpm -r test"
   },
   "packageManager": "pnpm@9.15.0",
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "typescript-eslint": "^8.18.2"
   }
 }

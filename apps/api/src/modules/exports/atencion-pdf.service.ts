@@ -1,5 +1,6 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { and, eq, desc } from "drizzle-orm";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 import PDFDocument = require("pdfkit");
 import { Writable } from "stream";
 import { DRIZZLE, Database } from "../../db/database.module";
