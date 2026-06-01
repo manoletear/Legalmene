@@ -12,7 +12,7 @@ async function main() {
   const pool = new Pool({ connectionString: url });
   const db = drizzle(pool, { schema });
 
-  console.log("Insertando datos demo...");
+  console.info("Insertando datos demo...");
 
   await db
     .insert(planes)
@@ -67,7 +67,7 @@ async function main() {
     ])
     .onConflictDoNothing();
 
-  console.log("Seed completado. Admin:", admin?.email ?? "(ya existía)");
+  console.info("Seed completado. Admin:", admin?.email ?? "(ya existía)");
   await pool.end();
 }
 

@@ -1,7 +1,6 @@
 import * as cdk from "aws-cdk-lib";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as rds from "aws-cdk-lib/aws-rds";
-import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as kms from "aws-cdk-lib/aws-kms";
 import { Construct } from "constructs";
 

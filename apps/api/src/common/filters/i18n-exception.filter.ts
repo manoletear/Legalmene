@@ -85,7 +85,6 @@ export class I18nExceptionFilter implements ExceptionFilter {
         if (Array.isArray(obj.errors)) {
           const zodLike = {
             issues: obj.errors,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-return
             get message() { return ""; },
           } as unknown as ZodError;
           // re-traducimos los issues

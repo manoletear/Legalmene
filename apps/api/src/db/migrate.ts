@@ -8,9 +8,9 @@ async function main() {
   if (!url) throw new Error("DATABASE_URL no configurada");
   const pool = new Pool({ connectionString: url });
   const db = drizzle(pool);
-  console.log("Aplicando migraciones...");
+  console.info("Aplicando migraciones...");
   await migrate(db, { migrationsFolder: "./drizzle/migrations" });
-  console.log("Migraciones aplicadas.");
+  console.info("Migraciones aplicadas.");
   await pool.end();
 }
 

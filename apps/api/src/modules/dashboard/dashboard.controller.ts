@@ -1,5 +1,5 @@
-import { Controller, Get, Inject, Query, UseGuards, UseInterceptors } from "@nestjs/common";
-import { CACHE_MANAGER, CacheInterceptor, CacheKey, CacheTTL } from "@nestjs/cache-manager";
+import { Controller, Get, Inject, Query, UseGuards } from "@nestjs/common";
+import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import { Cache } from "cache-manager";
 import { ApiBearerAuth, ApiHeader, ApiTags } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";

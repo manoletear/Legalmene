@@ -2,7 +2,6 @@ import * as cdk from "aws-cdk-lib";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as cf_origins from "aws-cdk-lib/aws-cloudfront-origins";
-import * as iam from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
 
 interface EdgeStackProps extends cdk.StackProps {

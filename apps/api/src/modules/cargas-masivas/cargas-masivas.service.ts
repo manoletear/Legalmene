@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, BadRequestException } from "@nestjs/common";
 import { parse } from "csv-parse/sync";
-import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { afiliados, NuevoAfiliado } from "../../db/schema/afiliados";
 import { formatearRut, rutValido } from "../../common/utils/rut";

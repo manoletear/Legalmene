@@ -1,9 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-const API = process.env.API_BASE ?? "http://localhost:3001/api/v1";
-
 test.describe("Cargas masivas", () => {
-  test("procesa CSV FLUJO y muestra resultado con errores", async ({ page }, testInfo) => {
+  test("procesa CSV FLUJO y muestra resultado con errores", async ({ page }) => {
     await page.goto("/cargas-masivas");
 
     // 2 válidos + 1 RUT con DV deliberadamente incorrecto (12345678 → DV correcto es 5, no 9).

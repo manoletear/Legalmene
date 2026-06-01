@@ -5,9 +5,8 @@ import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { sql } from "drizzle-orm";
-import { DatabaseModule, DRIZZLE, PG_POOL } from "../../src/db/database.module";
+import { DatabaseModule, PG_POOL } from "../../src/db/database.module";
 import { planes } from "../../src/db/schema/planes";
-import { afiliados } from "../../src/db/schema/afiliados";
 import { AfiliadosService } from "../../src/modules/afiliados/afiliados.service";
 import { AtencionesService } from "../../src/modules/atenciones/atenciones.service";
 

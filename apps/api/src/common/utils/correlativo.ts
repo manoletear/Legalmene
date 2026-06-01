@@ -1,6 +1,6 @@
 import { Database } from "../../db/database.module";
-import { correlativos, tipoAtencionEnum } from "../../db/schema/atenciones";
-import { sql, and, eq } from "drizzle-orm";
+import { correlativos } from "../../db/schema/atenciones";
+import { sql } from "drizzle-orm";
 
 const PREFIJO: Record<string, string> = {
   Consulta: "CONS",
