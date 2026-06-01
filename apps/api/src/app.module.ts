@@ -7,6 +7,7 @@ import { DatabaseModule } from "./db/database.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { AuditModule } from "./modules/audit/audit.module";
 import { AuditInterceptor } from "./modules/audit/audit.interceptor";
+import { MaintenanceInterceptor } from "./common/interceptors/maintenance.interceptor";
 import { MetricsModule } from "./modules/metrics/metrics.module";
 import { MetricsInterceptor } from "./modules/metrics/metrics.interceptor";
 import { UsuariosModule } from "./modules/usuarios/usuarios.module";
@@ -53,6 +54,7 @@ import { HealthModule } from "./modules/health/health.module";
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantThrottlerGuard },
+    { provide: APP_INTERCEPTOR, useClass: MaintenanceInterceptor },
     { provide: APP_INTERCEPTOR, useClass: MetricsInterceptor },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
   ],

@@ -135,6 +135,28 @@ UPDATE afiliados
 - Si transacción quedó en `Iniciado`: consultar manualmente con SDK
   Transbank y actualizar via `POST /pagos/confirmar`.
 
+## Modo mantenimiento
+
+Para freezes de despliegue o ventanas de migración:
+
+```bash
+# ECS: actualizar task definition con MAINTENANCE_MODE=true y desplegar
+aws ecs update-service --cluster legalmene-prod --service api \
+  --task-definition legalmene-api:NEW_REV
+
+# Local
+echo MAINTENANCE_MODE=true >> apps/api/.env
+pnpm api:dev
+```
+
+Mientras está activo:
+- `GET`, `HEAD`, `OPTIONS` pasan normalmente.
+- `POST`, `PUT`, `PATCH`, `DELETE` devuelven `503` con `Retry-After`.
+- `POST /pagos/confirmar` queda exento (callback Transbank no debe perderse).
+- `Retry-After` configurable con `MAINTENANCE_RETRY_AFTER` (segundos, default 300).
+
+Recuperar: quitar el env var y redeploy.
+
 ## Procedimientos de seguridad
 
 - Rotación secrets Aurora: AWS SM rotation lambda cada 90 días.
