@@ -18,6 +18,8 @@
     "db:generate": "pnpm --filter @legalmene/api db:generate",
     "db:migrate": "pnpm --filter @legalmene/api db:migrate",
     "db:seed": "pnpm --filter @legalmene/api db:seed",
+    "db:studio": "pnpm --filter @legalmene/api db:studio",
+    "e2e": "pnpm --filter @legalmene/e2e test",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test"
   },

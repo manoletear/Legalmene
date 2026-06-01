@@ -8,8 +8,11 @@ import { MatSidenavModule } from "@angular/material/sidenav";
 import { MatListModule } from "@angular/material/list";
 import { MatMenuModule } from "@angular/material/menu";
 import { MatTooltipModule } from "@angular/material/tooltip";
+import { MatBadgeModule } from "@angular/material/badge";
 import { MeService } from "./core/services/me.service";
 import { CodPlanService } from "./core/services/cod-plan.service";
+import { NotificacionesApiService, NotifItem } from "./core/services/notificaciones.service";
+import { signal } from "@angular/core";
 
 @Component({
   selector: "lm-root",
@@ -26,6 +29,7 @@ import { CodPlanService } from "./core/services/cod-plan.service";
     MatListModule,
     MatMenuModule,
     MatTooltipModule,
+    MatBadgeModule,
   ],
   template: `
     <mat-sidenav-container style="height: 100vh">
@@ -63,6 +67,38 @@ import { CodPlanService } from "./core/services/cod-plan.service";
           <span>Sistema PSL</span>
           <span class="muted" *ngIf="codPlan.codPlan() as cp" style="margin-left:12px; opacity:0.6;">Plan: {{ cp }}</span>
           <span style="flex: 1"></span>
+          <button
+            mat-icon-button
+            [matMenuTriggerFor]="notifMenu"
+            [matBadge]="notifCount() || ''"
+            [matBadgeHidden]="notifCount() === 0"
+            matBadgeColor="warn"
+            matBadgeSize="small"
+            matTooltip="Notificaciones"
+          >
+            <mat-icon>notifications</mat-icon>
+          </button>
+          <mat-menu #notifMenu="matMenu" xPosition="before">
+            <div style="padding:8px 16px; min-width:280px;" *ngIf="!notifItems().length">
+              <em style="opacity:0.6;">Sin notificaciones</em>
+            </div>
+            <button
+              mat-menu-item
+              *ngFor="let n of notifItems()"
+              [style.borderLeft]="
+                n.severidad === 'critical'
+                  ? '4px solid #d32f2f'
+                  : n.severidad === 'warn'
+                    ? '4px solid #fbc02d'
+                    : '4px solid #1976d2'
+              "
+            >
+              <div style="display:flex; flex-direction:column; padding:4px 0;">
+                <strong>{{ n.titulo }}</strong>
+                <small *ngIf="n.detalle" style="opacity:0.7;">{{ n.detalle }}</small>
+              </div>
+            </button>
+          </mat-menu>
           <ng-container *ngIf="me.user() as user; else loggingIn">
             <button mat-button [matMenuTriggerFor]="userMenu">
               <mat-icon>account_circle</mat-icon>
@@ -91,8 +127,25 @@ import { CodPlanService } from "./core/services/cod-plan.service";
 export class AppComponent implements OnInit {
   protected me = inject(MeService);
   protected codPlan = inject(CodPlanService);
+  private notif = inject(NotificacionesApiService);
+
+  protected notifCount = signal(0);
+  protected notifItems = signal<NotifItem[]>([]);
 
   ngOnInit() {
     this.me.load();
+    this.loadNotif();
+    // Refresca cada 60s para mantener el badge actualizado.
+    setInterval(() => this.loadNotif(), 60_000);
+  }
+
+  private loadNotif() {
+    this.notif.obtener().subscribe({
+      next: (r) => {
+        this.notifCount.set(r.count);
+        this.notifItems.set(r.items);
+      },
+      error: () => {},
+    });
   }
 }
