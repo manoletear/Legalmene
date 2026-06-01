@@ -4,6 +4,7 @@ import { Logger } from "@nestjs/common";
 import { ZodValidationPipe } from "nestjs-zod";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
+import { I18nExceptionFilter } from "./common/filters/i18n-exception.filter";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -11,6 +12,7 @@ async function bootstrap() {
 
   app.setGlobalPrefix("api/v1");
   app.useGlobalPipes(new ZodValidationPipe());
+  app.useGlobalFilters(new I18nExceptionFilter());
 
   app.enableCors({
     origin: process.env.WEB_ORIGIN ?? "http://localhost:4200",
