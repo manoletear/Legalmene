@@ -56,3 +56,6 @@ infra/cdk/cdk.context.json
 apps/api/data/
 tests/e2e/test-results/
 tests/e2e/playwright-report/
+
+# Postman openapi snapshot (regenerable)
+infra/postman/openapi.json

@@ -12,6 +12,7 @@ import { MatBadgeModule } from "@angular/material/badge";
 import { BreakpointObserver, Breakpoints } from "@angular/cdk/layout";
 import { MeService } from "./core/services/me.service";
 import { CodPlanService } from "./core/services/cod-plan.service";
+import { MaintenanceService } from "./core/services/maintenance.service";
 import { NotificacionesApiService, NotifItem } from "./core/services/notificaciones.service";
 import { signal } from "@angular/core";
 
@@ -66,9 +67,27 @@ import { signal } from "@angular/core";
           <a mat-list-item routerLink="/auditoria" routerLinkActive="active">
             <mat-icon matListItemIcon>history</mat-icon> Auditoría
           </a>
+          <a
+            mat-list-item
+            routerLink="/admin/usuarios"
+            routerLinkActive="active"
+            *ngIf="me.user()?.rol === 'Administrador'"
+          >
+            <mat-icon matListItemIcon>admin_panel_settings</mat-icon> Admin
+          </a>
         </mat-nav-list>
       </mat-sidenav>
       <mat-sidenav-content>
+        <div
+          *ngIf="maint.active()"
+          style="background:#fff4e0; border-bottom:1px solid #f9b04c; padding:8px 16px; display:flex; align-items:center; gap:8px;"
+        >
+          <mat-icon style="color:#c66400;">warning</mat-icon>
+          <span>
+            Sistema en mantenimiento: las acciones de escritura están temporalmente
+            deshabilitadas.
+          </span>
+        </div>
         <mat-toolbar>
           <button
             mat-icon-button
@@ -141,6 +160,7 @@ import { signal } from "@angular/core";
 export class AppComponent implements OnInit {
   protected me = inject(MeService);
   protected codPlan = inject(CodPlanService);
+  protected maint = inject(MaintenanceService);
   private notif = inject(NotificacionesApiService);
   private breakpoints = inject(BreakpointObserver);
 

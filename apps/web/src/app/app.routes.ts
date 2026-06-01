@@ -57,5 +57,10 @@ export const routes: Routes = [
     loadComponent: () =>
       import("./features/auditoria/auditoria.component").then((m) => m.AuditoriaComponent),
   },
+  {
+    path: "admin/usuarios",
+    loadComponent: () =>
+      import("./features/admin/admin-usuarios.component").then((m) => m.AdminUsuariosComponent),
+  },
   { path: "**", redirectTo: "dashboard" },
 ];
