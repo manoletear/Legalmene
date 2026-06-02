@@ -5,6 +5,7 @@ import { atenciones } from "../../db/schema/atenciones";
 import { afiliados } from "../../db/schema/afiliados";
 import { gestiones } from "../../db/schema/gestiones";
 import { comites } from "../../db/schema/comites";
+import { usuarios } from "../../db/schema/usuarios";
 
 export interface DashboardKpis {
   codPlan: string;
@@ -122,5 +123,61 @@ export class DashboardService {
       .groupBy(sql`${atenciones.fechaApertura}::date`)
       .orderBy(sql`${atenciones.fechaApertura}::date`);
     return rows.map((r) => ({ fecha: r.fecha, total: Number(r.total) }));
+  }
+
+  // Distribución por competencia (Civil/Penal/Laboral/...) — donut chart.
+  async porCompetencia(codPlan: string): Promise<{ competencia: string; total: number }[]> {
+    const rows = await this.db
+      .select({ competencia: atenciones.competencia, total: count() })
+      .from(atenciones)
+      .where(eq(atenciones.codPlan, codPlan))
+      .groupBy(atenciones.competencia)
+      .orderBy(sql`count(*) desc`);
+    return rows.map((r) => ({ competencia: r.competencia, total: Number(r.total) }));
+  }
+
+  // Top abogados por atenciones activas (Abierta/EnGestion/EnComite).
+  // Identifica cuellos de botella de carga.
+  async cargaPorAbogado(
+    codPlan: string,
+    limit = 10,
+  ): Promise<{ abogadoId: string; email: string; activas: number; total: number }[]> {
+    const rows = await this.db
+      .select({
+        abogadoId: atenciones.abogadoAsignadoId,
+        email: usuarios.email,
+        activas: sql<number>`count(*) filter (where ${atenciones.estado} in ('Abierta','EnGestion','EnComite'))`,
+        total: count(),
+      })
+      .from(atenciones)
+      .innerJoin(usuarios, eq(atenciones.abogadoAsignadoId, usuarios.id))
+      .where(eq(atenciones.codPlan, codPlan))
+      .groupBy(atenciones.abogadoAsignadoId, usuarios.email)
+      .orderBy(sql`count(*) filter (where ${atenciones.estado} in ('Abierta','EnGestion','EnComite')) desc`)
+      .limit(limit);
+    return rows.map((r) => ({
+      abogadoId: r.abogadoId ?? "",
+      email: r.email,
+      activas: Number(r.activas),
+      total: Number(r.total),
+    }));
+  }
+
+  // Atenciones creadas por mes (últimos N meses). Tendencia macro.
+  async porMes(codPlan: string, meses = 12): Promise<{ mes: string; total: number }[]> {
+    const desde = new Date();
+    desde.setUTCDate(1);
+    desde.setUTCHours(0, 0, 0, 0);
+    desde.setUTCMonth(desde.getUTCMonth() - meses + 1);
+    const rows = await this.db
+      .select({
+        mes: sql<string>`to_char(date_trunc('month', ${atenciones.fechaApertura}), 'YYYY-MM')`,
+        total: count(),
+      })
+      .from(atenciones)
+      .where(and(eq(atenciones.codPlan, codPlan), gte(atenciones.fechaApertura, desde)))
+      .groupBy(sql`date_trunc('month', ${atenciones.fechaApertura})`)
+      .orderBy(sql`date_trunc('month', ${atenciones.fechaApertura})`);
+    return rows.map((r) => ({ mes: r.mes, total: Number(r.total) }));
   }
 }

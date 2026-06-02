@@ -71,4 +71,36 @@ export class DashboardController {
     await this.cache.set(key, fresh, 60_000);
     return fresh;
   }
+
+  @Get("por-competencia")
+  async porCompetencia(@CodPlan() codPlan: string) {
+    const key = `dashboard:competencia:${codPlan}`;
+    const cached = await this.cache.get(key);
+    if (cached) return cached;
+    const fresh = await this.service.porCompetencia(codPlan);
+    await this.cache.set(key, fresh, 60_000);
+    return fresh;
+  }
+
+  @Get("carga-abogados")
+  async cargaAbogados(@CodPlan() codPlan: string, @Query("limit") limit?: string) {
+    const l = limit ? parseInt(limit, 10) : 10;
+    const key = `dashboard:abogados:${codPlan}:${l}`;
+    const cached = await this.cache.get(key);
+    if (cached) return cached;
+    const fresh = await this.service.cargaPorAbogado(codPlan, l);
+    await this.cache.set(key, fresh, 60_000);
+    return fresh;
+  }
+
+  @Get("por-mes")
+  async porMes(@CodPlan() codPlan: string, @Query("meses") meses?: string) {
+    const m = meses ? parseInt(meses, 10) : 12;
+    const key = `dashboard:mes:${codPlan}:${m}`;
+    const cached = await this.cache.get(key);
+    if (cached) return cached;
+    const fresh = await this.service.porMes(codPlan, m);
+    await this.cache.set(key, fresh, 60_000);
+    return fresh;
+  }
 }

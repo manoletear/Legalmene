@@ -25,6 +25,23 @@ export interface TimelinePoint {
   total: number;
 }
 
+export interface PorCompetencia {
+  competencia: string;
+  total: number;
+}
+
+export interface CargaAbogado {
+  abogadoId: string;
+  email: string;
+  activas: number;
+  total: number;
+}
+
+export interface PorMes {
+  mes: string;
+  total: number;
+}
+
 @Injectable({ providedIn: "root" })
 export class DashboardApiService {
   private http = inject(HttpClient);
@@ -37,6 +54,22 @@ export class DashboardApiService {
   timeline(dias = 30): Observable<TimelinePoint[]> {
     return this.http.get<TimelinePoint[]>(`${this.base}/timeline-atenciones`, {
       params: new HttpParams().set("dias", String(dias)),
+    });
+  }
+
+  porCompetencia(): Observable<PorCompetencia[]> {
+    return this.http.get<PorCompetencia[]>(`${this.base}/por-competencia`);
+  }
+
+  cargaAbogados(limit = 10): Observable<CargaAbogado[]> {
+    return this.http.get<CargaAbogado[]>(`${this.base}/carga-abogados`, {
+      params: new HttpParams().set("limit", String(limit)),
+    });
+  }
+
+  porMes(meses = 12): Observable<PorMes[]> {
+    return this.http.get<PorMes[]>(`${this.base}/por-mes`, {
+      params: new HttpParams().set("meses", String(meses)),
     });
   }
 }

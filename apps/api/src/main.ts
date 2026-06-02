@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import helmet from "helmet";
 import { NestFactory } from "@nestjs/core";
 import { Logger } from "@nestjs/common";
 import { ZodValidationPipe } from "nestjs-zod";
@@ -11,6 +12,31 @@ async function bootstrap() {
   const logger = new Logger("Bootstrap");
 
   app.setGlobalPrefix("api/v1");
+
+  // Headers de seguridad (HSTS, CSP, X-Frame-Options, etc).
+  // crossOriginResourcePolicy en "cross-origin" porque el frontend Angular
+  // vive en un dominio distinto (CloudFront vs ALB). Si llegan a ser el
+  // mismo origin se puede tightenear a "same-origin".
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+          fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+          imgSrc: ["'self'", "data:", "blob:"],
+          connectSrc: ["'self'"],
+          frameAncestors: ["'none'"],
+        },
+      },
+      hsts: { maxAge: 31_536_000, includeSubDomains: true, preload: true },
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+      // Swagger UI necesita inline styles; CSP arriba lo permite con
+      // 'unsafe-inline' en styleSrc.
+    }),
+  );
+
   app.useGlobalPipes(new ZodValidationPipe());
   app.useGlobalFilters(new I18nExceptionFilter());
 
