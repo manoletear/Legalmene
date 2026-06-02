@@ -1,120 +1,126 @@
 import { Component, OnInit, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
-import { FormBuilder, ReactiveFormsModule, Validators } from "@angular/forms";
-import { MatCardModule } from "@angular/material/card";
-import { MatFormFieldModule } from "@angular/material/form-field";
-import { MatInputModule } from "@angular/material/input";
-import { MatSelectModule } from "@angular/material/select";
-import { MatButtonModule } from "@angular/material/button";
-import { MatIconModule } from "@angular/material/icon";
-import { MatTableModule } from "@angular/material/table";
-import { MatChipsModule } from "@angular/material/chips";
-import { MatPaginatorModule, PageEvent } from "@angular/material/paginator";
-import { MatSnackBar, MatSnackBarModule } from "@angular/material/snack-bar";
+import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from "@angular/forms";
+import { CardModule } from "primeng/card";
+import { InputTextModule } from "primeng/inputtext";
+import { InputNumberModule } from "primeng/inputnumber";
+import { SelectModule } from "primeng/select";
+import { ButtonModule } from "primeng/button";
+import { TableModule } from "primeng/table";
+import { TagModule } from "primeng/tag";
+import { ToastModule } from "primeng/toast";
+import { MessageService } from "primeng/api";
 import { PagosApiService } from "../../core/services/pagos.service";
 import { AfiliadosApiService } from "../../core/services/afiliados.service";
 import type { Afiliado, Pago } from "@legalmene/shared";
+
+type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast";
+
+import type { TableLazyLoadEvent } from "primeng/table";
 
 @Component({
   selector: "lm-pagos",
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     ReactiveFormsModule,
-    MatCardModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatSelectModule,
-    MatButtonModule,
-    MatIconModule,
-    MatTableModule,
-    MatChipsModule,
-    MatPaginatorModule,
-    MatSnackBarModule,
+    CardModule,
+    InputTextModule,
+    InputNumberModule,
+    SelectModule,
+    ButtonModule,
+    TableModule,
+    TagModule,
+    ToastModule,
   ],
   template: `
-    <mat-card style="margin-bottom:16px;">
-      <mat-card-header>
-        <mat-card-title>Iniciar pago WebPay</mat-card-title>
-        <mat-card-subtitle>Demo (stub Transbank); orden de compra generada localmente</mat-card-subtitle>
-      </mat-card-header>
-      <mat-card-content>
-        <form [formGroup]="form" (ngSubmit)="iniciar()" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start;">
-          <mat-form-field appearance="outline" style="min-width:280px; flex:1;">
-            <mat-label>Afiliado</mat-label>
-            <mat-select formControlName="afiliadoId">
-              <mat-option *ngFor="let a of afiliados()" [value]="a.id">
-                {{ a.rut }} — {{ a.apellidoPaterno }}, {{ a.nombres }}
-              </mat-option>
-            </mat-select>
-          </mat-form-field>
-          <mat-form-field appearance="outline" style="min-width:160px;">
-            <mat-label>Monto (CLP)</mat-label>
-            <input matInput type="number" formControlName="monto" />
-          </mat-form-field>
-          <button mat-flat-button color="primary" type="submit" [disabled]="form.invalid || iniciando()">
-            Iniciar pago
-          </button>
-        </form>
-      </mat-card-content>
-    </mat-card>
+    <p-toast></p-toast>
+    <p-card [style]="{ 'margin-bottom': '16px', display: 'block' }">
+      <ng-template pTemplate="header">
+        <div style="padding:16px 16px 0;">
+          <h2 style="margin:0;">Iniciar pago WebPay</h2>
+          <small class="lm-muted">Demo (stub Transbank); orden de compra generada localmente</small>
+        </div>
+      </ng-template>
+      <form [formGroup]="form" (ngSubmit)="iniciar()" class="lm-row">
+        <p-select
+          formControlName="afiliadoId"
+          [options]="afiliadoOpts()"
+          optionLabel="label"
+          optionValue="value"
+          [filter]="true"
+          filterBy="label"
+          appendTo="body"
+          placeholder="Selecciona afiliado"
+          [style]="{ 'min-width': '280px' }"
+          styleClass="lm-grow"
+        ></p-select>
+        <p-inputNumber formControlName="monto" mode="decimal" [min]="1" placeholder="Monto (CLP)" [style]="{ width: '160px' }"></p-inputNumber>
+        <button pButton type="submit" label="Iniciar pago" [disabled]="form.invalid || iniciando()"></button>
+      </form>
+    </p-card>
 
-    <mat-card>
-      <mat-card-header>
-        <mat-card-title>Historial</mat-card-title>
-        <span style="flex:1"></span>
-        <mat-form-field appearance="outline" subscriptSizing="dynamic" style="width:160px;">
-          <mat-label>Estado</mat-label>
-          <mat-select [value]="filtroEstado" (selectionChange)="setEstado($event.value)">
-            <mat-option [value]="undefined">Todos</mat-option>
-            <mat-option value="Iniciado">Iniciado</mat-option>
-            <mat-option value="Autorizado">Autorizado</mat-option>
-            <mat-option value="Rechazado">Rechazado</mat-option>
-            <mat-option value="Anulado">Anulado</mat-option>
-            <mat-option value="Reembolsado">Reembolsado</mat-option>
-          </mat-select>
-        </mat-form-field>
-      </mat-card-header>
-      <mat-card-content>
-        <table mat-table [dataSource]="data()" *ngIf="data().length; else vacio">
-          <ng-container matColumnDef="ordenCompra">
-            <th mat-header-cell *matHeaderCellDef>Orden</th>
-            <td mat-cell *matCellDef="let p">{{ p.ordenCompra }}</td>
-          </ng-container>
-          <ng-container matColumnDef="monto">
-            <th mat-header-cell *matHeaderCellDef>Monto</th>
-            <td mat-cell *matCellDef="let p">{{ p.monto | currency: p.moneda : 'symbol-narrow' : '1.0-0' }}</td>
-          </ng-container>
-          <ng-container matColumnDef="estado">
-            <th mat-header-cell *matHeaderCellDef>Estado</th>
-            <td mat-cell *matCellDef="let p"><mat-chip [color]="estadoColor(p.estado)" highlighted>{{ p.estado }}</mat-chip></td>
-          </ng-container>
-          <ng-container matColumnDef="proveedor">
-            <th mat-header-cell *matHeaderCellDef>Proveedor</th>
-            <td mat-cell *matCellDef="let p">{{ p.proveedor }}</td>
-          </ng-container>
-          <ng-container matColumnDef="fecha">
-            <th mat-header-cell *matHeaderCellDef>Iniciado</th>
-            <td mat-cell *matCellDef="let p">{{ p.fechaIniciado | date: 'short' }}</td>
-          </ng-container>
-          <tr mat-header-row *matHeaderRowDef="cols"></tr>
-          <tr mat-row *matRowDef="let row; columns: cols"></tr>
-        </table>
-        <ng-template #vacio>
-          <p *ngIf="!loading()" style="opacity:0.5;">Sin pagos.</p>
+    <p-card>
+      <ng-template pTemplate="header">
+        <div class="lm-row" style="padding:16px 16px 0;">
+          <h2 style="margin:0; flex:1;">Historial</h2>
+          <p-select
+            [(ngModel)]="filtroEstado"
+            (onChange)="setEstado($event.value)"
+            [options]="estadoOpts"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Estado"
+            [showClear]="true"
+            [style]="{ width: '180px' }"
+          ></p-select>
+        </div>
+      </ng-template>
+
+      <p-table
+        [value]="data()"
+        [lazy]="true"
+        (onLazyLoad)="onLazy($event)"
+        [paginator]="true"
+        [rows]="pageSize()"
+        [totalRecords]="total()"
+        [rowsPerPageOptions]="[25, 50]"
+        [loading]="loading()"
+        [first]="(page() - 1) * pageSize()"
+        styleClass="p-datatable-sm"
+      >
+        <ng-template pTemplate="header">
+          <tr>
+            <th>Orden</th>
+            <th>Monto</th>
+            <th>Estado</th>
+            <th>Proveedor</th>
+            <th>Iniciado</th>
+          </tr>
         </ng-template>
-        <mat-paginator [length]="total()" [pageSize]="pageSize()" [pageSizeOptions]="[25, 50]" (page)="onPage($event)" />
-      </mat-card-content>
-    </mat-card>
+        <ng-template pTemplate="body" let-p>
+          <tr>
+            <td>{{ p.ordenCompra }}</td>
+            <td>{{ p.monto | currency: p.moneda : 'symbol-narrow' : '1.0-0' }}</td>
+            <td><p-tag [value]="p.estado" [severity]="estadoSeverity(p.estado)"></p-tag></td>
+            <td>{{ p.proveedor }}</td>
+            <td>{{ p.fechaIniciado | date: 'short' }}</td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr><td colspan="5" style="text-align:center; padding:24px;" class="lm-muted">Sin pagos.</td></tr>
+        </ng-template>
+      </p-table>
+    </p-card>
   `,
 })
 export class PagosComponent implements OnInit {
   private fb = inject(FormBuilder);
   private api = inject(PagosApiService);
   private afiliadosApi = inject(AfiliadosApiService);
-  private snack = inject(MatSnackBar);
+  private msg = inject(MessageService);
 
-  protected cols = ["ordenCompra", "monto", "estado", "proveedor", "fecha"];
   protected data = signal<Pago[]>([]);
   protected afiliados = signal<Afiliado[]>([]);
   protected total = signal(0);
@@ -123,6 +129,20 @@ export class PagosComponent implements OnInit {
   protected loading = signal(false);
   protected iniciando = signal(false);
   protected filtroEstado: string | undefined;
+
+  protected estadoOpts = [
+    { label: "Iniciado", value: "Iniciado" },
+    { label: "Autorizado", value: "Autorizado" },
+    { label: "Rechazado", value: "Rechazado" },
+    { label: "Anulado", value: "Anulado" },
+    { label: "Reembolsado", value: "Reembolsado" },
+  ];
+
+  protected afiliadoOpts = () =>
+    this.afiliados().map((a) => ({
+      label: `${a.rut} — ${a.apellidoPaterno}, ${a.nombres}`,
+      value: a.id,
+    }));
 
   protected form = this.fb.group({
     afiliadoId: ["", Validators.required],
@@ -152,9 +172,11 @@ export class PagosComponent implements OnInit {
     this.recargar();
   }
 
-  onPage(ev: PageEvent) {
-    this.page.set(ev.pageIndex + 1);
-    this.pageSize.set(ev.pageSize);
+  onLazy(ev: TableLazyLoadEvent) {
+    const first = ev.first ?? 0;
+    const rows = ev.rows ?? this.pageSize();
+    this.page.set(Math.floor(first / rows) + 1);
+    this.pageSize.set(rows);
     this.recargar();
   }
 
@@ -171,19 +193,20 @@ export class PagosComponent implements OnInit {
       .subscribe({
         next: (res) => {
           this.iniciando.set(false);
-          this.snack.open(`Pago iniciado: ${res.pago.ordenCompra}`, "OK", { duration: 3000 });
+          this.msg.add({ severity: "success", summary: `Pago iniciado: ${res.pago.ordenCompra}`, life: 3000 });
           this.recargar();
         },
         error: (err) => {
           this.iniciando.set(false);
-          this.snack.open(`Error: ${err.error?.message ?? err.message}`, "Cerrar", { duration: 4000 });
+          this.msg.add({ severity: "error", summary: "Error", detail: err.error?.message ?? err.message, life: 4000 });
         },
       });
   }
 
-  estadoColor(e: string) {
-    if (e === "Autorizado") return "primary";
-    if (e === "Rechazado" || e === "Anulado") return "warn";
-    return "accent";
+  estadoSeverity(e: string): Severity {
+    if (e === "Autorizado") return "success";
+    if (e === "Rechazado" || e === "Anulado") return "danger";
+    if (e === "Reembolsado") return "secondary";
+    return "info";
   }
 }

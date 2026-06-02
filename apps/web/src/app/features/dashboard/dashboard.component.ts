@@ -1,10 +1,9 @@
 import { Component, OnInit, computed, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { RouterLink } from "@angular/router";
-import { MatCardModule } from "@angular/material/card";
-import { MatIconModule } from "@angular/material/icon";
-import { MatButtonModule } from "@angular/material/button";
-import { MatProgressSpinnerModule } from "@angular/material/progress-spinner";
+import { CardModule } from "primeng/card";
+import { ButtonModule } from "primeng/button";
+import { ProgressSpinnerModule } from "primeng/progressspinner";
 import {
   DashboardApiService,
   DashboardKpis,
@@ -17,141 +16,113 @@ import {
 @Component({
   selector: "lm-dashboard",
   standalone: true,
-  imports: [
-    CommonModule,
-    RouterLink,
-    MatCardModule,
-    MatIconModule,
-    MatButtonModule,
-    MatProgressSpinnerModule,
-  ],
+  imports: [CommonModule, RouterLink, CardModule, ButtonModule, ProgressSpinnerModule],
   template: `
     <h1 style="display:flex; align-items:center; gap:12px;">
       Dashboard
-      <small *ngIf="kpis() as k" style="opacity:0.5; font-weight:normal;">plan {{ k.codPlan }}</small>
+      <small *ngIf="kpis() as k" class="lm-muted" style="font-weight:normal;">plan {{ k.codPlan }}</small>
     </h1>
 
     <div *ngIf="loading()" style="display:flex; justify-content:center; padding:48px;">
-      <mat-progress-spinner mode="indeterminate" diameter="48"></mat-progress-spinner>
+      <p-progressSpinner styleClass="!w-12 !h-12" strokeWidth="4"></p-progressSpinner>
     </div>
 
     <ng-container *ngIf="kpis() as k">
-      <!-- Primary KPIs -->
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px; margin-bottom:24px;">
-        <mat-card>
-          <mat-card-content>
-            <div style="display:flex; align-items:center; gap:12px;">
-              <mat-icon style="font-size:40px; width:40px; height:40px; color:#1976d2;">people</mat-icon>
-              <div>
-                <div style="font-size:28px; font-weight:600;">{{ k.afiliados.activos }}</div>
-                <div style="opacity:0.7;">Afiliados activos</div>
-                <small style="opacity:0.5;">{{ k.afiliados.total }} totales · {{ k.afiliados.eliminados }} eliminados</small>
-              </div>
+      <!-- KPIs primarios -->
+      <div class="lm-grid lm-grid-4" style="margin-bottom:24px;">
+        <p-card>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <i class="pi pi-users" style="font-size:32px; color:#1976d2;"></i>
+            <div>
+              <div style="font-size:28px; font-weight:600;">{{ k.afiliados.activos }}</div>
+              <div style="opacity:0.7;">Afiliados activos</div>
+              <small class="lm-muted">{{ k.afiliados.total }} totales · {{ k.afiliados.eliminados }} eliminados</small>
             </div>
-          </mat-card-content>
-        </mat-card>
+          </div>
+        </p-card>
 
-        <mat-card>
-          <mat-card-content>
-            <div style="display:flex; align-items:center; gap:12px;">
-              <mat-icon style="font-size:40px; width:40px; height:40px; color:#1976d2;">gavel</mat-icon>
-              <div>
-                <div style="font-size:28px; font-weight:600;">{{ k.atenciones.abiertas + k.atenciones.enGestion + k.atenciones.enComite }}</div>
-                <div style="opacity:0.7;">Atenciones activas</div>
-                <small style="opacity:0.5;">{{ k.atenciones.total }} totales</small>
-              </div>
+        <p-card>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <i class="pi pi-briefcase" style="font-size:32px; color:#1976d2;"></i>
+            <div>
+              <div style="font-size:28px; font-weight:600;">{{ k.atenciones.abiertas + k.atenciones.enGestion + k.atenciones.enComite }}</div>
+              <div style="opacity:0.7;">Atenciones activas</div>
+              <small class="lm-muted">{{ k.atenciones.total }} totales</small>
             </div>
-          </mat-card-content>
-        </mat-card>
+          </div>
+        </p-card>
 
-        <mat-card>
-          <mat-card-content>
-            <div style="display:flex; align-items:center; gap:12px;">
-              <mat-icon style="font-size:40px; width:40px; height:40px;" [style.color]="k.gestiones.vencidas ? '#d32f2f' : '#1976d2'">schedule</mat-icon>
-              <div>
-                <div style="font-size:28px; font-weight:600;">{{ k.gestiones.pendientes }}</div>
-                <div style="opacity:0.7;">Gestiones pendientes</div>
-                <small *ngIf="k.gestiones.vencidas" style="color:#d32f2f;">{{ k.gestiones.vencidas }} vencidas</small>
-              </div>
+        <p-card>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <i class="pi pi-clock" style="font-size:32px;" [style.color]="k.gestiones.vencidas ? '#d32f2f' : '#1976d2'"></i>
+            <div>
+              <div style="font-size:28px; font-weight:600;">{{ k.gestiones.pendientes }}</div>
+              <div style="opacity:0.7;">Gestiones pendientes</div>
+              <small *ngIf="k.gestiones.vencidas" style="color:#d32f2f;">{{ k.gestiones.vencidas }} vencidas</small>
             </div>
-          </mat-card-content>
-        </mat-card>
+          </div>
+        </p-card>
 
-        <mat-card>
-          <mat-card-content>
-            <div style="display:flex; align-items:center; gap:12px;">
-              <mat-icon style="font-size:40px; width:40px; height:40px; color:#1976d2;">how_to_vote</mat-icon>
-              <div>
-                <div style="font-size:28px; font-weight:600;">{{ k.comites.abiertos }}</div>
-                <div style="opacity:0.7;">Comités abiertos</div>
-              </div>
+        <p-card>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <i class="pi pi-id-card" style="font-size:32px; color:#1976d2;"></i>
+            <div>
+              <div style="font-size:28px; font-weight:600;">{{ k.comites.abiertos }}</div>
+              <div style="opacity:0.7;">Comités abiertos</div>
             </div>
-          </mat-card-content>
-        </mat-card>
+          </div>
+        </p-card>
       </div>
 
       <!-- Atenciones por tipo + estado -->
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;">
-        <mat-card>
-          <mat-card-header><mat-card-title>Atenciones por tipo</mat-card-title></mat-card-header>
-          <mat-card-content>
-            <div style="display:flex; flex-direction:column; gap:8px;">
-              <ng-container *ngFor="let row of porTipo()">
-                <div style="display:flex; align-items:center; gap:8px;">
-                  <div style="width:80px; opacity:0.7;">{{ row.label }}</div>
-                  <div style="flex:1; background:#eee; border-radius:4px; height:24px; overflow:hidden;">
-                    <div [style.width.%]="row.pct" style="background:#1976d2; height:100%;"></div>
-                  </div>
-                  <div style="width:48px; text-align:right;">{{ row.value }}</div>
+      <div class="lm-grid lm-grid-2" style="margin-bottom:24px;">
+        <p-card header="Atenciones por tipo">
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <ng-container *ngFor="let row of porTipo()">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div style="width:80px; opacity:0.7;">{{ row.label }}</div>
+                <div style="flex:1; background:#eee; border-radius:4px; height:24px; overflow:hidden;">
+                  <div [style.width.%]="row.pct" style="background:#1976d2; height:100%;"></div>
                 </div>
-              </ng-container>
-            </div>
-          </mat-card-content>
-        </mat-card>
+                <div style="width:48px; text-align:right;">{{ row.value }}</div>
+              </div>
+            </ng-container>
+          </div>
+        </p-card>
 
-        <mat-card>
-          <mat-card-header><mat-card-title>Atenciones por estado</mat-card-title></mat-card-header>
-          <mat-card-content>
-            <div style="display:flex; flex-direction:column; gap:8px;">
-              <ng-container *ngFor="let row of porEstado()">
-                <div style="display:flex; align-items:center; gap:8px;">
-                  <div style="width:100px; opacity:0.7;">{{ row.label }}</div>
-                  <div style="flex:1; background:#eee; border-radius:4px; height:24px; overflow:hidden;">
-                    <div [style.width.%]="row.pct" [style.background]="row.color" style="height:100%;"></div>
-                  </div>
-                  <div style="width:48px; text-align:right;">{{ row.value }}</div>
+        <p-card header="Atenciones por estado">
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <ng-container *ngFor="let row of porEstado()">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div style="width:100px; opacity:0.7;">{{ row.label }}</div>
+                <div style="flex:1; background:#eee; border-radius:4px; height:24px; overflow:hidden;">
+                  <div [style.width.%]="row.pct" [style.background]="row.color" style="height:100%;"></div>
                 </div>
-              </ng-container>
-            </div>
-          </mat-card-content>
-        </mat-card>
+                <div style="width:48px; text-align:right;">{{ row.value }}</div>
+              </div>
+            </ng-container>
+          </div>
+        </p-card>
       </div>
 
       <!-- Timeline sparkline -->
-      <mat-card>
-        <mat-card-header>
-          <mat-card-title>Atenciones creadas (últimos 30 días)</mat-card-title>
-          <mat-card-subtitle>{{ k.atenciones.creadasUltimos30Dias }} en total · {{ k.atenciones.creadasHoy }} hoy</mat-card-subtitle>
-        </mat-card-header>
-        <mat-card-content>
-          <svg [attr.viewBox]="'0 0 ' + sparkW + ' ' + sparkH" style="width:100%; height:120px;" *ngIf="timeline().length">
-            <polyline [attr.points]="sparkPoints()" fill="none" stroke="#1976d2" stroke-width="2"></polyline>
-            <ng-container *ngFor="let pt of sparkDots(); let i = index">
-              <circle [attr.cx]="pt.x" [attr.cy]="pt.y" r="3" fill="#1976d2"></circle>
-            </ng-container>
-          </svg>
-          <p *ngIf="!timeline().length" style="opacity:0.5;">Sin datos en el período.</p>
-        </mat-card-content>
-        <mat-card-actions>
-          <a mat-button routerLink="/atenciones">Ver atenciones →</a>
-        </mat-card-actions>
-      </mat-card>
+      <p-card header="Atenciones creadas (últimos 30 días)" [subheader]="k.atenciones.creadasUltimos30Dias + ' en total · ' + k.atenciones.creadasHoy + ' hoy'">
+        <svg [attr.viewBox]="'0 0 ' + sparkW + ' ' + sparkH" style="width:100%; height:120px;" *ngIf="timeline().length">
+          <polyline [attr.points]="sparkPoints()" fill="none" stroke="#1976d2" stroke-width="2"></polyline>
+          <ng-container *ngFor="let pt of sparkDots(); let i = index">
+            <circle [attr.cx]="pt.x" [attr.cy]="pt.y" r="3" fill="#1976d2"></circle>
+          </ng-container>
+        </svg>
+        <p *ngIf="!timeline().length" class="lm-muted">Sin datos en el período.</p>
+        <ng-template pTemplate="footer">
+          <a pButton [text]="true" size="small" routerLink="/atenciones" label="Ver atenciones →"></a>
+        </ng-template>
+      </p-card>
 
-      <!-- Distribución por competencia (donut SVG) + Top abogados -->
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:24px;">
-        <mat-card>
-          <mat-card-header><mat-card-title>Atenciones por competencia</mat-card-title></mat-card-header>
-          <mat-card-content style="display:flex; gap:16px; align-items:center;">
+      <!-- Competencia donut + Top abogados -->
+      <div class="lm-grid lm-grid-2" style="margin-top:24px;">
+        <p-card header="Atenciones por competencia">
+          <div style="display:flex; gap:16px; align-items:center;">
             <svg viewBox="0 0 100 100" style="width:140px; height:140px;" *ngIf="porCompetencia().length">
               <circle cx="50" cy="50" r="40" fill="none" stroke="#eee" stroke-width="20" />
               <ng-container *ngFor="let arc of donutArcs(); let i = index">
@@ -171,37 +142,31 @@ import {
                 <span><strong>{{ row.total }}</strong> ({{ row.pct.toFixed(0) }}%)</span>
               </div>
             </div>
-          </mat-card-content>
-        </mat-card>
+          </div>
+        </p-card>
 
-        <mat-card>
-          <mat-card-header><mat-card-title>Carga por abogado (top {{ cargaAbogados().length }})</mat-card-title></mat-card-header>
-          <mat-card-content>
-            <div *ngFor="let a of cargaAbogados()" style="display:flex; align-items:center; gap:8px; padding:4px 0; border-bottom:1px solid #eee;">
-              <mat-icon style="opacity:0.5;">person</mat-icon>
-              <span style="flex:1;">{{ a.email }}</span>
-              <span style="opacity:0.6; font-size:12px;">{{ a.total }} totales</span>
-              <span [style.color]="a.activas > 10 ? '#d32f2f' : '#1976d2'"><strong>{{ a.activas }}</strong> activas</span>
-            </div>
-            <p *ngIf="!cargaAbogados().length" style="opacity:0.5;">Sin atenciones asignadas.</p>
-          </mat-card-content>
-        </mat-card>
+        <p-card [header]="'Carga por abogado (top ' + cargaAbogados().length + ')'">
+          <div *ngFor="let a of cargaAbogados()" style="display:flex; align-items:center; gap:8px; padding:4px 0; border-bottom:1px solid #eee;">
+            <i class="pi pi-user lm-muted"></i>
+            <span style="flex:1;">{{ a.email }}</span>
+            <span class="lm-muted lm-small">{{ a.total }} totales</span>
+            <span [style.color]="a.activas > 10 ? '#d32f2f' : '#1976d2'"><strong>{{ a.activas }}</strong> activas</span>
+          </div>
+          <p *ngIf="!cargaAbogados().length" class="lm-muted">Sin atenciones asignadas.</p>
+        </p-card>
       </div>
 
-      <!-- Tendencia 12 meses (bar chart minimal) -->
-      <mat-card style="margin-top:24px;">
-        <mat-card-header><mat-card-title>Atenciones por mes (últimos 12)</mat-card-title></mat-card-header>
-        <mat-card-content>
-          <svg viewBox="0 0 600 140" style="width:100%; height:140px;" *ngIf="porMes().length">
-            <g *ngFor="let bar of monthBars(); let i = index">
-              <rect [attr.x]="bar.x" [attr.y]="bar.y" [attr.width]="bar.w" [attr.height]="bar.h" fill="#1976d2" />
-              <text [attr.x]="bar.x + bar.w / 2" y="135" text-anchor="middle" font-size="9" fill="#666">{{ bar.label }}</text>
-              <text [attr.x]="bar.x + bar.w / 2" [attr.y]="bar.y - 4" text-anchor="middle" font-size="9" fill="#1976d2">{{ bar.value }}</text>
-            </g>
-          </svg>
-          <p *ngIf="!porMes().length" style="opacity:0.5;">Sin datos.</p>
-        </mat-card-content>
-      </mat-card>
+      <!-- Tendencia 12 meses -->
+      <p-card header="Atenciones por mes (últimos 12)" styleClass="lm-mt-24" [style]="{ 'margin-top': '24px' }">
+        <svg viewBox="0 0 600 140" style="width:100%; height:140px;" *ngIf="porMes().length">
+          <g *ngFor="let bar of monthBars(); let i = index">
+            <rect [attr.x]="bar.x" [attr.y]="bar.y" [attr.width]="bar.w" [attr.height]="bar.h" fill="#1976d2" />
+            <text [attr.x]="bar.x + bar.w / 2" y="135" text-anchor="middle" font-size="9" fill="#666">{{ bar.label }}</text>
+            <text [attr.x]="bar.x + bar.w / 2" [attr.y]="bar.y - 4" text-anchor="middle" font-size="9" fill="#1976d2">{{ bar.value }}</text>
+          </g>
+        </svg>
+        <p *ngIf="!porMes().length" class="lm-muted">Sin datos.</p>
+      </p-card>
     </ng-container>
   `,
 })
@@ -215,7 +180,6 @@ export class DashboardComponent implements OnInit {
   protected porMes = signal<PorMes[]>([]);
   protected loading = signal(true);
 
-  // Paleta para donut/leyenda. Repite si hay > 9 categorías.
   private readonly DONUT_COLORS = [
     "#1976d2", "#388e3c", "#fbc02d", "#7b1fa2", "#d32f2f",
     "#00897b", "#f57c00", "#5d4037", "#455a64",
@@ -261,9 +225,6 @@ export class DashboardComponent implements OnInit {
     }));
   });
 
-  // Donut chart: cada arco es un círculo con stroke-dasharray que define
-  // la porción visible y stroke-dashoffset que la rota. Circunferencia
-  // 2πr = 2π·40 ≈ 251.33.
   protected readonly CIRC = 2 * Math.PI * 40;
 
   protected donutLegend = computed(() => {
@@ -307,7 +268,7 @@ export class DashboardComponent implements OnInit {
         y: H - h + 10,
         w: stepX - 8,
         h,
-        label: p.mes.slice(5), // MM
+        label: p.mes.slice(5),
         value: p.total,
       };
     });

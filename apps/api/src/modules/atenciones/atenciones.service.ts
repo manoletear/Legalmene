@@ -11,6 +11,7 @@ import { atenciones, Atencion, NuevaAtencion } from "../../db/schema/atenciones"
 import { afiliados } from "../../db/schema/afiliados";
 import { siguienteCorrelativo } from "../../common/utils/correlativo";
 import { WebhooksService } from "../webhooks/webhooks.service";
+import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
 import type {
   CreateAtencionDto,
   UpdateAtencionDto,
@@ -23,6 +24,7 @@ export class AtencionesService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     @Inject(WebhooksService) private readonly webhooks: WebhooksService,
+    @Inject(NotifInboxService) private readonly notif: NotifInboxService,
   ) {}
 
   async buscar(codPlan: string, filtro: FiltroAtencionesDto) {

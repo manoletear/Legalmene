@@ -2,12 +2,13 @@ import { Component, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormBuilder, ReactiveFormsModule, Validators } from "@angular/forms";
 import { Router } from "@angular/router";
-import { MatCardModule } from "@angular/material/card";
-import { MatFormFieldModule } from "@angular/material/form-field";
-import { MatInputModule } from "@angular/material/input";
-import { MatSelectModule } from "@angular/material/select";
-import { MatButtonModule } from "@angular/material/button";
-import { MatSnackBar, MatSnackBarModule } from "@angular/material/snack-bar";
+import { CardModule } from "primeng/card";
+import { InputTextModule } from "primeng/inputtext";
+import { TextareaModule } from "primeng/textarea";
+import { SelectModule } from "primeng/select";
+import { ButtonModule } from "primeng/button";
+import { ToastModule } from "primeng/toast";
+import { MessageService } from "primeng/api";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { AfiliadosApiService } from "../../core/services/afiliados.service";
 import type { Afiliado } from "@legalmene/shared";
@@ -18,72 +19,80 @@ import type { Afiliado } from "@legalmene/shared";
   imports: [
     CommonModule,
     ReactiveFormsModule,
-    MatCardModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatSelectModule,
-    MatButtonModule,
-    MatSnackBarModule,
+    CardModule,
+    InputTextModule,
+    TextareaModule,
+    SelectModule,
+    ButtonModule,
+    ToastModule,
   ],
   template: `
-    <mat-card>
-      <mat-card-header><mat-card-title>Nueva atención</mat-card-title></mat-card-header>
-      <mat-card-content>
-        <form [formGroup]="form" (ngSubmit)="submit()" style="display:grid; gap:16px; max-width:680px;">
-          <mat-form-field appearance="outline">
-            <mat-label>Tipo</mat-label>
-            <mat-select formControlName="tipo">
-              <mat-option value="Consulta">Consulta</mat-option>
-              <mat-option value="Asesoria">Asesoría</mat-option>
-              <mat-option value="Juicio">Juicio</mat-option>
-            </mat-select>
-          </mat-form-field>
+    <p-toast></p-toast>
+    <p-card header="Nueva atención">
+      <form [formGroup]="form" (ngSubmit)="submit()" class="lm-col" style="gap:16px; max-width:680px;">
+        <div class="lm-col" style="gap:4px;">
+          <label>Tipo</label>
+          <p-select
+            formControlName="tipo"
+            [options]="tipoOpts"
+            optionLabel="label"
+            optionValue="value"
+            appendTo="body"
+          ></p-select>
+        </div>
 
-          <mat-form-field appearance="outline">
-            <mat-label>Afiliado</mat-label>
-            <mat-select formControlName="afiliadoId">
-              <mat-option *ngFor="let a of afiliados()" [value]="a.id">
-                {{ a.rut }} — {{ a.apellidoPaterno }}, {{ a.nombres }}
-              </mat-option>
-            </mat-select>
-          </mat-form-field>
+        <div class="lm-col" style="gap:4px;">
+          <label>Afiliado</label>
+          <p-select
+            formControlName="afiliadoId"
+            [options]="afiliadoOpts()"
+            optionLabel="label"
+            optionValue="value"
+            [filter]="true"
+            filterBy="label"
+            appendTo="body"
+            placeholder="Selecciona afiliado"
+          ></p-select>
+        </div>
 
-          <mat-form-field appearance="outline">
-            <mat-label>Competencia</mat-label>
-            <mat-select formControlName="competencia">
-              <mat-option *ngFor="let c of competencias" [value]="c">{{ c }}</mat-option>
-            </mat-select>
-          </mat-form-field>
+        <div class="lm-col" style="gap:4px;">
+          <label>Competencia</label>
+          <p-select
+            formControlName="competencia"
+            [options]="competenciaOpts"
+            optionLabel="label"
+            optionValue="value"
+            appendTo="body"
+          ></p-select>
+        </div>
 
-          <mat-form-field appearance="outline">
-            <mat-label>Materia</mat-label>
-            <input matInput formControlName="materia" />
-          </mat-form-field>
+        <div class="lm-col" style="gap:4px;">
+          <label>Materia</label>
+          <input pInputText type="text" formControlName="materia" />
+        </div>
 
-          <mat-form-field appearance="outline">
-            <mat-label>Descripción</mat-label>
-            <textarea matInput rows="4" formControlName="descripcion"></textarea>
-          </mat-form-field>
+        <div class="lm-col" style="gap:4px;">
+          <label>Descripción</label>
+          <textarea pTextarea rows="4" formControlName="descripcion"></textarea>
+        </div>
 
-          <mat-form-field appearance="outline">
-            <mat-label>Prioridad</mat-label>
-            <mat-select formControlName="prioridad">
-              <mat-option value="Baja">Baja</mat-option>
-              <mat-option value="Media">Media</mat-option>
-              <mat-option value="Alta">Alta</mat-option>
-              <mat-option value="Urgente">Urgente</mat-option>
-            </mat-select>
-          </mat-form-field>
+        <div class="lm-col" style="gap:4px;">
+          <label>Prioridad</label>
+          <p-select
+            formControlName="prioridad"
+            [options]="prioridadOpts"
+            optionLabel="label"
+            optionValue="value"
+            appendTo="body"
+          ></p-select>
+        </div>
 
-          <div style="display:flex; gap:12px;">
-            <button mat-flat-button color="primary" type="submit" [disabled]="form.invalid || saving()">
-              Crear
-            </button>
-            <button mat-button type="button" (click)="cancelar()">Cancelar</button>
-          </div>
-        </form>
-      </mat-card-content>
-    </mat-card>
+        <div class="lm-row" style="gap:12px;">
+          <button pButton type="submit" label="Crear" [disabled]="form.invalid || saving()"></button>
+          <button pButton type="button" label="Cancelar" [text]="true" severity="secondary" (click)="cancelar()"></button>
+        </div>
+      </form>
+    </p-card>
   `,
 })
 export class AtencionFormComponent {
@@ -91,21 +100,32 @@ export class AtencionFormComponent {
   private api = inject(AtencionesApiService);
   private afiliadosApi = inject(AfiliadosApiService);
   private router = inject(Router);
-  private snack = inject(MatSnackBar);
+  private msg = inject(MessageService);
 
   protected afiliados = signal<Afiliado[]>([]);
   protected saving = signal(false);
-  protected competencias = [
-    "Civil",
-    "Penal",
-    "Laboral",
-    "Familia",
-    "Tributario",
-    "Comercial",
-    "Administrativo",
-    "Constitucional",
-    "Otro",
+
+  protected tipoOpts = [
+    { label: "Consulta", value: "Consulta" },
+    { label: "Asesoría", value: "Asesoria" },
+    { label: "Juicio", value: "Juicio" },
   ];
+  protected competenciaOpts = [
+    "Civil", "Penal", "Laboral", "Familia", "Tributario",
+    "Comercial", "Administrativo", "Constitucional", "Otro",
+  ].map((c) => ({ label: c, value: c }));
+  protected prioridadOpts = [
+    { label: "Baja", value: "Baja" },
+    { label: "Media", value: "Media" },
+    { label: "Alta", value: "Alta" },
+    { label: "Urgente", value: "Urgente" },
+  ];
+
+  protected afiliadoOpts = () =>
+    this.afiliados().map((a) => ({
+      label: `${a.rut} — ${a.apellidoPaterno}, ${a.nombres}`,
+      value: a.id,
+    }));
 
   protected form = this.fb.group({
     tipo: ["Consulta", Validators.required],
@@ -139,11 +159,16 @@ export class AtencionFormComponent {
           : this.api.crearJuicio(payload);
     obs.subscribe({
       next: (atencion) => {
-        this.snack.open(`Creada: ${atencion.correlativo}`, "OK", { duration: 3000 });
+        this.msg.add({ severity: "success", summary: "Creada", detail: atencion.correlativo, life: 3000 });
         void this.router.navigate(["/atenciones", atencion.id]);
       },
       error: (err) => {
-        this.snack.open(`Error: ${err.error?.message ?? err.message}`, "Cerrar", { duration: 5000 });
+        this.msg.add({
+          severity: "error",
+          summary: "Error",
+          detail: err.error?.message ?? err.message,
+          life: 5000,
+        });
         this.saving.set(false);
       },
     });

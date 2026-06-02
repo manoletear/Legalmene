@@ -1,18 +1,17 @@
 import { Component, OnInit, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
-import { MatCardModule } from "@angular/material/card";
-import { MatTableModule } from "@angular/material/table";
-import { MatChipsModule } from "@angular/material/chips";
-import { MatButtonModule } from "@angular/material/button";
-import { MatIconModule } from "@angular/material/icon";
-import { MatFormFieldModule } from "@angular/material/form-field";
-import { MatInputModule } from "@angular/material/input";
-import { MatSelectModule } from "@angular/material/select";
-import { MatSlideToggleModule } from "@angular/material/slide-toggle";
-import { MatPaginatorModule, PageEvent } from "@angular/material/paginator";
-import { MatSnackBar, MatSnackBarModule } from "@angular/material/snack-bar";
+import { CardModule } from "primeng/card";
+import { TableModule } from "primeng/table";
+import { TagModule } from "primeng/tag";
+import { ButtonModule } from "primeng/button";
+import { InputTextModule } from "primeng/inputtext";
+import { SelectModule } from "primeng/select";
+import { ToggleSwitchModule } from "primeng/toggleswitch";
+import { ToastModule } from "primeng/toast";
+import { MessageService } from "primeng/api";
 import { UsuariosAdminService, UsuarioAdmin } from "../../core/services/usuarios-admin.service";
+import type { TableLazyLoadEvent } from "primeng/table";
 
 const ROLES = ["Administrador", "Supervisor", "Abogado", "Operador", "Auditor"] as const;
 
@@ -22,99 +21,116 @@ const ROLES = ["Administrador", "Supervisor", "Abogado", "Operador", "Auditor"] 
   imports: [
     CommonModule,
     FormsModule,
-    MatCardModule,
-    MatTableModule,
-    MatChipsModule,
-    MatButtonModule,
-    MatIconModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatSelectModule,
-    MatSlideToggleModule,
-    MatPaginatorModule,
-    MatSnackBarModule,
+    CardModule,
+    TableModule,
+    TagModule,
+    ButtonModule,
+    InputTextModule,
+    SelectModule,
+    ToggleSwitchModule,
+    ToastModule,
   ],
   template: `
-    <mat-card>
-      <mat-card-header>
-        <mat-card-title>Administración de usuarios</mat-card-title>
-        <mat-card-subtitle>Cambios sincronizados con Entra ID en el siguiente login</mat-card-subtitle>
-      </mat-card-header>
-      <mat-card-content>
-        <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
-          <mat-form-field appearance="outline" style="min-width:220px; flex:1;">
-            <mat-label>Buscar (nombre o email)</mat-label>
-            <input matInput [(ngModel)]="q" (keyup.enter)="recargar()" />
-          </mat-form-field>
-          <mat-form-field appearance="outline" style="min-width:160px">
-            <mat-label>Rol</mat-label>
-            <mat-select [(ngModel)]="filtroRol" (selectionChange)="recargar()">
-              <mat-option [value]="undefined">Todos</mat-option>
-              <mat-option *ngFor="let r of roles" [value]="r">{{ r }}</mat-option>
-            </mat-select>
-          </mat-form-field>
-          <mat-form-field appearance="outline" style="min-width:140px">
-            <mat-label>Estado</mat-label>
-            <mat-select [(ngModel)]="filtroActivo" (selectionChange)="recargar()">
-              <mat-option [value]="undefined">Todos</mat-option>
-              <mat-option [value]="true">Activos</mat-option>
-              <mat-option [value]="false">Inactivos</mat-option>
-            </mat-select>
-          </mat-form-field>
-          <span style="flex:1"></span>
-          <span style="opacity:0.7;">{{ total() }} resultados</span>
+    <p-toast></p-toast>
+    <p-card>
+      <ng-template pTemplate="header">
+        <div style="padding:16px 16px 0;">
+          <h2 style="margin:0;">Administración de usuarios</h2>
+          <small class="lm-muted">Cambios sincronizados con Entra ID en el siguiente login</small>
         </div>
+      </ng-template>
 
-        <table mat-table [dataSource]="data()" *ngIf="data().length; else vacio">
-          <ng-container matColumnDef="email">
-            <th mat-header-cell *matHeaderCellDef>Email</th>
-            <td mat-cell *matCellDef="let u">
-              <div>{{ u.email }}</div>
-              <small style="opacity:0.6;">{{ u.nombre }}</small>
-            </td>
-          </ng-container>
-          <ng-container matColumnDef="rol">
-            <th mat-header-cell *matHeaderCellDef>Rol</th>
-            <td mat-cell *matCellDef="let u">
-              <mat-form-field appearance="outline" subscriptSizing="dynamic" style="width:160px;">
-                <mat-select [value]="u.rol" (selectionChange)="cambiarRol(u, $event.value)">
-                  <mat-option *ngFor="let r of roles" [value]="r">{{ r }}</mat-option>
-                </mat-select>
-              </mat-form-field>
-            </td>
-          </ng-container>
-          <ng-container matColumnDef="planes">
-            <th mat-header-cell *matHeaderCellDef>Planes</th>
-            <td mat-cell *matCellDef="let u">
-              <mat-chip *ngFor="let p of u.codPlanes" style="margin-right:4px;">{{ p }}</mat-chip>
-            </td>
-          </ng-container>
-          <ng-container matColumnDef="activo">
-            <th mat-header-cell *matHeaderCellDef>Activo</th>
-            <td mat-cell *matCellDef="let u">
-              <mat-slide-toggle [checked]="u.activo" (change)="cambiarActivo(u, $event.checked)" />
-            </td>
-          </ng-container>
-          <ng-container matColumnDef="ultimo">
-            <th mat-header-cell *matHeaderCellDef>Último login</th>
-            <td mat-cell *matCellDef="let u">{{ u.ultimoLogin ? (u.ultimoLogin | date: 'short') : '—' }}</td>
-          </ng-container>
-          <tr mat-header-row *matHeaderRowDef="cols"></tr>
-          <tr mat-row *matRowDef="let row; columns: cols"></tr>
-        </table>
-        <ng-template #vacio>
-          <p *ngIf="!loading()" style="opacity:0.5;">Sin usuarios.</p>
+      <div class="lm-row" style="margin-bottom:16px;">
+        <input
+          pInputText
+          type="text"
+          [(ngModel)]="q"
+          (keyup.enter)="recargar()"
+          placeholder="Buscar (nombre o email)"
+          style="flex:1; min-width:220px;"
+        />
+        <p-select
+          [(ngModel)]="filtroRol"
+          (onChange)="recargar()"
+          [options]="rolOpts"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Rol"
+          [showClear]="true"
+          [style]="{ 'min-width': '160px' }"
+        ></p-select>
+        <p-select
+          [(ngModel)]="filtroActivo"
+          (onChange)="recargar()"
+          [options]="activoOpts"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Estado"
+          [showClear]="true"
+          [style]="{ 'min-width': '140px' }"
+        ></p-select>
+        <span class="lm-grow"></span>
+        <span class="lm-muted">{{ total() }} resultados</span>
+      </div>
+
+      <p-table
+        [value]="data()"
+        [lazy]="true"
+        (onLazyLoad)="onLazy($event)"
+        [paginator]="true"
+        [rows]="pageSize()"
+        [totalRecords]="total()"
+        [rowsPerPageOptions]="[25, 50, 100]"
+        [loading]="loading()"
+        [first]="(page() - 1) * pageSize()"
+        styleClass="p-datatable-sm"
+      >
+        <ng-template pTemplate="header">
+          <tr>
+            <th>Email</th>
+            <th>Rol</th>
+            <th>Planes</th>
+            <th>Activo</th>
+            <th>Último login</th>
+          </tr>
         </ng-template>
-        <mat-paginator [length]="total()" [pageSize]="pageSize()" [pageSizeOptions]="[25, 50, 100]" (page)="onPage($event)" />
-      </mat-card-content>
-    </mat-card>
+        <ng-template pTemplate="body" let-u>
+          <tr>
+            <td>
+              <div>{{ u.email }}</div>
+              <small class="lm-muted">{{ u.nombre }}</small>
+            </td>
+            <td>
+              <p-select
+                [ngModel]="u.rol"
+                (onChange)="cambiarRol(u, $event.value)"
+                [options]="rolOpts"
+                optionLabel="label"
+                optionValue="value"
+                [style]="{ width: '160px' }"
+                appendTo="body"
+              ></p-select>
+            </td>
+            <td>
+              <p-tag *ngFor="let p of u.codPlanes" [value]="p" severity="secondary" styleClass="lm-mr-4" [style]="{ 'margin-right': '4px' }"></p-tag>
+            </td>
+            <td>
+              <p-toggleSwitch [ngModel]="u.activo" (onChange)="cambiarActivo(u, $event.checked)"></p-toggleSwitch>
+            </td>
+            <td>{{ u.ultimoLogin ? (u.ultimoLogin | date: 'short') : '—' }}</td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr><td colspan="5" style="text-align:center; padding:24px;" class="lm-muted">Sin usuarios.</td></tr>
+        </ng-template>
+      </p-table>
+    </p-card>
   `,
 })
 export class AdminUsuariosComponent implements OnInit {
   private api = inject(UsuariosAdminService);
-  private snack = inject(MatSnackBar);
+  private msg = inject(MessageService);
 
-  protected cols = ["email", "rol", "planes", "activo", "ultimo"];
   protected data = signal<UsuarioAdmin[]>([]);
   protected total = signal(0);
   protected page = signal(1);
@@ -123,7 +139,11 @@ export class AdminUsuariosComponent implements OnInit {
   protected q = "";
   protected filtroRol: string | undefined;
   protected filtroActivo: boolean | undefined;
-  protected roles = ROLES;
+  protected rolOpts = ROLES.map((r) => ({ label: r, value: r }));
+  protected activoOpts = [
+    { label: "Activos", value: true },
+    { label: "Inactivos", value: false },
+  ];
 
   ngOnInit() {
     this.recargar();
@@ -149,23 +169,25 @@ export class AdminUsuariosComponent implements OnInit {
       });
   }
 
-  onPage(ev: PageEvent) {
-    this.page.set(ev.pageIndex + 1);
-    this.pageSize.set(ev.pageSize);
+  onLazy(ev: TableLazyLoadEvent) {
+    const first = ev.first ?? 0;
+    const rows = ev.rows ?? this.pageSize();
+    this.page.set(Math.floor(first / rows) + 1);
+    this.pageSize.set(rows);
     this.recargar();
   }
 
   cambiarRol(u: UsuarioAdmin, rol: string) {
     this.api.actualizar(u.id, { rol }).subscribe({
-      next: () => this.snack.open(`${u.email} → ${rol}`, "OK", { duration: 2000 }),
-      error: (err) => this.snack.open(`Error: ${err.error?.message ?? err.message}`, "Cerrar", { duration: 4000 }),
+      next: () => this.msg.add({ severity: "success", summary: `${u.email} → ${rol}`, life: 2000 }),
+      error: (err) => this.msg.add({ severity: "error", summary: "Error", detail: err.error?.message ?? err.message, life: 4000 }),
     });
   }
 
   cambiarActivo(u: UsuarioAdmin, activo: boolean) {
     this.api.actualizar(u.id, { activo }).subscribe({
-      next: () => this.snack.open(`${u.email} ${activo ? "activado" : "desactivado"}`, "OK", { duration: 2000 }),
-      error: (err) => this.snack.open(`Error: ${err.error?.message ?? err.message}`, "Cerrar", { duration: 4000 }),
+      next: () => this.msg.add({ severity: "success", summary: `${u.email} ${activo ? "activado" : "desactivado"}`, life: 2000 }),
+      error: (err) => this.msg.add({ severity: "error", summary: "Error", detail: err.error?.message ?? err.message, life: 4000 }),
     });
   }
 }

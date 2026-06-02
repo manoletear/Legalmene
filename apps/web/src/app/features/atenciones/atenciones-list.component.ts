@@ -2,18 +2,16 @@ import { Component, OnInit, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { RouterLink } from "@angular/router";
-import { MatCardModule } from "@angular/material/card";
-import { MatTableModule } from "@angular/material/table";
-import { MatChipsModule } from "@angular/material/chips";
-import { MatButtonModule } from "@angular/material/button";
-import { MatIconModule } from "@angular/material/icon";
-import { MatFormFieldModule } from "@angular/material/form-field";
-import { MatSelectModule } from "@angular/material/select";
-import { MatInputModule } from "@angular/material/input";
-import { MatPaginatorModule, PageEvent } from "@angular/material/paginator";
+import { CardModule } from "primeng/card";
+import { TableModule } from "primeng/table";
+import { TagModule } from "primeng/tag";
+import { ButtonModule } from "primeng/button";
+import { SelectModule } from "primeng/select";
+import { InputTextModule } from "primeng/inputtext";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { environment } from "../../../environments/environment";
 import type { Atencion } from "@legalmene/shared";
+import type { TableLazyLoadEvent } from "primeng/table";
 
 @Component({
   selector: "lm-atenciones-list",
@@ -22,105 +20,106 @@ import type { Atencion } from "@legalmene/shared";
     CommonModule,
     FormsModule,
     RouterLink,
-    MatCardModule,
-    MatTableModule,
-    MatChipsModule,
-    MatButtonModule,
-    MatIconModule,
-    MatFormFieldModule,
-    MatSelectModule,
-    MatInputModule,
-    MatPaginatorModule,
+    CardModule,
+    TableModule,
+    TagModule,
+    ButtonModule,
+    SelectModule,
+    InputTextModule,
   ],
   template: `
-    <mat-card>
-      <mat-card-header>
-        <mat-card-title>Atenciones</mat-card-title>
-        <span style="flex:1"></span>
-        <button mat-stroked-button (click)="exportarCsv()" style="margin-right:8px;">
-          <mat-icon>download</mat-icon> Exportar CSV
-        </button>
-        <button mat-flat-button color="primary" routerLink="/atenciones/nueva">
-          <mat-icon>add</mat-icon> Nueva consulta
-        </button>
-      </mat-card-header>
-
-      <mat-card-content>
-        <div style="display:flex; gap:12px; align-items:center; margin:16px 0;">
-          <mat-form-field appearance="outline" style="min-width:140px">
-            <mat-label>Tipo</mat-label>
-            <mat-select [(ngModel)]="filtroTipo" (selectionChange)="recargar()">
-              <mat-option [value]="undefined">Todos</mat-option>
-              <mat-option value="Consulta">Consulta</mat-option>
-              <mat-option value="Asesoria">Asesoría</mat-option>
-              <mat-option value="Juicio">Juicio</mat-option>
-            </mat-select>
-          </mat-form-field>
-          <mat-form-field appearance="outline" style="min-width:140px">
-            <mat-label>Estado</mat-label>
-            <mat-select [(ngModel)]="filtroEstado" (selectionChange)="recargar()">
-              <mat-option [value]="undefined">Todos</mat-option>
-              <mat-option value="Abierta">Abierta</mat-option>
-              <mat-option value="EnGestion">En gestión</mat-option>
-              <mat-option value="EnComite">En comité</mat-option>
-              <mat-option value="Suspendida">Suspendida</mat-option>
-              <mat-option value="Cerrada">Cerrada</mat-option>
-            </mat-select>
-          </mat-form-field>
-          <mat-form-field appearance="outline" style="min-width:180px">
-            <mat-label>Correlativo</mat-label>
-            <input matInput [(ngModel)]="filtroCorrelativo" (keyup.enter)="recargar()" placeholder="CONS-2026-..." />
-          </mat-form-field>
-          <mat-form-field appearance="outline" style="flex:1">
-            <mat-label>Buscar (materia, descripción)</mat-label>
-            <input matInput [(ngModel)]="filtroQ" (keyup.enter)="recargar()" placeholder="ej. despido, alimentos…" />
-          </mat-form-field>
+    <p-card>
+      <ng-template pTemplate="header">
+        <div style="display:flex; align-items:center; gap:8px; padding:16px 16px 0;">
+          <h2 style="margin:0; flex:1;">Atenciones</h2>
+          <button pButton icon="pi pi-download" label="Exportar CSV" [outlined]="true" (click)="exportarCsv()"></button>
+          <button pButton icon="pi pi-plus" label="Nueva consulta" routerLink="/atenciones/nueva"></button>
         </div>
+      </ng-template>
 
-        <table mat-table [dataSource]="data()" *ngIf="data().length; else vacio">
-          <ng-container matColumnDef="correlativo">
-            <th mat-header-cell *matHeaderCellDef>Correlativo</th>
-            <td mat-cell *matCellDef="let a">
-              <a [routerLink]="['/atenciones', a.id]" style="text-decoration:none">{{ a.correlativo }}</a>
-            </td>
-          </ng-container>
-          <ng-container matColumnDef="tipo">
-            <th mat-header-cell *matHeaderCellDef>Tipo</th>
-            <td mat-cell *matCellDef="let a"><mat-chip [color]="tipoColor(a.tipo)" highlighted>{{ a.tipo }}</mat-chip></td>
-          </ng-container>
-          <ng-container matColumnDef="materia">
-            <th mat-header-cell *matHeaderCellDef>Materia</th>
-            <td mat-cell *matCellDef="let a">{{ a.materia }} <small style="opacity:0.6">({{ a.competencia }})</small></td>
-          </ng-container>
-          <ng-container matColumnDef="estado">
-            <th mat-header-cell *matHeaderCellDef>Estado</th>
-            <td mat-cell *matCellDef="let a"><mat-chip [color]="estadoColor(a.estado)" highlighted>{{ a.estado }}</mat-chip></td>
-          </ng-container>
-          <ng-container matColumnDef="prioridad">
-            <th mat-header-cell *matHeaderCellDef>Prioridad</th>
-            <td mat-cell *matCellDef="let a">{{ a.prioridad }}</td>
-          </ng-container>
-          <ng-container matColumnDef="fecha">
-            <th mat-header-cell *matHeaderCellDef>Apertura</th>
-            <td mat-cell *matCellDef="let a">{{ a.fechaApertura | date: 'dd/MM/yyyy' }}</td>
-          </ng-container>
-          <tr mat-header-row *matHeaderRowDef="cols"></tr>
-          <tr mat-row *matRowDef="let row; columns: cols"></tr>
-        </table>
+      <div class="lm-row" style="margin:16px 0;">
+        <p-select
+          [(ngModel)]="filtroTipo"
+          (onChange)="recargar()"
+          [options]="tipoOpts"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Tipo"
+          [showClear]="true"
+          styleClass="lm-grow"
+          [style]="{ 'min-width': '140px' }"
+        ></p-select>
+        <p-select
+          [(ngModel)]="filtroEstado"
+          (onChange)="recargar()"
+          [options]="estadoOpts"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Estado"
+          [showClear]="true"
+          [style]="{ 'min-width': '160px' }"
+        ></p-select>
+        <input
+          pInputText
+          type="text"
+          [(ngModel)]="filtroCorrelativo"
+          (keyup.enter)="recargar()"
+          placeholder="Correlativo (CONS-2026-…)"
+          style="min-width:180px;"
+        />
+        <input
+          pInputText
+          type="text"
+          [(ngModel)]="filtroQ"
+          (keyup.enter)="recargar()"
+          placeholder="Buscar (materia, descripción)"
+          style="flex:1; min-width:200px;"
+        />
+      </div>
 
-        <ng-template #vacio>
-          <p *ngIf="!loading()">No hay atenciones.</p>
-          <p *ngIf="loading()">Cargando…</p>
+      <p-table
+        [value]="data()"
+        [lazy]="true"
+        (onLazyLoad)="onLazy($event)"
+        [paginator]="true"
+        [rows]="pageSize()"
+        [totalRecords]="total()"
+        [rowsPerPageOptions]="[10, 25, 50, 100]"
+        [loading]="loading()"
+        [first]="(page() - 1) * pageSize()"
+        styleClass="p-datatable-sm"
+      >
+        <ng-template pTemplate="header">
+          <tr>
+            <th>Correlativo</th>
+            <th>Tipo</th>
+            <th>Materia</th>
+            <th>Estado</th>
+            <th>Prioridad</th>
+            <th>Apertura</th>
+          </tr>
         </ng-template>
-
-        <mat-paginator [length]="total()" [pageSize]="pageSize()" [pageSizeOptions]="[10, 25, 50, 100]" (page)="onPage($event)" />
-      </mat-card-content>
-    </mat-card>
+        <ng-template pTemplate="body" let-a>
+          <tr>
+            <td><a [routerLink]="['/atenciones', a.id]" style="text-decoration:none; color:#1976d2;">{{ a.correlativo }}</a></td>
+            <td><p-tag [value]="a.tipo" [severity]="tipoSeverity(a.tipo)"></p-tag></td>
+            <td>{{ a.materia }} <small class="lm-muted">({{ a.competencia }})</small></td>
+            <td><p-tag [value]="a.estado" [severity]="estadoSeverity(a.estado)"></p-tag></td>
+            <td>{{ a.prioridad }}</td>
+            <td>{{ a.fechaApertura | date: 'dd/MM/yyyy' }}</td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr>
+            <td colspan="6" style="text-align:center; padding:24px;" class="lm-muted">No hay atenciones.</td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </p-card>
   `,
 })
 export class AtencionesListComponent implements OnInit {
   private api = inject(AtencionesApiService);
-  protected cols = ["correlativo", "tipo", "materia", "estado", "prioridad", "fecha"];
   protected data = signal<Atencion[]>([]);
   protected total = signal(0);
   protected page = signal(1);
@@ -130,6 +129,19 @@ export class AtencionesListComponent implements OnInit {
   protected filtroEstado: string | undefined;
   protected filtroCorrelativo = "";
   protected filtroQ = "";
+
+  protected tipoOpts = [
+    { label: "Consulta", value: "Consulta" },
+    { label: "Asesoría", value: "Asesoria" },
+    { label: "Juicio", value: "Juicio" },
+  ];
+  protected estadoOpts = [
+    { label: "Abierta", value: "Abierta" },
+    { label: "En gestión", value: "EnGestion" },
+    { label: "En comité", value: "EnComite" },
+    { label: "Suspendida", value: "Suspendida" },
+    { label: "Cerrada", value: "Cerrada" },
+  ];
 
   ngOnInit() {
     this.recargar();
@@ -156,28 +168,27 @@ export class AtencionesListComponent implements OnInit {
       });
   }
 
-  onPage(ev: PageEvent) {
-    this.page.set(ev.pageIndex + 1);
-    this.pageSize.set(ev.pageSize);
+  onLazy(ev: TableLazyLoadEvent) {
+    const first = ev.first ?? 0;
+    const rows = ev.rows ?? this.pageSize();
+    this.page.set(Math.floor(first / rows) + 1);
+    this.pageSize.set(rows);
     this.recargar();
   }
 
-  tipoColor(t: string) {
-    return t === "Juicio" ? "warn" : t === "Asesoria" ? "accent" : "primary";
+  tipoSeverity(t: string): "success" | "info" | "warn" | "danger" | "secondary" | "contrast" {
+    return t === "Juicio" ? "danger" : t === "Asesoria" ? "warn" : "info";
   }
 
-  estadoColor(e: string) {
-    if (e === "Cerrada" || e === "Archivada") return undefined;
-    if (e === "EnComite") return "warn";
-    if (e === "Suspendida") return "warn";
-    return "primary";
+  estadoSeverity(e: string): "success" | "info" | "warn" | "danger" | "secondary" | "contrast" {
+    if (e === "Cerrada" || e === "Archivada") return "secondary";
+    if (e === "EnComite" || e === "Suspendida") return "warn";
+    return "info";
   }
 
-  // Export: navega al endpoint en una nueva tab (browser maneja download).
   exportarCsv() {
     const codPlan = localStorage.getItem("cod_plan") ?? "DEMO";
     const url = `${environment.apiBaseUrl}/exports/atenciones.csv`;
-    // Necesita header X-Cod-Plan, así que fetch + blob en vez de window.open.
     fetch(url, { headers: { "X-Cod-Plan": codPlan } })
       .then((r) => r.blob())
       .then((blob) => {

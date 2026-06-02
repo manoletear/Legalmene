@@ -2,17 +2,18 @@ import { Component, OnInit, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { RouterLink } from "@angular/router";
-import { MatCardModule } from "@angular/material/card";
-import { MatTableModule } from "@angular/material/table";
-import { MatChipsModule } from "@angular/material/chips";
-import { MatButtonModule } from "@angular/material/button";
-import { MatIconModule } from "@angular/material/icon";
-import { MatFormFieldModule } from "@angular/material/form-field";
-import { MatSelectModule } from "@angular/material/select";
-import { MatCheckboxModule } from "@angular/material/checkbox";
-import { MatPaginatorModule, PageEvent } from "@angular/material/paginator";
-import { MatSnackBar, MatSnackBarModule } from "@angular/material/snack-bar";
+import { CardModule } from "primeng/card";
+import { TableModule } from "primeng/table";
+import { TagModule } from "primeng/tag";
+import { ButtonModule } from "primeng/button";
+import { SelectModule } from "primeng/select";
+import { CheckboxModule } from "primeng/checkbox";
+import { ToastModule } from "primeng/toast";
+import { MessageService } from "primeng/api";
 import { GestionesGlobalService, GestionGlobalRow } from "../../core/services/gestiones-global.service";
+import type { TableLazyLoadEvent } from "primeng/table";
+
+type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast";
 
 @Component({
   selector: "lm-gestiones-global",
@@ -21,107 +22,116 @@ import { GestionesGlobalService, GestionGlobalRow } from "../../core/services/ge
     CommonModule,
     FormsModule,
     RouterLink,
-    MatCardModule,
-    MatTableModule,
-    MatChipsModule,
-    MatButtonModule,
-    MatIconModule,
-    MatFormFieldModule,
-    MatSelectModule,
-    MatCheckboxModule,
-    MatPaginatorModule,
-    MatSnackBarModule,
+    CardModule,
+    TableModule,
+    TagModule,
+    ButtonModule,
+    SelectModule,
+    CheckboxModule,
+    ToastModule,
   ],
   template: `
-    <mat-card>
-      <mat-card-header>
-        <mat-card-title>Gestiones</mat-card-title>
-        <mat-card-subtitle>Vista operacional cross-atención</mat-card-subtitle>
-      </mat-card-header>
-      <mat-card-content>
-        <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
-          <mat-form-field appearance="outline" style="min-width:140px">
-            <mat-label>Estado</mat-label>
-            <mat-select [(ngModel)]="filtroEstado" (selectionChange)="recargar()">
-              <mat-option [value]="undefined">Todos</mat-option>
-              <mat-option value="Pendiente">Pendiente</mat-option>
-              <mat-option value="Completada">Completada</mat-option>
-              <mat-option value="Vencida">Vencida</mat-option>
-              <mat-option value="Cancelada">Cancelada</mat-option>
-            </mat-select>
-          </mat-form-field>
-          <mat-form-field appearance="outline" style="min-width:160px">
-            <mat-label>Tipo</mat-label>
-            <mat-select [(ngModel)]="filtroTipo" (selectionChange)="recargar()">
-              <mat-option [value]="undefined">Todos</mat-option>
-              <mat-option *ngFor="let t of tipos" [value]="t">{{ t }}</mat-option>
-            </mat-select>
-          </mat-form-field>
-          <mat-checkbox [(ngModel)]="soloVencidas" (change)="recargar()">Solo vencidas</mat-checkbox>
-          <span style="flex:1"></span>
-          <span style="opacity:0.7;">{{ total() }} resultados</span>
+    <p-toast></p-toast>
+    <p-card>
+      <ng-template pTemplate="header">
+        <div style="padding:16px 16px 0;">
+          <h2 style="margin:0;">Gestiones</h2>
+          <small class="lm-muted">Vista operacional cross-atención</small>
         </div>
+      </ng-template>
 
-        <table mat-table [dataSource]="data()" *ngIf="data().length; else vacio">
-          <ng-container matColumnDef="estado">
-            <th mat-header-cell *matHeaderCellDef>Estado</th>
-            <td mat-cell *matCellDef="let g">
-              <mat-chip [color]="estadoColor(g)" highlighted>{{ estadoLabel(g) }}</mat-chip>
-            </td>
-          </ng-container>
-          <ng-container matColumnDef="titulo">
-            <th mat-header-cell *matHeaderCellDef>Título</th>
-            <td mat-cell *matCellDef="let g">
+      <div class="lm-row" style="margin-bottom:16px;">
+        <p-select
+          [(ngModel)]="filtroEstado"
+          (onChange)="recargar()"
+          [options]="estadoOpts"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Estado"
+          [showClear]="true"
+          [style]="{ 'min-width': '140px' }"
+        ></p-select>
+        <p-select
+          [(ngModel)]="filtroTipo"
+          (onChange)="recargar()"
+          [options]="tipoOpts"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Tipo"
+          [showClear]="true"
+          [style]="{ 'min-width': '180px' }"
+        ></p-select>
+        <div class="lm-row" style="gap:8px;">
+          <p-checkbox [(ngModel)]="soloVencidas" (onChange)="recargar()" [binary]="true" inputId="vencidas"></p-checkbox>
+          <label for="vencidas">Solo vencidas</label>
+        </div>
+        <span class="lm-grow"></span>
+        <span class="lm-muted">{{ total() }} resultados</span>
+      </div>
+
+      <p-table
+        [value]="data()"
+        [lazy]="true"
+        (onLazyLoad)="onLazy($event)"
+        [paginator]="true"
+        [rows]="pageSize()"
+        [totalRecords]="total()"
+        [rowsPerPageOptions]="[25, 50, 100]"
+        [loading]="loading()"
+        [first]="(page() - 1) * pageSize()"
+        styleClass="p-datatable-sm"
+      >
+        <ng-template pTemplate="header">
+          <tr>
+            <th>Estado</th>
+            <th>Título</th>
+            <th>Atención</th>
+            <th>Responsable</th>
+            <th>Compromiso</th>
+            <th></th>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-g>
+          <tr>
+            <td><p-tag [value]="estadoLabel(g)" [severity]="estadoSeverity(g)"></p-tag></td>
+            <td>
               <div>{{ g.titulo }}</div>
-              <small style="opacity:0.6;">{{ g.tipo }}</small>
+              <small class="lm-muted">{{ g.tipo }}</small>
             </td>
-          </ng-container>
-          <ng-container matColumnDef="atencion">
-            <th mat-header-cell *matHeaderCellDef>Atención</th>
-            <td mat-cell *matCellDef="let g">
-              <a [routerLink]="['/atenciones', g.atencionId]" style="text-decoration:none;">{{ g.correlativo }}</a>
-              <div><small style="opacity:0.6;">{{ g.atencionMateria }}</small></div>
+            <td>
+              <a [routerLink]="['/atenciones', g.atencionId]" style="text-decoration:none; color:#1976d2;">{{ g.correlativo }}</a>
+              <div><small class="lm-muted">{{ g.atencionMateria }}</small></div>
             </td>
-          </ng-container>
-          <ng-container matColumnDef="responsable">
-            <th mat-header-cell *matHeaderCellDef>Responsable</th>
-            <td mat-cell *matCellDef="let g">{{ g.responsableEmail }}</td>
-          </ng-container>
-          <ng-container matColumnDef="compromiso">
-            <th mat-header-cell *matHeaderCellDef>Compromiso</th>
-            <td mat-cell *matCellDef="let g">
+            <td>{{ g.responsableEmail }}</td>
+            <td>
               <span [style.color]="esVencida(g) ? '#d32f2f' : null">
                 {{ g.fechaCompromiso ? (g.fechaCompromiso | date: 'short') : '—' }}
               </span>
             </td>
-          </ng-container>
-          <ng-container matColumnDef="acciones">
-            <th mat-header-cell *matHeaderCellDef></th>
-            <td mat-cell *matCellDef="let g">
-              <button mat-icon-button *ngIf="g.estado === 'Pendiente'" (click)="completar(g)" title="Marcar completada">
-                <mat-icon>check_circle</mat-icon>
-              </button>
+            <td>
+              <button
+                pButton
+                *ngIf="g.estado === 'Pendiente'"
+                icon="pi pi-check-circle"
+                [text]="true"
+                severity="success"
+                (click)="completar(g)"
+                pTooltip="Marcar completada"
+              ></button>
             </td>
-          </ng-container>
-          <tr mat-header-row *matHeaderRowDef="cols"></tr>
-          <tr mat-row *matRowDef="let row; columns: cols"></tr>
-        </table>
-
-        <ng-template #vacio>
-          <p *ngIf="!loading()" style="opacity:0.5;">Sin gestiones.</p>
-          <p *ngIf="loading()">Cargando…</p>
+          </tr>
         </ng-template>
-
-        <mat-paginator [length]="total()" [pageSize]="pageSize()" [pageSizeOptions]="[25, 50, 100]" (page)="onPage($event)" />
-      </mat-card-content>
-    </mat-card>
+        <ng-template pTemplate="emptymessage">
+          <tr><td colspan="6" style="text-align:center; padding:24px;" class="lm-muted">Sin gestiones.</td></tr>
+        </ng-template>
+      </p-table>
+    </p-card>
   `,
 })
 export class GestionesGlobalComponent implements OnInit {
   private api = inject(GestionesGlobalService);
-  private snack = inject(MatSnackBar);
+  private msg = inject(MessageService);
 
-  protected cols = ["estado", "titulo", "atencion", "responsable", "compromiso", "acciones"];
   protected data = signal<GestionGlobalRow[]>([]);
   protected total = signal(0);
   protected page = signal(1);
@@ -131,15 +141,15 @@ export class GestionesGlobalComponent implements OnInit {
   protected filtroTipo: string | undefined;
   protected soloVencidas = false;
   protected tipos = [
-    "LlamadaTelefonica",
-    "Email",
-    "Reunion",
-    "EscritoJudicial",
-    "Audiencia",
-    "Notificacion",
-    "AnalisisDocumental",
-    "Resolucion",
-    "Otra",
+    "LlamadaTelefonica", "Email", "Reunion", "EscritoJudicial", "Audiencia",
+    "Notificacion", "AnalisisDocumental", "Resolucion", "Otra",
+  ];
+  protected tipoOpts = this.tipos.map((t) => ({ label: t, value: t }));
+  protected estadoOpts = [
+    { label: "Pendiente", value: "Pendiente" },
+    { label: "Completada", value: "Completada" },
+    { label: "Vencida", value: "Vencida" },
+    { label: "Cancelada", value: "Cancelada" },
   ];
 
   ngOnInit() {
@@ -166,9 +176,11 @@ export class GestionesGlobalComponent implements OnInit {
       });
   }
 
-  onPage(ev: PageEvent) {
-    this.page.set(ev.pageIndex + 1);
-    this.pageSize.set(ev.pageSize);
+  onLazy(ev: TableLazyLoadEvent) {
+    const first = ev.first ?? 0;
+    const rows = ev.rows ?? this.pageSize();
+    this.page.set(Math.floor(first / rows) + 1);
+    this.pageSize.set(rows);
     this.recargar();
   }
 
@@ -177,11 +189,11 @@ export class GestionesGlobalComponent implements OnInit {
     if (!resultado) return;
     this.api.completar(g.id, { resultado }).subscribe({
       next: () => {
-        this.snack.open("Gestión completada", "OK", { duration: 2000 });
+        this.msg.add({ severity: "success", summary: "Gestión completada", life: 2000 });
         this.recargar();
       },
       error: (err) =>
-        this.snack.open(`Error: ${err.error?.message ?? err.message}`, "Cerrar", { duration: 4000 }),
+        this.msg.add({ severity: "error", summary: "Error", detail: err.error?.message ?? err.message, life: 4000 }),
     });
   }
 
@@ -194,9 +206,9 @@ export class GestionesGlobalComponent implements OnInit {
     return this.esVencida(g) ? "Vencida" : g.estado;
   }
 
-  estadoColor(g: GestionGlobalRow) {
-    if (g.estado === "Completada") return "primary";
-    if (this.esVencida(g) || g.estado === "Cancelada") return "warn";
-    return "accent";
+  estadoSeverity(g: GestionGlobalRow): Severity {
+    if (g.estado === "Completada") return "success";
+    if (this.esVencida(g) || g.estado === "Cancelada") return "danger";
+    return "warn";
   }
 }
