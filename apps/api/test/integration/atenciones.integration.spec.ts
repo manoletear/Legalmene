@@ -10,6 +10,7 @@ import { planes } from "../../src/db/schema/planes";
 import { AfiliadosService } from "../../src/modules/afiliados/afiliados.service";
 import { AtencionesService } from "../../src/modules/atenciones/atenciones.service";
 import { WebhooksService } from "../../src/modules/webhooks/webhooks.service";
+import { NotifInboxService } from "../../src/modules/notif-inbox/notif-inbox.service";
 
 const RUN = !!process.env.DATABASE_URL;
 
@@ -30,6 +31,15 @@ const RUN = !!process.env.DATABASE_URL;
         // Stub: el test no verifica entrega real de webhooks; basta con la
         // promesa resolviendo para no romper la pipeline.
         { provide: WebhooksService, useValue: { emitir: async () => undefined } },
+        // Stub NotifInbox para no crear filas; firmas usadas: crear, crearSiNoExisteUnseen.
+        {
+          provide: NotifInboxService,
+          useValue: {
+            crear: async () => null,
+            crearSiNoExisteUnseen: async () => null,
+            crearBulk: async () => [],
+          },
+        },
       ],
     }).compile();
     atenciones = moduleRef.get(AtencionesService);
