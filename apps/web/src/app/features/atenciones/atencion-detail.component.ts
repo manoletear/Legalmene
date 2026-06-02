@@ -14,6 +14,7 @@ import { AccordionModule } from "primeng/accordion";
 import { TabsModule } from "primeng/tabs";
 import { ToastModule } from "primeng/toast";
 import { MessageService } from "primeng/api";
+import { PromptService } from "../../shared/prompt.service";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { GestionesApiService } from "../../core/services/gestiones.service";
 import { ComitesApiService } from "../../core/services/comites.service";
@@ -177,6 +178,7 @@ export class AtencionDetailComponent implements OnInit {
   private comitesApi = inject(ComitesApiService);
   private documentosApi = inject(DocumentosApiService);
   private msg = inject(MessageService);
+  private prompt = inject(PromptService);
 
   protected atencion = signal<Atencion | null>(null);
   protected gestiones = signal<Gestion[]>([]);
@@ -283,16 +285,27 @@ export class AtencionDetailComponent implements OnInit {
       });
   }
 
-  completar(gestionId: string) {
-    const resultado = window.prompt("Resultado de la gestión:");
+  async completar(gestionId: string) {
+    const resultado = await this.prompt.open({
+      header: "Completar gestión",
+      label: "Resultado",
+      placeholder: "Describe el resultado…",
+      multiline: true,
+      required: true,
+    });
     if (!resultado) return;
     this.gestionesApi
       .completar(gestionId, { resultado })
       .subscribe(() => this.atencion() && this.cargar(this.atencion()!.id));
   }
 
-  convocarComite(atencionId: string) {
-    const motivo = window.prompt("Motivo del comité:");
+  async convocarComite(atencionId: string) {
+    const motivo = await this.prompt.open({
+      header: "Convocar comité",
+      label: "Motivo",
+      multiline: true,
+      required: true,
+    });
     if (!motivo) return;
     this.comitesApi
       .convocar(atencionId, {
@@ -305,8 +318,12 @@ export class AtencionDetailComponent implements OnInit {
       });
   }
 
-  votar(comiteId: string, voto: "AFavor" | "EnContra" | "Abstencion") {
-    const comentario = window.prompt(`Comentario (${voto}):`) ?? undefined;
+  async votar(comiteId: string, voto: "AFavor" | "EnContra" | "Abstencion") {
+    const comentario = (await this.prompt.open({
+      header: `Voto ${voto}`,
+      label: "Comentario (opcional)",
+      multiline: true,
+    })) ?? undefined;
     this.comitesApi.votar(comiteId, { voto, comentario }).subscribe({
       next: () => {
         this.msg.add({ severity: "success", summary: `Voto ${voto} registrado`, life: 2000 });
@@ -317,8 +334,13 @@ export class AtencionDetailComponent implements OnInit {
     });
   }
 
-  cerrarComite(comiteId: string, decision: "Aprobado" | "Rechazado" | "Diferido") {
-    const acta = window.prompt(`Acta de cierre (${decision}):`);
+  async cerrarComite(comiteId: string, decision: "Aprobado" | "Rechazado" | "Diferido") {
+    const acta = await this.prompt.open({
+      header: `Cerrar comité: ${decision}`,
+      label: "Acta",
+      multiline: true,
+      required: true,
+    });
     if (!acta) return;
     this.comitesApi.cerrar(comiteId, { decision, acta }).subscribe({
       next: () => {
@@ -330,8 +352,13 @@ export class AtencionDetailComponent implements OnInit {
     });
   }
 
-  derivar(nuevoTipo: "Asesoria" | "Juicio") {
-    const motivo = window.prompt(`Motivo para derivar a ${nuevoTipo}:`);
+  async derivar(nuevoTipo: "Asesoria" | "Juicio") {
+    const motivo = await this.prompt.open({
+      header: `Derivar a ${nuevoTipo}`,
+      label: "Motivo",
+      multiline: true,
+      required: true,
+    });
     if (!motivo) return;
     const a = this.atencion();
     if (!a) return;

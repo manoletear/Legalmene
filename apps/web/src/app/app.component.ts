@@ -8,6 +8,8 @@ import { PopoverModule } from "primeng/popover";
 import { OverlayBadgeModule } from "primeng/overlaybadge";
 import { TooltipModule } from "primeng/tooltip";
 import { Popover } from "primeng/popover";
+import { ConfirmDialogModule } from "primeng/confirmdialog";
+import { ToastModule } from "primeng/toast";
 import { MeService } from "./core/services/me.service";
 import { CodPlanService } from "./core/services/cod-plan.service";
 import { MaintenanceService } from "./core/services/maintenance.service";
@@ -26,8 +28,12 @@ import { NotifInboxApiService, NotifItem } from "./core/services/notif-inbox.ser
     PopoverModule,
     OverlayBadgeModule,
     TooltipModule,
+    ConfirmDialogModule,
+    ToastModule,
   ],
   template: `
+    <p-toast></p-toast>
+    <p-confirmDialog></p-confirmDialog>
     <div style="display:flex; height:100vh; overflow:hidden;">
       <!-- Sidebar desktop -->
       <aside class="lm-sidebar" *ngIf="!isMobile()">

@@ -5,7 +5,8 @@ import { provideAnimations } from "@angular/platform-browser/animations";
 import { providePrimeNG } from "primeng/config";
 import { definePreset } from "@primeng/themes";
 import Aura from "@primeng/themes/aura";
-import { MessageService } from "primeng/api";
+import { ConfirmationService, MessageService } from "primeng/api";
+import { DialogService } from "primeng/dynamicdialog";
 import { routes } from "./app.routes";
 import { codPlanInterceptor } from "./core/interceptors/cod-plan.interceptor";
 import { maintenanceInterceptor } from "./core/interceptors/maintenance.interceptor";
@@ -50,5 +51,7 @@ export const appConfig: ApplicationConfig = {
       ripple: true,
     }),
     MessageService,
+    ConfirmationService,
+    DialogService,
   ],
 };

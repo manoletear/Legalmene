@@ -12,7 +12,8 @@ import { TabsModule } from "primeng/tabs";
 import { AccordionModule } from "primeng/accordion";
 import { PaginatorModule, PaginatorState } from "primeng/paginator";
 import { ToastModule } from "primeng/toast";
-import { MessageService } from "primeng/api";
+import { ConfirmDialogModule } from "primeng/confirmdialog";
+import { ConfirmationService, MessageService } from "primeng/api";
 import {
   WebhooksApiService,
   WebhookSus,
@@ -40,9 +41,11 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
     AccordionModule,
     PaginatorModule,
     ToastModule,
+    ConfirmDialogModule,
   ],
   template: `
     <p-toast></p-toast>
+    <p-confirmDialog></p-confirmDialog>
     <p-tabs value="0">
       <p-tablist>
         <p-tab value="0">Suscripciones ({{ subs().length }})</p-tab>
@@ -157,6 +160,7 @@ export class AdminWebhooksComponent implements OnInit {
   private fb = inject(FormBuilder);
   private api = inject(WebhooksApiService);
   private msg = inject(MessageService);
+  private confirm = inject(ConfirmationService);
 
   protected eventos = WEBHOOK_EVENTOS;
   protected eventoOpts = WEBHOOK_EVENTOS.map((e) => ({ label: e, value: e }));
@@ -217,10 +221,19 @@ export class AdminWebhooksComponent implements OnInit {
   }
 
   eliminar(s: WebhookSus) {
-    if (!confirm(`¿Eliminar webhook "${s.nombre}"?`)) return;
-    this.api.eliminar(s.id).subscribe(() => {
-      this.msg.add({ severity: "success", summary: "Eliminada", life: 1500 });
-      this.recargar();
+    this.confirm.confirm({
+      header: "Eliminar webhook",
+      message: `¿Eliminar webhook "${s.nombre}"? Esta acción no se puede deshacer.`,
+      icon: "pi pi-exclamation-triangle",
+      acceptLabel: "Eliminar",
+      rejectLabel: "Cancelar",
+      acceptButtonStyleClass: "p-button-danger",
+      accept: () => {
+        this.api.eliminar(s.id).subscribe(() => {
+          this.msg.add({ severity: "success", summary: "Eliminada", life: 1500 });
+          this.recargar();
+        });
+      },
     });
   }
 

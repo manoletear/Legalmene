@@ -101,6 +101,17 @@ export class AtencionesService {
     };
     const [row] = await this.db.insert(atenciones).values(payload).returning();
     await this.webhooks.emitir(codPlan, "atencion.creada", { atencion: row });
+    if (row.abogadoAsignadoId) {
+      await this.notif.crear({
+        codPlan,
+        usuarioId: row.abogadoAsignadoId,
+        severidad: "info",
+        titulo: `Nueva ${row.tipo}: ${row.correlativo}`,
+        detalle: row.materia,
+        accionUrl: `/atenciones/${row.id}`,
+        metadata: { atencionId: row.id, tipo: row.tipo },
+      });
+    }
     return row;
   }
 
@@ -148,6 +159,17 @@ export class AtencionesService {
       .where(eq(atenciones.id, origen.id));
 
     await this.webhooks.emitir(codPlan, "atencion.derivada", { origen, nueva });
+    if (nueva.abogadoAsignadoId) {
+      await this.notif.crear({
+        codPlan,
+        usuarioId: nueva.abogadoAsignadoId,
+        severidad: "warn",
+        titulo: `Derivada a ${nueva.tipo}: ${nueva.correlativo}`,
+        detalle: `Desde ${origen.correlativo} — ${payload.motivo}`,
+        accionUrl: `/atenciones/${nueva.id}`,
+        metadata: { atencionId: nueva.id, origenId: origen.id, tipo: nueva.tipo },
+      });
+    }
     return nueva;
   }
 }

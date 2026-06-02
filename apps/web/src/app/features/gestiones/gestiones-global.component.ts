@@ -11,6 +11,7 @@ import { CheckboxModule } from "primeng/checkbox";
 import { ToastModule } from "primeng/toast";
 import { MessageService } from "primeng/api";
 import { GestionesGlobalService, GestionGlobalRow } from "../../core/services/gestiones-global.service";
+import { PromptService } from "../../shared/prompt.service";
 import type { TableLazyLoadEvent } from "primeng/table";
 
 type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast";
@@ -131,6 +132,7 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
 export class GestionesGlobalComponent implements OnInit {
   private api = inject(GestionesGlobalService);
   private msg = inject(MessageService);
+  private prompt = inject(PromptService);
 
   protected data = signal<GestionGlobalRow[]>([]);
   protected total = signal(0);
@@ -184,8 +186,13 @@ export class GestionesGlobalComponent implements OnInit {
     this.recargar();
   }
 
-  completar(g: GestionGlobalRow) {
-    const resultado = window.prompt(`Resultado de "${g.titulo}":`);
+  async completar(g: GestionGlobalRow) {
+    const resultado = await this.prompt.open({
+      header: `Completar: ${g.titulo}`,
+      label: "Resultado",
+      multiline: true,
+      required: true,
+    });
     if (!resultado) return;
     this.api.completar(g.id, { resultado }).subscribe({
       next: () => {

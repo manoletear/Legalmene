@@ -4,6 +4,7 @@ import { DRIZZLE, Database } from "../../db/database.module";
 import { gestiones, NuevaGestion, Gestion } from "../../db/schema/gestiones";
 import { atenciones } from "../../db/schema/atenciones";
 import { usuarios } from "../../db/schema/usuarios";
+import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
 import type { CreateGestion, CompletarGestion } from "@legalmene/shared";
 
 export interface FiltroGestiones {
@@ -17,7 +18,10 @@ export interface FiltroGestiones {
 
 @Injectable()
 export class GestionesService {
-  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: Database,
+    @Inject(NotifInboxService) private readonly notif: NotifInboxService,
+  ) {}
 
   async listarPorAtencion(codPlan: string, atencionId: string): Promise<Gestion[]> {
     await this.assertAtencionEnPlan(codPlan, atencionId);
@@ -103,6 +107,17 @@ export class GestionesService {
       .update(atenciones)
       .set({ fechaUltimaGestion: new Date(), estado: "EnGestion", updatedAt: new Date() })
       .where(eq(atenciones.id, input.atencionId));
+    await this.notif.crear({
+      codPlan,
+      usuarioId: row.responsableId,
+      severidad: row.fechaCompromiso ? "warn" : "info",
+      titulo: `Gestión asignada: ${row.titulo}`,
+      detalle: row.fechaCompromiso
+        ? `${row.tipo} · compromiso ${row.fechaCompromiso.toISOString().slice(0, 10)}`
+        : row.tipo,
+      accionUrl: `/atenciones/${input.atencionId}`,
+      metadata: { gestionId: row.id, atencionId: input.atencionId },
+    });
     return row;
   }
 
