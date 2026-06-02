@@ -19,7 +19,7 @@ test.describe("Health + Swagger", () => {
     expect(res.ok()).toBeTruthy();
     const body = await res.json();
     expect(body.status).toBe("ok");
-    expect(body.checks.db).toBe("ok");
+    expect(body.checks.db.status).toBe("ok");
   });
 
   test("api/docs sirve Swagger UI", async ({ page }) => {
