@@ -14,6 +14,7 @@ export default tseslint.config(
       "**/coverage/**",
       "**/drizzle/migrations/**",
       "legacy-auto-crm/**",
+      "tests/load/**", // k6 scripts run in Goja runtime con __ENV global
     ],
   },
   js.configs.recommended,

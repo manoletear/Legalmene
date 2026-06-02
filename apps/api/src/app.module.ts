@@ -20,6 +20,7 @@ import { PagosModule } from "./modules/pagos/pagos.module";
 import { CargasMasivasModule } from "./modules/cargas-masivas/cargas-masivas.module";
 import { DocumentosModule } from "./modules/documentos/documentos.module";
 import { NotificacionesModule } from "./modules/notificaciones/notificaciones.module";
+import { NotifInboxModule } from "./modules/notif-inbox/notif-inbox.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { ExportsModule } from "./modules/exports/exports.module";
 import { WebhooksModule } from "./modules/webhooks/webhooks.module";
@@ -50,6 +51,7 @@ import { HealthModule } from "./modules/health/health.module";
     CargasMasivasModule,
     DocumentosModule,
     NotificacionesModule,
+    NotifInboxModule,
     DashboardModule,
     ExportsModule,
     WebhooksModule,

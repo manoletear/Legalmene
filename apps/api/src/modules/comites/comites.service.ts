@@ -3,11 +3,15 @@ import { and, eq } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { comites, participantesComite, NuevoComite } from "../../db/schema/comites";
 import { atenciones } from "../../db/schema/atenciones";
+import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
 import type { ConvocarComite } from "@legalmene/shared";
 
 @Injectable()
 export class ComitesService {
-  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: Database,
+    @Inject(NotifInboxService) private readonly notif: NotifInboxService,
+  ) {}
 
   async listarPorAtencion(codPlan: string, atencionId: string) {
     await this.assertAtencionEnPlan(codPlan, atencionId);
@@ -41,6 +45,21 @@ export class ComitesService {
         .set({ estado: "EnComite", updatedAt: new Date() })
         .where(eq(atenciones.id, input.atencionId));
 
+      return comite;
+    }).then(async (comite) => {
+      // Notif persistente a cada participante. Out-of-transaction
+      // porque un error de inbox no debe abortar la convocatoria.
+      await this.notif.crearBulk(
+        input.participantesIds.map((usuarioId) => ({
+          codPlan,
+          usuarioId,
+          severidad: "warn" as const,
+          titulo: "Convocado a comité",
+          detalle: input.motivo,
+          accionUrl: `/atenciones/${input.atencionId}`,
+          metadata: { comiteId: comite.id, atencionId: input.atencionId },
+        })),
+      );
       return comite;
     });
   }

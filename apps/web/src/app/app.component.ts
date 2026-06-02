@@ -10,10 +10,11 @@ import { MatMenuModule } from "@angular/material/menu";
 import { MatTooltipModule } from "@angular/material/tooltip";
 import { MatBadgeModule } from "@angular/material/badge";
 import { BreakpointObserver, Breakpoints } from "@angular/cdk/layout";
+import { Router } from "@angular/router";
 import { MeService } from "./core/services/me.service";
 import { CodPlanService } from "./core/services/cod-plan.service";
 import { MaintenanceService } from "./core/services/maintenance.service";
-import { NotificacionesApiService, NotifItem } from "./core/services/notificaciones.service";
+import { NotifInboxApiService, NotifItem } from "./core/services/notif-inbox.service";
 import { signal } from "@angular/core";
 
 @Component({
@@ -111,21 +112,34 @@ import { signal } from "@angular/core";
           <button
             mat-icon-button
             [matMenuTriggerFor]="notifMenu"
-            [matBadge]="notifCount() || ''"
-            [matBadgeHidden]="notifCount() === 0"
+            [matBadge]="unseenCount() || ''"
+            [matBadgeHidden]="unseenCount() === 0"
             matBadgeColor="warn"
             matBadgeSize="small"
             matTooltip="Notificaciones"
+            (menuOpened)="cargarInbox()"
           >
             <mat-icon>notifications</mat-icon>
           </button>
           <mat-menu #notifMenu="matMenu" xPosition="before">
-            <div style="padding:8px 16px; min-width:280px;" *ngIf="!notifItems().length">
+            <div style="display:flex; align-items:center; gap:8px; padding:8px 16px; border-bottom:1px solid #eee;">
+              <strong style="flex:1;">Notificaciones</strong>
+              <button
+                mat-button
+                color="primary"
+                *ngIf="unseenCount() > 0"
+                (click)="$event.stopPropagation(); marcarTodasLeidas()"
+              >
+                Marcar todas leídas
+              </button>
+            </div>
+            <div style="padding:16px; min-width:320px;" *ngIf="!inboxItems().length">
               <em style="opacity:0.6;">Sin notificaciones</em>
             </div>
             <button
               mat-menu-item
-              *ngFor="let n of notifItems()"
+              *ngFor="let n of inboxItems()"
+              (click)="abrirNotif(n)"
               [style.borderLeft]="
                 n.severidad === 'critical'
                   ? '4px solid #d32f2f'
@@ -133,10 +147,12 @@ import { signal } from "@angular/core";
                     ? '4px solid #fbc02d'
                     : '4px solid #1976d2'
               "
+              [style.background]="n.seen ? 'transparent' : 'rgba(25, 118, 210, 0.04)'"
             >
-              <div style="display:flex; flex-direction:column; padding:4px 0;">
-                <strong>{{ n.titulo }}</strong>
+              <div style="display:flex; flex-direction:column; padding:4px 0; min-width:280px;">
+                <strong [style.fontWeight]="n.seen ? 'normal' : 'bold'">{{ n.titulo }}</strong>
                 <small *ngIf="n.detalle" style="opacity:0.7;">{{ n.detalle }}</small>
+                <small style="opacity:0.5;">{{ n.createdAt | date: 'short' }}</small>
               </div>
             </button>
           </mat-menu>
@@ -169,32 +185,43 @@ export class AppComponent implements OnInit {
   protected me = inject(MeService);
   protected codPlan = inject(CodPlanService);
   protected maint = inject(MaintenanceService);
-  private notif = inject(NotificacionesApiService);
+  private notif = inject(NotifInboxApiService);
+  private router = inject(Router);
   private breakpoints = inject(BreakpointObserver);
 
   @ViewChild("sidenav") private sidenav!: MatSidenav;
 
-  protected notifCount = signal(0);
-  protected notifItems = signal<NotifItem[]>([]);
+  protected unseenCount = signal(0);
+  protected inboxItems = signal<NotifItem[]>([]);
   protected isMobile = signal(false);
 
   ngOnInit() {
     this.me.load();
-    this.loadNotif();
+    this.cargarInbox();
     this.breakpoints
       .observe([Breakpoints.Handset, Breakpoints.Small])
       .subscribe((r) => this.isMobile.set(r.matches));
     // Refresca cada 60s para mantener el badge actualizado.
-    setInterval(() => this.loadNotif(), 60_000);
+    setInterval(() => this.cargarInbox(), 60_000);
   }
 
-  private loadNotif() {
-    this.notif.obtener().subscribe({
+  cargarInbox() {
+    this.notif.inbox({ pageSize: 10 }).subscribe({
       next: (r) => {
-        this.notifCount.set(r.count);
-        this.notifItems.set(r.items);
+        this.unseenCount.set(r.unseen);
+        this.inboxItems.set(r.data);
       },
       error: () => {},
     });
+  }
+
+  marcarTodasLeidas() {
+    this.notif.marcarTodasLeidas().subscribe(() => this.cargarInbox());
+  }
+
+  abrirNotif(n: NotifItem) {
+    if (!n.seen) this.notif.marcarLeida(n.id).subscribe();
+    if (n.accionUrl) void this.router.navigateByUrl(n.accionUrl);
+    setTimeout(() => this.cargarInbox(), 500);
   }
 }

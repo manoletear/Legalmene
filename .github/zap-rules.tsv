@@ -1,0 +1,9 @@
+# Reglas ZAP para mute/ignore. Formato: rule_id<TAB>action<TAB>comment
+# action: WARN | FAIL | IGNORE
+
+# Cookies inseguras: ignoramos en dev porque AUTH_DISABLED no setea cookies
+10010	IGNORE	Cookie No HttpOnly Flag (sin cookies en dev mode)
+10011	IGNORE	Cookie Without Secure Flag (igual)
+
+# X-Powered-By: lo dejamos visible por ahora (lo veremos en hardening)
+10037	WARN	Server Leaks Information via X-Powered-By
