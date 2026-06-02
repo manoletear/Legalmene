@@ -1,9 +1,9 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { and, asc, eq, lte, or } from "drizzle-orm";
-import { createHmac } from "crypto";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { webhookEntregas, webhooksSuscripciones } from "../../db/schema/webhooks";
+import { firmarWebhook } from "../../common/utils/webhook-signature";
 
 // Reintentos con backoff exponencial: 1m, 5m, 15m, 60m, 4h, 16h. 6 intentos.
 const BACKOFF_MS = [60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000, 4 * 3_600_000, 16 * 3_600_000];
@@ -70,7 +70,7 @@ export class WebhooksDispatcher {
       return;
     }
     const body = JSON.stringify({ evento: p.evento, payload: p.payload, deliveredAt: new Date().toISOString() });
-    const signature = createHmac("sha256", p.secret).update(body).digest("hex");
+    const signature = firmarWebhook(p.secret, body);
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",

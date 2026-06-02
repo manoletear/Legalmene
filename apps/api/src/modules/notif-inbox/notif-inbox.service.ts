@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { notificaciones, NuevaNotificacion, Notificacion } from "../../db/schema/notificaciones";
 
@@ -31,6 +31,28 @@ export class NotifInboxService {
     };
     const [row] = await this.db.insert(notificaciones).values(payload).returning();
     return row;
+  }
+
+  // Crea solo si no existe notif unseen con misma metadata.<key>=value.
+  // Útil para cron diarios (gestiones vencidas) que no deben spamear.
+  async crearSiNoExisteUnseen(
+    input: CrearNotif,
+    dedupKey: string,
+    dedupValue: string,
+  ): Promise<Notificacion | null> {
+    const [existing] = await this.db
+      .select({ id: notificaciones.id })
+      .from(notificaciones)
+      .where(
+        and(
+          eq(notificaciones.usuarioId, input.usuarioId),
+          eq(notificaciones.seen, false),
+          sql`${notificaciones.metadata}->>${dedupKey} = ${dedupValue}`,
+        ),
+      )
+      .limit(1);
+    if (existing) return null;
+    return this.crear(input);
   }
 
   // Bulk: una sola query inserta varias notif. Útil cuando un evento
