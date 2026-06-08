@@ -1,0 +1,38 @@
+language: "es-CL"
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  path_filters:
+    - "!**/dist/**"
+    - "!**/node_modules/**"
+    - "!**/.angular/**"
+    - "!**/cdk.out/**"
+    - "!**/playwright-report/**"
+    - "!**/test-results/**"
+    - "!apps/api/drizzle/migrations/**"
+    - "!infra/postman/**"
+    - "!infra/grafana/**"
+    - "!pnpm-lock.yaml"
+  path_instructions:
+    - path: "apps/api/**"
+      instructions: |
+        Backend NestJS 10 con Drizzle ORM. Verifica multi-tenancy (cod_plan
+        en queries), uso de @Inject(Class) en constructores por Vitest
+        decorator metadata, validación Zod en DTOs, soft-delete vía
+        vigencia='Eliminado' (Ley 19.628), correlativos atómicos.
+    - path: "apps/web/**"
+      instructions: |
+        Angular 19 standalone con PrimeNG Aura. Componentes deben usar
+        signal()/inject(), FormsModule cuando ngModel, ReactiveFormsModule
+        para form group. Toasts vía MessageService, confirm vía
+        ConfirmationService, prompts vía PromptService.
+    - path: "infra/cdk/**"
+      instructions: |
+        AWS CDK v2. Stacks separados por bounded context (Network/Data/
+        Edge/Compute). Secrets import vía fromSecretCompleteArn (no por
+        objeto) para evitar ciclo de stacks.
+chat:
+  auto_reply: false

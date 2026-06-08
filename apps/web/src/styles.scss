@@ -1,0 +1,409 @@
+// PrimeNG Aura theme con preset LegalChile aplicado en app.config.ts.
+// Iconos: primeicons.
+@import "primeicons/primeicons.css";
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  font-family: "Inter", "Roboto", "Helvetica Neue", sans-serif;
+  background: #f5f7fa;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.page {
+  padding: 24px;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+// Utilidades grid/flex.
+.lm-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.lm-col { display: flex; flex-direction: column; gap: 8px; }
+.lm-grid { display: grid; gap: 16px; }
+.lm-grid-4 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.lm-grid-3 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.lm-grid-2 { grid-template-columns: 1fr 1fr; }
+@media (max-width: 720px) { .lm-grid-2 { grid-template-columns: 1fr; } }
+.lm-grow { flex: 1; }
+.lm-muted { color: #64748b; }
+.lm-small { font-size: 12px; color: #64748b; }
+.lm-mono { font-variant-numeric: tabular-nums; }
+
+// Layout shell — top header band con logo + search + user.
+.lm-top-header {
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  height: 64px;
+  padding: 0 20px;
+  gap: 20px;
+}
+
+.lm-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+}
+
+.lm-brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background: linear-gradient(160deg, #0c2d54 0%, #2563eb 70%, #60a5fa 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
+}
+
+.lm-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.lm-brand-text strong {
+  background: linear-gradient(120deg, #0c2d54, #2563eb);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 1px;
+}
+
+.lm-brand-text small {
+  color: #94a3b8;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.lm-platform-title {
+  font-weight: 500;
+  color: #334155;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.lm-search {
+  flex: 1;
+  max-width: 480px;
+  position: relative;
+}
+
+.lm-search input {
+  width: 100%;
+  height: 38px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 0 60px 0 38px;
+  font-size: 14px;
+  color: #334155;
+}
+
+.lm-search input:focus {
+  outline: none;
+  border-color: #2563eb;
+  background: #fff;
+}
+
+.lm-search .pi-search {
+  position: absolute;
+  left: 12px;
+  top: 11px;
+  color: #94a3b8;
+}
+
+.lm-search .lm-kbd {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  font-size: 11px;
+  color: #64748b;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.lm-user-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 4px 4px 4px 10px;
+  border-radius: 8px;
+  transition: background 120ms ease;
+}
+
+.lm-user-chip:hover { background: #f1f5f9; }
+
+.lm-user-chip .lm-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.lm-user-chip .lm-user-meta {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  text-align: right;
+}
+
+.lm-user-chip .lm-user-meta strong { font-size: 13px; color: #0f172a; }
+.lm-user-chip .lm-user-meta small { font-size: 11px; color: #64748b; }
+
+// Sidebar
+.lm-sidebar {
+  width: 232px;
+  background: #ffffff;
+  border-right: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  padding-top: 12px;
+}
+
+.lm-sidebar nav { flex: 1; display: flex; flex-direction: column; }
+
+.lm-sidebar nav a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 18px;
+  color: #475569;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 120ms ease, color 120ms ease;
+  border-left: 3px solid transparent;
+}
+
+.lm-sidebar nav a i { font-size: 18px; color: #94a3b8; transition: color 120ms ease; }
+.lm-sidebar nav a:hover { background: #f8fafc; color: #2563eb; }
+.lm-sidebar nav a:hover i { color: #2563eb; }
+
+.lm-sidebar nav a.active {
+  background: #eff6ff;
+  color: #2563eb;
+  border-left-color: #2563eb;
+  font-weight: 600;
+}
+
+.lm-sidebar nav a.active i { color: #2563eb; }
+
+.lm-sidebar-footer {
+  padding: 12px 18px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.lm-sidebar-footer:hover { color: #2563eb; }
+
+// PrimeNG card override — softer shadow, larger radius.
+.p-card {
+  box-shadow:
+    0 1px 3px rgba(15, 23, 42, 0.05),
+    0 1px 2px rgba(15, 23, 42, 0.04) !important;
+  border-radius: 14px !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.p-card .p-card-body { padding: 20px !important; }
+
+// KPI card colored circle backgrounds.
+.lm-kpi-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+
+.lm-kpi-icon.blue { background: #dbeafe; color: #2563eb; }
+.lm-kpi-icon.green { background: #dcfce7; color: #16a34a; }
+.lm-kpi-icon.orange { background: #fed7aa; color: #ea580c; }
+.lm-kpi-icon.purple { background: #e9d5ff; color: #9333ea; }
+.lm-kpi-icon.red { background: #fecaca; color: #dc2626; }
+
+.lm-kpi-card .lm-kpi-value {
+  font-size: 30px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.1;
+  margin-top: 4px;
+}
+
+.lm-kpi-card .lm-kpi-label {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.lm-kpi-card .lm-kpi-delta {
+  font-size: 12px;
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lm-kpi-card .lm-kpi-delta.up { color: #16a34a; }
+.lm-kpi-card .lm-kpi-delta.down { color: #dc2626; }
+
+// Pipeline timeline horizontal.
+.lm-pipeline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 16px 0 4px;
+}
+
+.lm-pipeline-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  position: relative;
+  text-align: center;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.lm-pipeline-step .lm-step-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  border: 2px solid #e2e8f0;
+  color: #94a3b8;
+  z-index: 1;
+}
+
+.lm-pipeline-step.done .lm-step-dot {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.lm-pipeline-step.current .lm-step-dot {
+  background: #fff;
+  border-color: #2563eb;
+  color: #2563eb;
+  box-shadow: 0 0 0 4px #dbeafe;
+}
+
+.lm-pipeline-step.done strong, .lm-pipeline-step.current strong { color: #0f172a; }
+
+.lm-pipeline-step::before {
+  content: "";
+  position: absolute;
+  top: 16px;
+  left: -50%;
+  width: 100%;
+  height: 2px;
+  background: #e2e8f0;
+  z-index: 0;
+}
+
+.lm-pipeline-step:first-child::before { display: none; }
+
+.lm-pipeline-step.done::before, .lm-pipeline-step.current::before {
+  background: #2563eb;
+}
+
+// Mini info card (las 8 del ficha de caso).
+.lm-info-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lm-info-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.lm-info-card-header i { color: #2563eb; }
+
+.lm-info-card .lm-info-main {
+  font-size: 16px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.lm-info-card .lm-info-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #475569;
+}
+
+.lm-info-card-footer {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid #f1f5f9;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.lm-info-card-footer:hover { text-decoration: underline; }
+
+// Alert row chips.
+.lm-alert-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+.lm-alert-row:last-child { border-bottom: none; }
+.lm-alert-row .lm-alert-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+.lm-alert-row .lm-alert-icon.critical { background: #fee2e2; color: #dc2626; }
+.lm-alert-row .lm-alert-icon.high { background: #fed7aa; color: #ea580c; }
+.lm-alert-row .lm-alert-icon.info { background: #dbeafe; color: #2563eb; }

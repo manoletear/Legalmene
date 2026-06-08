@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": true,
+    "incremental": true,
+    "skipLibCheck": true,
+    "strictPropertyInitialization": false,
+    "paths": {
+      "@legalmene/shared": ["../../packages/shared/src"],
+      "@legalmene/shared/*": ["../../packages/shared/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts"]
+}

@@ -1,0 +1,61 @@
+node_modules/
+dist/
+build/
+.next/
+out/.env
+.env.local
+.env.*.local
+!.env.example
+
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+
+# TS emit artifacts mistakenly created in source dirs
+packages/shared/src/**/*.d.ts
+packages/shared/src/**/*.js
+packages/shared/src/**/*.js.map
+apps/api/src/**/*.d.ts
+apps/api/src/**/*.js
+apps/api/src/**/*.js.map
+
+coverage/
+.nyc_output/
+
+drizzle/migrations/meta/_journal.json.bak
+
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/*.db-journal
+
+# Legacy auto-crm artifacts (kept in legacy-auto-crm/ for reference)
+legacy-auto-crm/node_modules/
+legacy-auto-crm/.next/
+legacy-auto-crm/data/*.db*
+
+.vercel
+.idea/
+.vscode/
+
+# Angular CLI cache
+.angular/
+
+# Local env files (apps/*/.env)
+apps/*/.env
+
+# CDK synth output
+infra/cdk/cdk.out/
+infra/cdk/dist/
+infra/cdk/cdk.context.json
+apps/api/data/
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+
+# Postman openapi snapshot (regenerable)
+infra/postman/openapi.json

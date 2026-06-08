@@ -1,0 +1,40 @@
+version: 2
+updates:
+  # Backend + frontend npm deps
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      nestjs:
+        patterns: ["@nestjs/*", "nestjs-zod", "passport*"]
+      angular:
+        patterns: ["@angular/*", "@angular-devkit/*", "rxjs", "zone.js"]
+      aws-sdk:
+        patterns: ["@aws-sdk/*"]
+      drizzle:
+        patterns: ["drizzle-*", "pg", "@types/pg"]
+      testing:
+        patterns: ["vitest", "@vitest/*", "@playwright/*"]
+    labels: ["dependencies"]
+
+  # CDK
+  - package-ecosystem: "npm"
+    directory: "/infra/cdk"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    groups:
+      aws-cdk:
+        patterns: ["aws-cdk*", "@aws-cdk/*", "constructs"]
+    labels: ["dependencies", "infra"]
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "ci"]

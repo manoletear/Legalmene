@@ -1,0 +1,185 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: "20"
+  PNPM_VERSION: "9.15.0"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  install:
+    name: Install + cache
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+
+  lint:
+    name: Lint
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+
+  build-api:
+    name: Build API
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @legalmene/shared build
+      - run: pnpm --filter @legalmene/api build
+
+  build-web:
+    name: Build Angular
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @legalmene/shared build
+      - run: pnpm --filter @legalmene/web build
+
+  test-api:
+    name: Test API
+    needs: install
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: legalmene
+          POSTGRES_PASSWORD: legalmene
+          POSTGRES_DB: legalmene
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://legalmene:legalmene@localhost:5432/legalmene
+      AUTH_DISABLED: "true"
+      STORAGE_BACKEND: local
+      DOCUMENTS_LOCAL_DIR: ./data/docs
+      DOCUMENTS_LOCAL_SECRET: ci-secret
+      API_PUBLIC_URL: http://localhost:3001
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @legalmene/shared build
+      - name: Apply migrations
+        run: pnpm db:migrate
+      - name: Run unit tests
+        run: pnpm --filter @legalmene/api test
+
+  e2e:
+    name: E2E (Playwright)
+    needs: install
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: legalmene
+          POSTGRES_PASSWORD: legalmene
+          POSTGRES_DB: legalmene
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://legalmene:legalmene@localhost:5432/legalmene
+      AUTH_DISABLED: "true"
+      STORAGE_BACKEND: local
+      DOCUMENTS_LOCAL_DIR: ./data/docs
+      DOCUMENTS_LOCAL_SECRET: ci-secret
+      API_PUBLIC_URL: http://localhost:3001
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @legalmene/shared build
+      - run: cd apps/api && pnpm db:migrate && pnpm db:seed
+      - name: Install Playwright browsers
+        run: cd tests/e2e && npx playwright install --with-deps chromium
+      - name: Run E2E
+        run: cd tests/e2e && npx playwright test --project=chromium
+
+  cdk-synth:
+    name: CDK synth
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @legalmene/infra-cdk build
+      - name: Synth (no-credentials check)
+        working-directory: infra/cdk
+        env:
+          CDK_DEFAULT_REGION: sa-east-1
+          CDK_DEFAULT_ACCOUNT: "123456789012"
+        run: npx cdk synth --quiet || true

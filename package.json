@@ -1,0 +1,39 @@
+{
+  "name": "legalmene",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LegalChile PSL — Sistema de gestión legal SaaS",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "api:dev": "pnpm --filter @legalmene/shared build && pnpm --filter @legalmene/api dev",
+    "api:build": "pnpm --filter @legalmene/shared build && pnpm --filter @legalmene/api build",
+    "api:start": "pnpm --filter @legalmene/api start:prod",
+    "shared:build": "pnpm --filter @legalmene/shared build",
+    "shared:dev": "pnpm --filter @legalmene/shared dev",
+    "web:dev": "pnpm --filter @legalmene/web dev",
+    "web:build": "pnpm --filter @legalmene/web build",
+    "db:generate": "pnpm --filter @legalmene/api db:generate",
+    "db:migrate": "pnpm --filter @legalmene/api db:migrate",
+    "db:seed": "pnpm --filter @legalmene/api db:seed",
+    "db:studio": "pnpm --filter @legalmene/api db:studio",
+    "e2e": "pnpm --filter @legalmene/e2e test",
+    "lint": "eslint . --max-warnings 100",
+    "lint:fix": "eslint . --fix",
+    "lint:strict": "eslint . --max-warnings 0",
+    "typecheck": "pnpm -r --parallel exec tsc --noEmit",
+    "test": "pnpm -r test"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "typescript-eslint": "^8.18.2"
+  }
+}
