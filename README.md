@@ -121,7 +121,6 @@ infra/
 tests/e2e/            Playwright specs (chromium)
 docs/                 arquitectura + runbook
 .github/workflows/    ci.yml, backup-nightly.yml
-legacy-auto-crm/      referencia original Hainrixz/auto-crm
 ```
 
 ## Tests

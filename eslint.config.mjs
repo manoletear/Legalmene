@@ -13,7 +13,6 @@ export default tseslint.config(
       "**/playwright-report/**",
       "**/coverage/**",
       "**/drizzle/migrations/**",
-      "legacy-auto-crm/**",
       "tests/load/**", // k6 scripts run in Goja runtime con __ENV global
     ],
   },

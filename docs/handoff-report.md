@@ -180,7 +180,6 @@ tests/e2e/            Playwright specs (chromium)
 docs/                 arquitectura, runbook, api-versioning
 .github/workflows/    ci.yml, sbom.yml, migration-check.yml,
                       backup-nightly.yml
-legacy-auto-crm/      referencia original Hainrixz/auto-crm
 ```
 
 ---

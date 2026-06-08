@@ -49,7 +49,6 @@ infra/
   docker-compose.yml  # Postgres + Adminer local
 docs/
   propuesta-arquitectura-legalchile.md
-legacy-auto-crm/      # CRM Next.js incorporado como referencia (Hainrixz/auto-crm)
 ```
 
 ## Comandos
