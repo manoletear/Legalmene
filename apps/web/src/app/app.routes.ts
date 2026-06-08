@@ -1,5 +1,13 @@
 import { Routes } from "@angular/router";
 
+const atencionesList = () =>
+  import("./features/atenciones/atenciones-list.component").then(
+    (m) => m.AtencionesListComponent,
+  );
+
+const stubPage = () =>
+  import("./features/stub/stub-page.component").then((m) => m.StubPageComponent);
+
 export const routes: Routes = [
   { path: "", redirectTo: "dashboard", pathMatch: "full" },
   {
@@ -14,13 +22,7 @@ export const routes: Routes = [
         (m) => m.AfiliadosListComponent,
       ),
   },
-  {
-    path: "atenciones",
-    loadComponent: () =>
-      import("./features/atenciones/atenciones-list.component").then(
-        (m) => m.AtencionesListComponent,
-      ),
-  },
+  { path: "atenciones", loadComponent: atencionesList },
   {
     path: "atenciones/nueva",
     loadComponent: () =>
@@ -33,6 +35,9 @@ export const routes: Routes = [
         (m) => m.AtencionDetailComponent,
       ),
   },
+  { path: "consultas", loadComponent: atencionesList, data: { tipoFiltro: "Consulta" } },
+  { path: "asesorias", loadComponent: atencionesList, data: { tipoFiltro: "Asesoria" } },
+  { path: "juicios", loadComponent: atencionesList, data: { tipoFiltro: "Juicio" } },
   {
     path: "gestiones",
     loadComponent: () =>
@@ -56,6 +61,39 @@ export const routes: Routes = [
     path: "auditoria",
     loadComponent: () =>
       import("./features/auditoria/auditoria.component").then((m) => m.AuditoriaComponent),
+  },
+  // Stubs — UI futura, sin backend aún.
+  {
+    path: "aranceles",
+    loadComponent: stubPage,
+    data: {
+      titulo: "Aranceles",
+      descripcion: "Catálogo y matriz de aranceles legales",
+      icono: "pi-dollar",
+    },
+  },
+  {
+    path: "provisiones",
+    loadComponent: stubPage,
+    data: {
+      titulo: "Provisiones",
+      descripcion: "Provisiones financieras por caso y cliente",
+      icono: "pi-wallet",
+    },
+  },
+  {
+    path: "documentos",
+    loadComponent: stubPage,
+    data: {
+      titulo: "Documentos",
+      descripcion: "Repositorio centralizado de documentos legales",
+      icono: "pi-folder",
+    },
+  },
+  {
+    path: "reportes",
+    loadComponent: () =>
+      import("./features/reportes/reportes.component").then((m) => m.ReportesComponent),
   },
   {
     path: "admin/usuarios",

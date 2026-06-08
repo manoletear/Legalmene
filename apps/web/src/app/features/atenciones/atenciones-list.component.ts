@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
-import { RouterLink } from "@angular/router";
+import { ActivatedRoute, RouterLink } from "@angular/router";
 import { CardModule } from "primeng/card";
 import { TableModule } from "primeng/table";
 import { TagModule } from "primeng/tag";
@@ -31,14 +31,15 @@ import type { TableLazyLoadEvent } from "primeng/table";
     <p-card>
       <ng-template pTemplate="header">
         <div style="display:flex; align-items:center; gap:8px; padding:16px 16px 0;">
-          <h2 style="margin:0; flex:1;">Atenciones</h2>
+          <h2 style="margin:0; flex:1;">{{ titulo }}</h2>
           <button pButton icon="pi pi-download" label="Exportar CSV" [outlined]="true" (click)="exportarCsv()"></button>
-          <button pButton icon="pi pi-plus" label="Nueva consulta" routerLink="/atenciones/nueva"></button>
+          <button pButton icon="pi pi-plus" label="Nueva atención" routerLink="/atenciones/nueva"></button>
         </div>
       </ng-template>
 
       <div class="lm-row" style="margin:16px 0;">
         <p-select
+          *ngIf="!tipoBloqueado"
           [(ngModel)]="filtroTipo"
           (onChange)="recargar()"
           [options]="tipoOpts"
@@ -120,11 +121,13 @@ import type { TableLazyLoadEvent } from "primeng/table";
 })
 export class AtencionesListComponent implements OnInit {
   private api = inject(AtencionesApiService);
+  private route = inject(ActivatedRoute);
   protected data = signal<Atencion[]>([]);
   protected total = signal(0);
   protected page = signal(1);
   protected pageSize = signal(25);
   protected loading = signal(false);
+  protected tipoBloqueado = false;
   protected filtroTipo: "Consulta" | "Asesoria" | "Juicio" | undefined;
   protected filtroEstado: string | undefined;
   protected filtroCorrelativo = "";
@@ -144,7 +147,21 @@ export class AtencionesListComponent implements OnInit {
   ];
 
   ngOnInit() {
+    const tipoFiltro = this.route.snapshot.data["tipoFiltro"];
+    if (tipoFiltro) {
+      this.filtroTipo = tipoFiltro;
+      this.tipoBloqueado = true;
+    }
     this.recargar();
+  }
+
+  protected get titulo(): string {
+    switch (this.filtroTipo) {
+      case "Consulta": return "Consultas";
+      case "Asesoria": return "Asesorías";
+      case "Juicio": return "Juicios";
+      default: return "Atenciones";
+    }
   }
 
   recargar() {
