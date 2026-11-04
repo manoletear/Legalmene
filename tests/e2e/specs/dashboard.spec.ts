@@ -9,7 +9,7 @@ test.describe("Dashboard", () => {
     await expect(page.locator("h1")).toBeVisible();
     await expect(page.locator("text=Casos abiertos")).toBeVisible();
     await expect(page.locator("text=Consultas del día")).toBeVisible();
-    await expect(page.locator("text=SLA por vencer")).toBeVisible();
+    await expect(page.getByText("SLA por vencer", { exact: true }).first()).toBeVisible();
     await expect(page.locator("text=Provisiones pendientes")).toBeVisible();
   });
 });
