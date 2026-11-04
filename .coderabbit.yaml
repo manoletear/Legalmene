@@ -1,4 +1,4 @@
-language: "es-CL"
+language: "es"
 reviews:
   profile: "chill"
   request_changes_workflow: false
