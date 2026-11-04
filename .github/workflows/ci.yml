@@ -156,9 +156,16 @@ jobs:
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @legalmene/shared build
-      - run: cd apps/api && pnpm db:migrate && pnpm db:seed
+      - name: Build API
+        run: pnpm --filter @legalmene/api build
+      - name: Build Web
+        run: pnpm --filter @legalmene/web build
+      - name: Apply migrations + seed
+        run: cd apps/api && pnpm db:migrate && pnpm db:seed
       - name: Install Playwright browsers
         run: cd tests/e2e && npx playwright install --with-deps chromium
+      - name: Install serve
+        run: npm install -g serve
       - name: Run E2E
         run: cd tests/e2e && npx playwright test --project=chromium
 

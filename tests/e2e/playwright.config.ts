@@ -28,17 +28,32 @@ export default defineConfig({
     ? undefined
     : [
         {
-          command: "pnpm api:dev",
+          command: process.env.CI
+            ? "node apps/api/dist/apps/api/src/main.js"
+            : "pnpm api:dev",
           url: `${API_BASE}/health`,
-          reuseExistingServer: true,
+          reuseExistingServer: !process.env.CI,
           timeout: 90_000,
           cwd: "../..",
+          env: process.env.CI
+            ? {
+                PORT: "3001",
+                DATABASE_URL: process.env.DATABASE_URL ?? "",
+                AUTH_DISABLED: "true",
+                STORAGE_BACKEND: "local",
+                DOCUMENTS_LOCAL_DIR: "./data/docs",
+                DOCUMENTS_LOCAL_SECRET: "ci-secret",
+                API_PUBLIC_URL: "http://localhost:3001",
+              }
+            : {},
         },
         {
-          command: "pnpm web:dev",
+          command: process.env.CI
+            ? "npx serve apps/web/dist/web/browser -p 4200 -s --no-clipboard"
+            : "pnpm web:dev",
           url: WEB_BASE,
-          reuseExistingServer: true,
-          timeout: 120_000,
+          reuseExistingServer: !process.env.CI,
+          timeout: 30_000,
           cwd: "../..",
         },
       ],
