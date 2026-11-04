@@ -29,8 +29,8 @@ test.describe("Atenciones flow", () => {
     await expect(page).toHaveURL(/\/atenciones\/[0-9a-f-]+$/);
     // Correlativo visible en algún punto de la página (h1, h2 o span según diseño).
     await expect(page.locator("text=/CONS-\\d{4}-\\d{6}/").first()).toBeVisible();
-    // p-tag con tipo visible en la página.
-    await expect(page.locator("p-tag").filter({ hasText: "Consulta" }).first()).toBeVisible();
+    // breadcrumb con el tipo de caso visible (rutaPrincipal("Consulta") → "Consultas").
+    await expect(page.locator("text=Consultas").first()).toBeVisible();
   });
 
   test("búsqueda full-text encuentra atención por palabra parcial", async ({ page }) => {

@@ -7,10 +7,10 @@ test.describe("Dashboard", () => {
     await page.goto("/dashboard");
     // h1 ahora es el saludo personalizado; comprobamos que cargó la página.
     await expect(page.locator("h1")).toBeVisible();
-    await expect(page.locator("text=Afiliados activos")).toBeVisible();
-    await expect(page.locator("text=Atenciones activas")).toBeVisible();
-    await expect(page.locator("text=Gestiones pendientes")).toBeVisible();
-    await expect(page.locator("text=Comités abiertos")).toBeVisible();
+    await expect(page.locator("text=Casos abiertos")).toBeVisible();
+    await expect(page.locator("text=Consultas del día")).toBeVisible();
+    await expect(page.locator("text=SLA por vencer")).toBeVisible();
+    await expect(page.locator("text=Provisiones pendientes")).toBeVisible();
   });
 });
 
