@@ -1,5 +1,5 @@
 [build]
-  command = "pnpm --filter @legalmene/shared build && pnpm --filter @legalmene/web build"
+  command = "pnpm --filter @legalmene/shared build && pnpm --filter @legalmene/web build:demo"
   publish = "apps/web/dist/web/browser"
 
 [build.environment]

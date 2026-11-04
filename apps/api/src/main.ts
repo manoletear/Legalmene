@@ -41,7 +41,7 @@ async function bootstrap() {
   app.useGlobalFilters(new I18nExceptionFilter());
 
   app.enableCors({
-    origin: process.env.WEB_ORIGIN ?? "http://localhost:4200",
+    origin: (process.env.WEB_ORIGIN ?? "http://localhost:4200").split(",").map((o) => o.trim()),
     credentials: true,
   });
 
