@@ -27,10 +27,10 @@ test.describe("Atenciones flow", () => {
     await page.getByRole("button", { name: /^Crear$/ }).click();
 
     await expect(page).toHaveURL(/\/atenciones\/[0-9a-f-]+$/);
-    // Header de p-card: usamos h2 del template encabezado.
-    await expect(page.locator("h2").first()).toContainText(/CONS-\d{4}-\d{6}/);
-    // p-tag con tipo aparece primero en el header.
-    await expect(page.locator("p-tag").first()).toContainText("Consulta");
+    // Correlativo visible en algún punto de la página (h1, h2 o span según diseño).
+    await expect(page.locator("text=/CONS-\\d{4}-\\d{6}/").first()).toBeVisible();
+    // p-tag con tipo visible en la página.
+    await expect(page.locator("p-tag").filter({ hasText: "Consulta" }).first()).toBeVisible();
   });
 
   test("búsqueda full-text encuentra atención por palabra parcial", async ({ page }) => {

@@ -5,7 +5,8 @@ const API = process.env.API_BASE ?? "http://localhost:3001/api/v1";
 test.describe("Dashboard", () => {
   test("muestra KPIs principales con datos del tenant DEMO", async ({ page }) => {
     await page.goto("/dashboard");
-    await expect(page.locator("h1")).toContainText("Dashboard");
+    // h1 ahora es el saludo personalizado; comprobamos que cargó la página.
+    await expect(page.locator("h1")).toBeVisible();
     await expect(page.locator("text=Afiliados activos")).toBeVisible();
     await expect(page.locator("text=Atenciones activas")).toBeVisible();
     await expect(page.locator("text=Gestiones pendientes")).toBeVisible();
