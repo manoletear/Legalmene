@@ -1,4 +1,6 @@
-import { ApplicationConfig, provideZoneChangeDetection } from "@angular/core";
+import { ApplicationConfig, LOCALE_ID, provideZoneChangeDetection } from "@angular/core";
+import { registerLocaleData } from "@angular/common";
+import localeEsCl from "@angular/common/locales/es-CL";
 import { provideRouter } from "@angular/router";
 import { provideHttpClient, withInterceptors } from "@angular/common/http";
 import { provideAnimations } from "@angular/platform-browser/animations";
@@ -10,6 +12,8 @@ import { DialogService } from "primeng/dynamicdialog";
 import { routes } from "./app.routes";
 import { codPlanInterceptor } from "./core/interceptors/cod-plan.interceptor";
 import { maintenanceInterceptor } from "./core/interceptors/maintenance.interceptor";
+
+registerLocaleData(localeEsCl);
 
 // Theme custom de LegalChile sobre Aura: primary blue 800/900 institucional.
 // Aura palette está expuesta vía CSS variables (`--p-primary-500`, etc.)
@@ -50,6 +54,7 @@ export const appConfig: ApplicationConfig = {
       },
       ripple: true,
     }),
+    { provide: LOCALE_ID, useValue: "es-CL" },
     MessageService,
     ConfirmationService,
     DialogService,

@@ -6,6 +6,7 @@ import { afiliados } from "../../db/schema/afiliados";
 import { gestiones } from "../../db/schema/gestiones";
 import { comites } from "../../db/schema/comites";
 import { usuarios } from "../../db/schema/usuarios";
+import { provisiones } from "../../db/schema/provisiones";
 
 export interface DashboardKpis {
   codPlan: string;
@@ -22,6 +23,7 @@ export interface DashboardKpis {
   };
   gestiones: { pendientes: number; vencidas: number };
   comites: { abiertos: number };
+  provisiones: { pendientes: number; montoPendiente: number };
 }
 
 @Injectable()
@@ -78,6 +80,14 @@ export class DashboardService {
       .innerJoin(atenciones, eq(comites.atencionId, atenciones.id))
       .where(eq(atenciones.codPlan, codPlan));
 
+    const [p] = await this.db
+      .select({
+        pendientes: count(),
+        montoPendiente: sql<number>`coalesce(sum(${provisiones.monto}), 0)`,
+      })
+      .from(provisiones)
+      .where(and(eq(provisiones.codPlan, codPlan), eq(provisiones.estado, "Solicitada")));
+
     return {
       codPlan,
       afiliados: {
@@ -105,6 +115,10 @@ export class DashboardService {
       },
       comites: {
         abiertos: Number(c?.abiertos ?? 0),
+      },
+      provisiones: {
+        pendientes: Number(p?.pendientes ?? 0),
+        montoPendiente: Number(p?.montoPendiente ?? 0),
       },
     };
   }

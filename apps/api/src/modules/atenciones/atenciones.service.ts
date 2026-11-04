@@ -9,6 +9,7 @@ import { and, eq, count, ilike, sql, desc } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { atenciones, Atencion, NuevaAtencion } from "../../db/schema/atenciones";
 import { afiliados } from "../../db/schema/afiliados";
+import { aranceles } from "../../db/schema/aranceles";
 import { siguienteCorrelativo } from "../../common/utils/correlativo";
 import { WebhooksService } from "../webhooks/webhooks.service";
 import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
@@ -91,6 +92,8 @@ export class AtencionesService {
       throw new ConflictException("No se puede crear atención para afiliado no vigente");
     }
 
+    if (input.arancelId) await this.assertArancelEnPlan(codPlan, input.arancelId);
+
     const correlativo = await siguienteCorrelativo(this.db, codPlan, input.tipo);
     const payload: NuevaAtencion = {
       ...input,
@@ -117,12 +120,21 @@ export class AtencionesService {
 
   async actualizar(codPlan: string, id: string, patch: UpdateAtencionDto): Promise<Atencion> {
     await this.obtener(codPlan, id);
+    if (patch.arancelId) await this.assertArancelEnPlan(codPlan, patch.arancelId);
     const [row] = await this.db
       .update(atenciones)
       .set({ ...patch, updatedAt: new Date() })
       .where(and(eq(atenciones.id, id), eq(atenciones.codPlan, codPlan)))
       .returning();
     return row;
+  }
+
+  private async assertArancelEnPlan(codPlan: string, arancelId: string): Promise<void> {
+    const [row] = await this.db
+      .select({ id: aranceles.id })
+      .from(aranceles)
+      .where(and(eq(aranceles.id, arancelId), eq(aranceles.codPlan, codPlan)));
+    if (!row) throw new NotFoundException(`Arancel ${arancelId} no existe en plan ${codPlan}`);
   }
 
   // Derivar: Consulta -> Asesoría -> Juicio. Crea nueva atención enlazada por metadata.

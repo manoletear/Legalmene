@@ -18,6 +18,7 @@ export interface DashboardKpis {
   };
   gestiones: { pendientes: number; vencidas: number };
   comites: { abiertos: number };
+  provisiones: { pendientes: number; montoPendiente: number };
 }
 
 export interface TimelinePoint {

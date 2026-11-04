@@ -6,3 +6,5 @@ export * from "./types/pago";
 export * from "./types/usuario";
 export * from "./types/plan";
 export * from "./types/common";
+export * from "./types/arancel";
+export * from "./types/provision";

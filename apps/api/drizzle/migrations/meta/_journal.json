@@ -43,6 +43,13 @@
       "when": 1780371008302,
       "tag": "0005_curved_mystique",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793829509029,
+      "tag": "0006_cuddly_deathbird",
+      "breakpoints": true
     }
   ]
 }

@@ -86,8 +86,8 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
             <div class="lm-kpi-icon purple"><i class="pi pi-wallet"></i></div>
             <div style="flex:1;">
               <div class="lm-kpi-label">Provisiones pendientes <i class="pi pi-info-circle lm-muted" style="font-size:11px;"></i></div>
-              <div class="lm-kpi-value lm-mono">$ {{ provisionesPendientes() | number }}</div>
-              <span class="lm-kpi-delta up"><i class="pi pi-arrow-up"></i> +6,3% vs. ayer</span>
+              <div class="lm-kpi-value lm-mono">$ {{ k.provisiones.montoPendiente | number }}</div>
+              <span class="lm-small lm-muted">{{ k.provisiones.pendientes }} por aprobar</span>
             </div>
           </div>
         </p-card>
@@ -188,7 +188,7 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
               <div class="lm-alert-icon info"><i class="pi pi-file"></i></div>
               <div style="flex:1; font-size:14px; color:#475569;">{{ alertas().provisiones }} provisiones pendientes de aprobación</div>
               <p-tag value="Medio" severity="info"></p-tag>
-              <a style="color:#2563eb; font-size:13px; font-weight:500; cursor:pointer; margin-left:8px;">Ver provisiones</a>
+              <a routerLink="/provisiones" style="color:#2563eb; font-size:13px; font-weight:500; cursor:pointer; margin-left:8px;">Ver provisiones</a>
             </div>
             <div class="lm-alert-row">
               <div class="lm-alert-icon info"><i class="pi pi-users"></i></div>
@@ -314,16 +314,12 @@ export class DashboardComponent implements OnInit {
     return u.split(".").map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
   }
 
-  protected provisionesPendientes(): number {
-    return 128_450_000;
-  }
-
   protected alertas = computed(() => {
     const k = this.kpis();
     return {
       vencer3: k?.gestiones.vencidas ?? 23,
       escritos: 15,
-      provisiones: 8,
+      provisiones: k?.provisiones.pendientes ?? 0,
       consultas: 12,
       documentos: 4,
     };

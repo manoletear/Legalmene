@@ -19,6 +19,8 @@ export class PromptService {
         closable: true,
         modal: true,
         width: "min(480px, 90vw)",
+        // Sin esto PrimeNG devuelve null si se abre un prompt mientras el anterior aún se destruye.
+        duplicate: true,
       });
       ref.onClose.subscribe((v: string | null | undefined) => resolve(v ?? null));
     });

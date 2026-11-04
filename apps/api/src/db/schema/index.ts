@@ -9,3 +9,5 @@ export * from "./documentos";
 export * from "./auditoria";
 export * from "./webhooks";
 export * from "./notificaciones";
+export * from "./aranceles";
+export * from "./provisiones";

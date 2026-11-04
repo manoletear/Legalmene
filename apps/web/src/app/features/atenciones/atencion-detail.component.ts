@@ -1,6 +1,6 @@
 import { Component, OnInit, inject, signal, computed } from "@angular/core";
 import { CommonModule } from "@angular/common";
-import { FormBuilder, ReactiveFormsModule, Validators } from "@angular/forms";
+import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from "@angular/forms";
 import { ActivatedRoute, RouterLink } from "@angular/router";
 import { environment } from "../../../environments/environment";
 import { CardModule } from "primeng/card";
@@ -18,7 +18,9 @@ import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { GestionesApiService } from "../../core/services/gestiones.service";
 import { ComitesApiService } from "../../core/services/comites.service";
 import { DocumentosApiService, DocumentoMeta } from "../../core/services/documentos.service";
-import type { Atencion, Comite, Gestion } from "@legalmene/shared";
+import { ArancelesApiService } from "../../core/services/aranceles.service";
+import { ProvisionesApiService } from "../../core/services/provisiones.service";
+import type { ArancelConValor, Atencion, Comite, Gestion, ResumenProvisionAtencion } from "@legalmene/shared";
 
 type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast";
 
@@ -35,6 +37,7 @@ interface PipelineStep {
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     ReactiveFormsModule,
     RouterLink,
     CardModule,
@@ -126,19 +129,40 @@ interface PipelineStep {
 
             <div class="lm-info-card">
               <div class="lm-info-card-header"><i class="pi pi-dollar"></i> Arancel</div>
-              <div class="lm-info-row"><span>Código arancel</span><strong>A-{{ a.competencia.slice(0,3).toUpperCase() }}-01</strong></div>
-              <div class="lm-info-row"><span>Descripción</span><strong class="lm-small">{{ a.materia }}</strong></div>
-              <div class="lm-info-row"><span>Valor UF</span><strong>12</strong></div>
-              <div class="lm-info-row"><span>Valor CLP</span><strong>$ 468.480</strong></div>
-              <div class="lm-info-card-footer">Ver detalle de arancel →</div>
+              <ng-container *ngIf="arancelAsignado() as ar; else sinArancel">
+                <div class="lm-info-row"><span>Código arancel</span><strong>{{ ar.codigo }}</strong></div>
+                <div class="lm-info-row"><span>Descripción</span><strong class="lm-small">{{ ar.descripcion }}</strong></div>
+                <div class="lm-info-row"><span>Valor UF</span><strong>{{ ar.valorUfCentesimas / 100 | number: '1.0-2' }}</strong></div>
+                <div class="lm-info-row"><span>Valor CLP</span><strong>{{ ar.valorClp !== null ? ('$ ' + (ar.valorClp | number)) : 'Sin UF' }}</strong></div>
+              </ng-container>
+              <ng-template #sinArancel>
+                <div class="lm-small lm-muted" style="margin:4px 0 8px;">Sin arancel asignado</div>
+              </ng-template>
+              <p-select
+                [options]="arancelOpts()"
+                optionLabel="label"
+                optionValue="value"
+                [ngModel]="a.arancelId"
+                (onChange)="asignarArancel(a.id, $event.value)"
+                [showClear]="true"
+                placeholder="Asignar arancel"
+                appendTo="body"
+                [style]="{ width: '100%', 'margin-top': '6px' }"
+              ></p-select>
             </div>
 
             <div class="lm-info-card">
               <div class="lm-info-card-header"><i class="pi pi-wallet"></i> Provisión</div>
-              <div class="lm-info-row"><span>Monto provisionado</span><strong>$ 450.000</strong></div>
-              <div class="lm-info-row"><span>Utilizado</span><strong>$ 128.450</strong></div>
-              <div class="lm-info-row"><span>Disponible</span><strong style="color:#16a34a;">$ 321.550</strong></div>
-              <div class="lm-info-card-footer">Ver movimientos →</div>
+              <ng-container *ngIf="resumenProvision() as r">
+                <div class="lm-info-row"><span>Monto provisionado</span><strong>$ {{ r.aprobado | number }}</strong></div>
+                <div class="lm-info-row"><span>Utilizado</span><strong>$ {{ r.utilizado | number }}</strong></div>
+                <div class="lm-info-row"><span>Disponible</span><strong style="color:#16a34a;">$ {{ r.disponible | number }}</strong></div>
+                <div *ngIf="r.pendiente > 0" class="lm-info-row"><span>Por aprobar</span><strong style="color:#b45309;">$ {{ r.pendiente | number }}</strong></div>
+              </ng-container>
+              <div class="lm-info-card-footer">
+                <a style="cursor:pointer;" (click)="solicitarProvision(a.id)">Solicitar provisión</a> ·
+                <a routerLink="/provisiones">Ver provisiones →</a>
+              </div>
             </div>
           </div>
 
@@ -348,8 +372,22 @@ export class AtencionDetailComponent implements OnInit {
   private documentosApi = inject(DocumentosApiService);
   private msg = inject(MessageService);
   private prompt = inject(PromptService);
+  private arancelesApi = inject(ArancelesApiService);
+  private provisionesApi = inject(ProvisionesApiService);
 
   protected atencion = signal<Atencion | null>(null);
+  protected aranceles = signal<ArancelConValor[]>([]);
+  protected resumenProvision = signal<ResumenProvisionAtencion | null>(null);
+  protected arancelAsignado = computed(() => {
+    const id = this.atencion()?.arancelId;
+    return id ? this.aranceles().find((x) => x.id === id) ?? null : null;
+  });
+  protected arancelOpts = computed(() => {
+    const a = this.atencion();
+    return this.aranceles()
+      .filter((x) => x.vigente && (!a || x.competencia === a.competencia))
+      .map((x) => ({ label: `${x.codigo} — ${x.descripcion}`, value: x.id }));
+  });
   protected gestiones = signal<Gestion[]>([]);
   protected comites = signal<Comite[]>([]);
   protected documentos = signal<DocumentoMeta[]>([]);
@@ -401,6 +439,41 @@ export class AtencionDetailComponent implements OnInit {
     this.gestionesApi.listar(id).subscribe((g) => this.gestiones.set(g));
     this.comitesApi.listar(id).subscribe((c) => this.comites.set(c));
     this.documentosApi.listar(id).subscribe((d) => this.documentos.set(d));
+    this.arancelesApi.listar().subscribe((r) => this.aranceles.set(r.data));
+    this.cargarProvisiones(id);
+  }
+
+  private cargarProvisiones(id: string) {
+    this.provisionesApi.porAtencion(id).subscribe((r) => this.resumenProvision.set(r.resumen));
+  }
+
+  asignarArancel(atencionId: string, arancelId: string | null) {
+    this.api.actualizar(atencionId, { arancelId }).subscribe({
+      next: (a) => {
+        this.atencion.set(a);
+        this.msg.add({ severity: "success", summary: arancelId ? "Arancel asignado" : "Arancel quitado", life: 2500 });
+      },
+      error: (err) => this.msg.add({ severity: "error", summary: "Error", detail: err.error?.message ?? err.message, life: 4000 }),
+    });
+  }
+
+  async solicitarProvision(atencionId: string) {
+    const montoTxt = await this.prompt.open({ header: "Solicitar provisión", label: "Monto en pesos", required: true });
+    if (!montoTxt) return;
+    const monto = Number(montoTxt.replace(/[.\s$]/g, ""));
+    if (!Number.isInteger(monto) || monto <= 0) {
+      this.msg.add({ severity: "warn", summary: "Monto inválido", life: 3000 });
+      return;
+    }
+    const motivo = await this.prompt.open({ header: "Motivo de la provisión", label: "Motivo", multiline: true, required: true });
+    if (!motivo) return;
+    this.provisionesApi.solicitar(atencionId, { monto, motivo }).subscribe({
+      next: () => {
+        this.msg.add({ severity: "success", summary: "Provisión solicitada", detail: "Queda pendiente de aprobación", life: 3000 });
+        this.cargarProvisiones(atencionId);
+      },
+      error: (err) => this.msg.add({ severity: "error", summary: "Error", detail: err.error?.message ?? err.message, life: 4000 }),
+    });
   }
 
   rutaPrincipal(tipo: string): string {

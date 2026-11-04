@@ -25,6 +25,8 @@ import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { ExportsModule } from "./modules/exports/exports.module";
 import { WebhooksModule } from "./modules/webhooks/webhooks.module";
 import { HealthModule } from "./modules/health/health.module";
+import { ArancelesModule } from "./modules/aranceles/aranceles.module";
+import { ProvisionesModule } from "./modules/provisiones/provisiones.module";
 
 @Module({
   imports: [
@@ -55,6 +57,8 @@ import { HealthModule } from "./modules/health/health.module";
     DashboardModule,
     ExportsModule,
     WebhooksModule,
+    ArancelesModule,
+    ProvisionesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantThrottlerGuard },

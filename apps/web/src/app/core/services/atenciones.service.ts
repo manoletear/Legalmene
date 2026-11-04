@@ -7,6 +7,7 @@ import type {
   CreateAtencion,
   DerivarAtencion,
   PaginatedResult,
+  UpdateAtencion,
 } from "@legalmene/shared";
 
 export interface BuscarAtencionesOpts {
@@ -34,6 +35,10 @@ export class AtencionesApiService {
 
   obtener(id: string): Observable<Atencion> {
     return this.http.get<Atencion>(`${this.base}/${id}`);
+  }
+
+  actualizar(id: string, patch: UpdateAtencion): Observable<Atencion> {
+    return this.http.patch<Atencion>(`${this.base}/${id}`, patch);
   }
 
   crearConsulta(payload: Omit<CreateAtencion, "tipo">): Observable<Atencion> {

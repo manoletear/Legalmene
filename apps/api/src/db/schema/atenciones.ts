@@ -12,8 +12,10 @@ import {
 import { planes } from "./planes";
 import { afiliados } from "./afiliados";
 import { usuarios } from "./usuarios";
+import { aranceles } from "./aranceles";
+import { tipoAtencionEnum, competenciaEnum } from "./enums";
 
-export const tipoAtencionEnum = pgEnum("tipo_atencion", ["Consulta", "Asesoria", "Juicio"]);
+export { tipoAtencionEnum, competenciaEnum };
 export const estadoAtencionEnum = pgEnum("estado_atencion", [
   "Abierta",
   "EnGestion",
@@ -21,17 +23,6 @@ export const estadoAtencionEnum = pgEnum("estado_atencion", [
   "Suspendida",
   "Cerrada",
   "Archivada",
-]);
-export const competenciaEnum = pgEnum("competencia", [
-  "Civil",
-  "Penal",
-  "Laboral",
-  "Familia",
-  "Tributario",
-  "Comercial",
-  "Administrativo",
-  "Constitucional",
-  "Otro",
 ]);
 export const prioridadEnum = pgEnum("prioridad", ["Baja", "Media", "Alta", "Urgente"]);
 
@@ -61,6 +52,7 @@ export const atenciones = pgTable(
     fechaCierre: timestamp("fecha_cierre", { withTimezone: true }),
     fechaUltimaGestion: timestamp("fecha_ultima_gestion", { withTimezone: true }),
     prioridad: prioridadEnum("prioridad").notNull().default("Media"),
+    arancelId: uuid("arancel_id").references(() => aranceles.id, { onDelete: "set null" }),
     origen: varchar("origen", { length: 80 }),
     metadata: jsonb("metadata").$type<Record<string, unknown>>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

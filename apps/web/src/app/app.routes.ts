@@ -62,25 +62,17 @@ export const routes: Routes = [
     loadComponent: () =>
       import("./features/auditoria/auditoria.component").then((m) => m.AuditoriaComponent),
   },
-  // Stubs — UI futura, sin backend aún.
   {
     path: "aranceles",
-    loadComponent: stubPage,
-    data: {
-      titulo: "Aranceles",
-      descripcion: "Catálogo y matriz de aranceles legales",
-      icono: "pi-dollar",
-    },
+    loadComponent: () =>
+      import("./features/aranceles/aranceles.component").then((m) => m.ArancelesComponent),
   },
   {
     path: "provisiones",
-    loadComponent: stubPage,
-    data: {
-      titulo: "Provisiones",
-      descripcion: "Provisiones financieras por caso y cliente",
-      icono: "pi-wallet",
-    },
+    loadComponent: () =>
+      import("./features/provisiones/provisiones.component").then((m) => m.ProvisionesComponent),
   },
+  // Stubs — UI futura, sin backend aún.
   {
     path: "documentos",
     loadComponent: stubPage,

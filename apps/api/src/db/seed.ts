@@ -5,6 +5,21 @@ import * as schema from "./schema";
 import { planes } from "./schema/planes";
 import { usuarios } from "./schema/usuarios";
 import { afiliados } from "./schema/afiliados";
+import { aranceles, valoresUf } from "./schema/aranceles";
+
+// UF real del día desde mindicador.cl; si falla se deja sin UF (la UI lo indica).
+async function ufDelDia(): Promise<{ fecha: string; valorCentavos: number } | null> {
+  try {
+    const res = await fetch("https://mindicador.cl/api/uf", { signal: AbortSignal.timeout(8_000) });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { serie?: { fecha: string; valor: number }[] };
+    const ultimo = body.serie?.[0];
+    if (!ultimo) return null;
+    return { fecha: ultimo.fecha.slice(0, 10), valorCentavos: Math.round(ultimo.valor * 100) };
+  } catch {
+    return null;
+  }
+}
 
 async function main() {
   const url = process.env.DATABASE_URL;
@@ -66,6 +81,25 @@ async function main() {
       },
     ])
     .onConflictDoNothing();
+
+  await db
+    .insert(aranceles)
+    .values([
+      { codPlan: "DEMO", codigo: "A-LAB-01", descripcion: "Juicio por despido injustificado", competencia: "Laboral", tipo: "Juicio", valorUfCentesimas: 1200 },
+      { codPlan: "DEMO", codigo: "A-LAB-02", descripcion: "Consulta laboral", competencia: "Laboral", tipo: "Consulta", valorUfCentesimas: 100 },
+      { codPlan: "DEMO", codigo: "A-CIV-01", descripcion: "Juicio ejecutivo de cobro", competencia: "Civil", tipo: "Juicio", valorUfCentesimas: 1500 },
+      { codPlan: "DEMO", codigo: "A-CIV-02", descripcion: "Asesoría contractual", competencia: "Civil", tipo: "Asesoria", valorUfCentesimas: 300 },
+      { codPlan: "DEMO", codigo: "A-FAM-01", descripcion: "Demanda de alimentos", competencia: "Familia", tipo: "Juicio", valorUfCentesimas: 800 },
+    ])
+    .onConflictDoNothing();
+
+  const uf = await ufDelDia();
+  if (uf) {
+    await db.insert(valoresUf).values(uf).onConflictDoNothing();
+    console.info(`UF ${uf.fecha}: ${uf.valorCentavos / 100}`);
+  } else {
+    console.warn("No se pudo obtener la UF; los aranceles se mostrarán sin valor en pesos.");
+  }
 
   console.info("Seed completado. Admin:", admin?.email ?? "(ya existía)");
   await pool.end();

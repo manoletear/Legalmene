@@ -42,6 +42,7 @@ export const AtencionSchema = z.object({
   fechaUltimaGestion: z.string().datetime().optional().nullable(),
   prioridad: z.enum(["Baja", "Media", "Alta", "Urgente"]).default("Media"),
   origen: z.string().max(80).optional().nullable(),
+  arancelId: z.string().uuid().optional().nullable(),
   metadata: z.record(z.unknown()).optional().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
