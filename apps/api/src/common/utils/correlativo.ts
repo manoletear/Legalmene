@@ -8,20 +8,19 @@ const PREFIJO: Record<string, string> = {
   Juicio: "JUIC",
 };
 
-// Genera correlativo atómico por plan+tipo+año.
+// Genera correlativo atómico y global por tipo+año.
 // Formato: TIPO-AÑO-NNNNNN (ej: CONS-2026-000123).
 export async function siguienteCorrelativo(
   db: Database,
-  codPlan: string,
   tipo: "Consulta" | "Asesoria" | "Juicio",
 ): Promise<string> {
   const anio = String(new Date().getUTCFullYear());
 
   // UPSERT atómico: incrementa y retorna el nuevo valor en una sola query.
   const result = await db.execute<{ valor: { next: number } }>(sql`
-    INSERT INTO ${correlativos} (cod_plan, tipo, anio, valor)
-    VALUES (${codPlan}, ${tipo}, ${anio}, '{"next": 2}'::jsonb)
-    ON CONFLICT (cod_plan, tipo, anio) DO UPDATE
+    INSERT INTO ${correlativos} (tipo, anio, valor)
+    VALUES (${tipo}, ${anio}, '{"next": 2}'::jsonb)
+    ON CONFLICT (tipo, anio) DO UPDATE
       SET valor = jsonb_set(${correlativos.valor}, '{next}',
         to_jsonb((${correlativos.valor}->>'next')::int + 1))
     RETURNING valor

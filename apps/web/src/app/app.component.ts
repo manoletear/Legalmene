@@ -12,7 +12,6 @@ import { Popover } from "primeng/popover";
 import { ConfirmDialogModule } from "primeng/confirmdialog";
 import { ToastModule } from "primeng/toast";
 import { MeService } from "./core/services/me.service";
-import { CodPlanService } from "./core/services/cod-plan.service";
 import { MaintenanceService } from "./core/services/maintenance.service";
 import { NotifInboxApiService, NotifItem } from "./core/services/notif-inbox.service";
 
@@ -139,20 +138,8 @@ interface NavItem {
             <div style="padding:6px 4px; border-bottom:1px solid #eee; font-size:13px; color:#475569;">
               {{ user.email }}
             </div>
-            <div *ngIf="codPlan.codPlan() as cp" class="lm-small" style="padding:8px 4px;">
-              Plan activo: <strong style="color:#2563eb;">{{ cp }}</strong>
-            </div>
-            <div style="padding-top:4px;">
-              <strong class="lm-small" style="padding:4px;">Cambiar plan</strong>
-              <div
-                *ngFor="let p of user.codPlanes"
-                (click)="codPlan.set(p); userPopover.hide()"
-                style="display:flex; align-items:center; gap:8px; padding:8px 4px; cursor:pointer; border-radius:6px;"
-                [style.background]="p === codPlan.codPlan() ? '#eff6ff' : 'transparent'"
-              >
-                <i class="pi pi-check" *ngIf="p === codPlan.codPlan()" style="color:#2563eb;"></i>
-                <span [style.padding-left.px]="p === codPlan.codPlan() ? 0 : 20">Plan {{ p }}</span>
-              </div>
+            <div class="lm-small" style="padding:8px 4px;">
+              Perfil: <strong style="color:#2563eb;">{{ user.rol }}</strong>
             </div>
           </div>
         </p-popover>
@@ -221,7 +208,6 @@ interface NavItem {
 })
 export class AppComponent implements OnInit {
   protected me = inject(MeService);
-  protected codPlan = inject(CodPlanService);
   protected maint = inject(MaintenanceService);
   private notif = inject(NotifInboxApiService);
   private router = inject(Router);

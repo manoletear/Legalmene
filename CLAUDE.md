@@ -14,7 +14,7 @@ ejemplo y nunca deben quedar fijas en el código.
 ### Decisiones vigentes
 - Stack: **NestJS + AWS** (no Azure/FastAPI como dice la propuesta Tooxs).
 - Documentos: **Amazon S3** con URLs firmadas (el cliente descartó SharePoint).
-- El plan es un **producto**, no un tenant (corrección en curso, ver plan de trabajo §5).
+- El plan es un **producto**, no un tenant: un RUT puede tener varios planes (`planes_afiliado`).
 
 ## Estado del proyecto
 
@@ -25,7 +25,7 @@ ejemplo y nunca deben quedar fijas en el código.
 | Módulos Afiliados / Atenciones / Gestiones / Comités / Pagos | ✅ CRUD base + flujos clave |
 | Cargas masivas FLUJO/STOCK | ✅ Implementado |
 | Frontend Angular 19 | ✅ Shell + Dashboard + Afiliados + Atenciones + Aranceles + Provisiones |
-| Alineación con Anexo PSL | ⏳ Modelo núcleo en corrección (ver `docs/requerimientos-anexo-psl.md`) |
+| Alineación con Anexo PSL | 🟡 Paso 1 (modelo núcleo) listo; pasos 2–5 pendientes (ver `docs/requerimientos-anexo-psl.md` §5) |
 | Infraestructura AWS (CDK) | ⏳ Pendiente |
 | Migración SQL Server → Postgres | ⏳ Pendiente |
 | WebPay producción | ⏳ Stub (esperar SDK Transbank) |
@@ -36,9 +36,10 @@ ejemplo y nunca deben quedar fijas en el código.
 - **Backend**: NestJS 10 · TypeScript estricto · Drizzle ORM · PostgreSQL 16
 - **Frontend**: Angular 19 (standalone components) · PrimeNG (Aura) · MSAL.js para Entra ID · locale es-CL
 - **Auth**: Microsoft Entra ID (OIDC) — JWT verificado vía JWKS
-- **Multi-tenancy (legado, en corrección)**: hoy `cod_plan` + header `X-Cod-Plan` actúan como
-  tenant. Según el Anexo, el acceso se define por perfil y por propiedad de la atención, y un
-  RUT puede tener varios planes (`planes_afiliado` con vigencias).
+- **Planes (no hay tenant)**: `afiliados` es la persona (RUT único) y `planes_afiliado` guarda
+  cada relación RUT–Plan con su vigencia. `atenciones.cod_plan` es el plan bajo el cual se
+  atendió. No existe header `X-Cod-Plan`; los listados aceptan `?codPlan=` como filtro opcional.
+  El control de acceso por perfil y por propiedad de la atención llega en el paso 4.
 - **Compute** (objetivo): ECS Fargate (monolito modular) + Lambda para tareas event-driven
 - **Storage** (objetivo): Aurora PostgreSQL Multi-AZ + S3 + OpenSearch
 - **Local**: Docker Compose (Postgres + Adminer)
@@ -105,9 +106,12 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   con el lenguaje del Anexo del cliente.
 - **Tipos compartidos** entre API y web viven en `packages/shared` (Zod schemas + types
   inferidos). Nunca duplicar tipos entre apps.
-- **Multi-tenancy**: mientras exista el modelo legado, todo endpoint que toque datos de un
-  plan usa `@CodPlan()`. No crear nuevas tablas que dependan de `cod_plan` como tenant;
-  seguir el modelo objetivo de `docs/requerimientos-anexo-psl.md`.
+- **Planes**: nunca filtrar por plan como si fuera tenant. Para saber si un RUT tiene derecho
+  a atención usar `planesDeAfiliados()` / `planVigenteSql` (`modules/afiliados/vigencia.ts`):
+  vigente = vigencia Activo, fecha_inicio ≤ hoy (Chile), sin término o término ≥ hoy, y plan
+  vigente. Sin planes vigentes, la atención solo puede ir como `REZAGADO` o `METLIFE`.
+  Correlativos son globales por tipo/año. `usuarios.cod_planes` ya no se aplica (lo reemplaza
+  el paso 4).
 - **Reglas de negocio clave (Anexo)**: solo planes vigentes permiten nuevas atenciones;
   aranceles son por materia y la cobertura por plan define el copago; una atención con
   arancel impago queda detenida; no se cierra una asesoría/juicio con gestiones o comité

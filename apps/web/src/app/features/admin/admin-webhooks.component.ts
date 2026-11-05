@@ -7,6 +7,8 @@ import { TagModule } from "primeng/tag";
 import { ButtonModule } from "primeng/button";
 import { InputTextModule } from "primeng/inputtext";
 import { MultiSelectModule } from "primeng/multiselect";
+import { SelectModule } from "primeng/select";
+import { PlanesApiService } from "../../core/services/planes.service";
 import { ToggleSwitchModule } from "primeng/toggleswitch";
 import { TabsModule } from "primeng/tabs";
 import { AccordionModule } from "primeng/accordion";
@@ -36,6 +38,7 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
     ButtonModule,
     InputTextModule,
     MultiSelectModule,
+    SelectModule,
     ToggleSwitchModule,
     TabsModule,
     AccordionModule,
@@ -46,7 +49,20 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
   template: `
     <p-toast></p-toast>
     <p-confirmDialog></p-confirmDialog>
-    <p-tabs value="0">
+    <div class="lm-row" style="gap:8px; margin-bottom:8px; align-items:center;">
+      <label>Plan</label>
+      <p-select
+        [ngModel]="codPlan()"
+        (onChange)="setPlan($event.value)"
+        [options]="planOpts()"
+        optionLabel="label"
+        optionValue="value"
+        placeholder="Selecciona plan"
+        [style]="{ width: '260px' }"
+      ></p-select>
+      <small class="lm-muted">Las suscripciones reciben solo eventos de atenciones de este plan.</small>
+    </div>
+    <p-tabs value="0" *ngIf="codPlan()">
       <p-tablist>
         <p-tab value="0">Suscripciones ({{ subs().length }})</p-tab>
         <p-tab value="1">Entregas</p-tab>
@@ -161,6 +177,10 @@ export class AdminWebhooksComponent implements OnInit {
   private api = inject(WebhooksApiService);
   private msg = inject(MessageService);
   private confirm = inject(ConfirmationService);
+  private planesApi = inject(PlanesApiService);
+
+  protected codPlan = signal<string | null>(null);
+  protected planOpts = signal<{ label: string; value: string }[]>([]);
 
   protected eventos = WEBHOOK_EVENTOS;
   protected eventoOpts = WEBHOOK_EVENTOS.map((e) => ({ label: e, value: e }));
@@ -177,16 +197,28 @@ export class AdminWebhooksComponent implements OnInit {
   });
 
   ngOnInit() {
+    this.planesApi.listar().subscribe((ps) => {
+      this.planOpts.set(ps.map((p) => ({ label: `${p.codPlan} — ${p.nombre}`, value: p.codPlan })));
+      if (!this.codPlan() && ps.length > 0) this.setPlan(ps[0].codPlan);
+    });
+  }
+
+  setPlan(codPlan: string) {
+    this.codPlan.set(codPlan);
+    this.entregasPage.set(1);
     this.recargar();
     this.recargarEntregas();
   }
 
   recargar() {
-    this.api.listar().subscribe((r) => this.subs.set(r));
+    const cp = this.codPlan();
+    if (cp) this.api.listar(cp).subscribe((r) => this.subs.set(r));
   }
 
   recargarEntregas() {
-    this.api.entregas({ page: this.entregasPage(), pageSize: this.entregasPageSize() }).subscribe((r) => {
+    const cp = this.codPlan();
+    if (!cp) return;
+    this.api.entregas(cp, { page: this.entregasPage(), pageSize: this.entregasPageSize() }).subscribe((r) => {
       this.entregas.set(r.data);
       this.entregasTotal.set(r.total);
     });
@@ -201,10 +233,11 @@ export class AdminWebhooksComponent implements OnInit {
   }
 
   crear() {
-    if (this.form.invalid) return;
+    const cp = this.codPlan();
+    if (this.form.invalid || !cp) return;
     const v = this.form.value;
     this.api
-      .crear({ nombre: v.nombre!, url: v.url!, eventos: (v.eventos as string[]) ?? [] })
+      .crear(cp, { nombre: v.nombre!, url: v.url!, eventos: (v.eventos as string[]) ?? [] })
       .subscribe({
         next: () => {
           this.form.reset({ nombre: "", url: "", eventos: [] as string[] });
@@ -217,7 +250,7 @@ export class AdminWebhooksComponent implements OnInit {
   }
 
   toggleActivo(s: WebhookSus, activo: boolean) {
-    this.api.actualizar(s.id, { activo }).subscribe(() => this.recargar());
+    this.api.actualizar(s.codPlan, s.id, { activo }).subscribe(() => this.recargar());
   }
 
   eliminar(s: WebhookSus) {
@@ -229,7 +262,7 @@ export class AdminWebhooksComponent implements OnInit {
       rejectLabel: "Cancelar",
       acceptButtonStyleClass: "p-button-danger",
       accept: () => {
-        this.api.eliminar(s.id).subscribe(() => {
+        this.api.eliminar(s.codPlan, s.id).subscribe(() => {
           this.msg.add({ severity: "success", summary: "Eliminada", life: 1500 });
           this.recargar();
         });
@@ -243,7 +276,9 @@ export class AdminWebhooksComponent implements OnInit {
   }
 
   reintentar(e: WebhookEntrega) {
-    this.api.reintentar(e.id).subscribe(() => {
+    const cp = this.codPlan();
+    if (!cp) return;
+    this.api.reintentar(cp, e.id).subscribe(() => {
       this.msg.add({ severity: "success", summary: "Marcada Pendiente", detail: "Dispatcher la tomará en 30s", life: 3000 });
       this.recargarEntregas();
     });

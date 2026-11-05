@@ -13,13 +13,13 @@ export class ComitesService {
     @Inject(NotifInboxService) private readonly notif: NotifInboxService,
   ) {}
 
-  async listarPorAtencion(codPlan: string, atencionId: string) {
-    await this.assertAtencionEnPlan(codPlan, atencionId);
+  async listarPorAtencion(atencionId: string) {
+    await this.planDeAtencion(atencionId);
     return this.db.select().from(comites).where(eq(comites.atencionId, atencionId));
   }
 
-  async convocar(codPlan: string, convocadoPor: string, input: ConvocarComite) {
-    await this.assertAtencionEnPlan(codPlan, input.atencionId);
+  async convocar(convocadoPor: string, input: ConvocarComite) {
+    const codPlan = await this.planDeAtencion(input.atencionId);
 
     return this.db.transaction(async (tx) => {
       const [comite] = await tx
@@ -65,7 +65,6 @@ export class ComitesService {
   }
 
   async votar(
-    codPlan: string,
     comiteId: string,
     usuarioId: string,
     voto: "AFavor" | "EnContra" | "Abstencion",
@@ -73,7 +72,6 @@ export class ComitesService {
   ) {
     const [comite] = await this.db.select().from(comites).where(eq(comites.id, comiteId));
     if (!comite) throw new NotFoundException(`Comité ${comiteId} no existe`);
-    await this.assertAtencionEnPlan(codPlan, comite.atencionId);
     if (comite.estado === "Cerrado" || comite.estado === "Cancelado") {
       throw new BadRequestException(`Comité ya está ${comite.estado}, no admite votos`);
     }
@@ -94,14 +92,12 @@ export class ComitesService {
   }
 
   async cerrar(
-    codPlan: string,
     comiteId: string,
     decision: "Aprobado" | "Rechazado" | "Diferido",
     acta: string,
   ) {
     const [comite] = await this.db.select().from(comites).where(eq(comites.id, comiteId));
     if (!comite) throw new NotFoundException(`Comité ${comiteId} no existe`);
-    await this.assertAtencionEnPlan(codPlan, comite.atencionId);
     const [updated] = await this.db
       .update(comites)
       .set({
@@ -120,11 +116,13 @@ export class ComitesService {
     return updated;
   }
 
-  private async assertAtencionEnPlan(codPlan: string, atencionId: string) {
+  // Devuelve el plan bajo el cual se registró la atención (usado en notificaciones).
+  private async planDeAtencion(atencionId: string): Promise<string> {
     const [a] = await this.db
-      .select({ id: atenciones.id })
+      .select({ codPlan: atenciones.codPlan })
       .from(atenciones)
-      .where(and(eq(atenciones.id, atencionId), eq(atenciones.codPlan, codPlan)));
-    if (!a) throw new NotFoundException(`Atención ${atencionId} no existe en plan ${codPlan}`);
+      .where(eq(atenciones.id, atencionId));
+    if (!a) throw new NotFoundException(`Atención ${atencionId} no existe`);
+    return a.codPlan;
   }
 }

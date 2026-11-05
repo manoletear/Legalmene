@@ -26,6 +26,7 @@ export interface FiltroProvisiones {
   page?: number;
   pageSize?: number;
   estado?: EstadoProvision;
+  codPlan?: string;
 }
 
 const ESTADOS_ATENCION_CERRADA = ["Cerrada", "Archivada"];
@@ -38,11 +39,11 @@ const utilizadoSql = sql<number>`coalesce(sum(case when ${provisionMovimientos.t
 export class ProvisionesService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  async listar(codPlan: string, filtro: FiltroProvisiones = {}) {
+  async listar(filtro: FiltroProvisiones = {}) {
     const page = filtro.page ?? 1;
     const pageSize = Math.min(filtro.pageSize ?? 50, 200);
     const where = and(
-      eq(provisiones.codPlan, codPlan),
+      filtro.codPlan ? eq(atenciones.codPlan, filtro.codPlan) : undefined,
       filtro.estado ? eq(provisiones.estado, filtro.estado) : undefined,
     );
     const [rows, [{ value: total }]] = await Promise.all([
@@ -67,7 +68,11 @@ export class ProvisionesService {
         .orderBy(desc(provisiones.fechaSolicitud))
         .limit(pageSize)
         .offset((page - 1) * pageSize),
-      this.db.select({ value: count() }).from(provisiones).where(where),
+      this.db
+        .select({ value: count() })
+        .from(provisiones)
+        .innerJoin(atenciones, eq(provisiones.atencionId, atenciones.id))
+        .where(where),
     ]);
     return {
       data: rows,
@@ -78,30 +83,30 @@ export class ProvisionesService {
     };
   }
 
-  async listarPorAtencion(codPlan: string, atencionId: string) {
-    await this.assertAtencionEnPlan(codPlan, atencionId);
+  async listarPorAtencion(atencionId: string) {
+    await this.assertAtencion(atencionId);
     const filas = await this.db
       .select()
       .from(provisiones)
-      .where(and(eq(provisiones.atencionId, atencionId), eq(provisiones.codPlan, codPlan)))
+      .where(eq(provisiones.atencionId, atencionId))
       .orderBy(desc(provisiones.fechaSolicitud));
-    return { data: filas, resumen: await this.resumenAtencion(codPlan, atencionId) };
+    return { data: filas, resumen: await this.resumenAtencion(atencionId) };
   }
 
-  async resumenAtencion(codPlan: string, atencionId: string): Promise<ResumenProvisionAtencion> {
+  async resumenAtencion(atencionId: string): Promise<ResumenProvisionAtencion> {
     const [totales] = await this.db
       .select({
         aprobado: sql<number>`coalesce(sum(${provisiones.monto}) filter (where ${provisiones.estado} = 'Aprobada'), 0)`,
         pendiente: sql<number>`coalesce(sum(${provisiones.monto}) filter (where ${provisiones.estado} = 'Solicitada'), 0)`,
       })
       .from(provisiones)
-      .where(and(eq(provisiones.atencionId, atencionId), eq(provisiones.codPlan, codPlan)));
+      .where(eq(provisiones.atencionId, atencionId));
 
     const [mov] = await this.db
       .select({ utilizado: utilizadoSql })
       .from(provisionMovimientos)
       .innerJoin(provisiones, eq(provisionMovimientos.provisionId, provisiones.id))
-      .where(and(eq(provisiones.atencionId, atencionId), eq(provisiones.codPlan, codPlan)));
+      .where(eq(provisiones.atencionId, atencionId));
 
     const aprobado = Number(totales?.aprobado ?? 0);
     const utilizado = Number(mov?.utilizado ?? 0);
@@ -114,24 +119,22 @@ export class ProvisionesService {
   }
 
   async solicitar(
-    codPlan: string,
     atencionId: string,
     usuarioId: string,
     input: SolicitarProvision,
   ): Promise<Provision> {
-    const atencion = await this.assertAtencionEnPlan(codPlan, atencionId);
+    const atencion = await this.assertAtencion(atencionId);
     if (ESTADOS_ATENCION_CERRADA.includes(atencion.estado)) {
       throw new BadRequestException(`No se pueden solicitar provisiones en un caso ${atencion.estado}`);
     }
     const [row] = await this.db
       .insert(provisiones)
-      .values({ codPlan, atencionId, monto: input.monto, motivo: input.motivo, solicitadaPorId: usuarioId })
+      .values({ atencionId, monto: input.monto, motivo: input.motivo, solicitadaPorId: usuarioId })
       .returning();
     return row;
   }
 
   async resolver(
-    codPlan: string,
     id: string,
     usuarioId: string,
     decision: "Aprobada" | "Rechazada",
@@ -149,19 +152,18 @@ export class ProvisionesService {
       .where(
         and(
           eq(provisiones.id, id),
-          eq(provisiones.codPlan, codPlan),
           eq(provisiones.estado, "Solicitada"),
         ),
       )
       .returning();
     if (row) return row;
 
-    const actual = await this.obtener(codPlan, id);
+    const actual = await this.obtener(id);
     throw new ConflictException(`La provisión ya fue resuelta (${actual.estado})`);
   }
 
-  async listarMovimientos(codPlan: string, provisionId: string): Promise<ProvisionMovimiento[]> {
-    await this.obtener(codPlan, provisionId);
+  async listarMovimientos(provisionId: string): Promise<ProvisionMovimiento[]> {
+    await this.obtener(provisionId);
     return this.db
       .select()
       .from(provisionMovimientos)
@@ -170,7 +172,6 @@ export class ProvisionesService {
   }
 
   async registrarMovimiento(
-    codPlan: string,
     provisionId: string,
     usuarioId: string,
     input: RegistrarMovimiento,
@@ -180,9 +181,9 @@ export class ProvisionesService {
       const [prov] = await tx
         .select()
         .from(provisiones)
-        .where(and(eq(provisiones.id, provisionId), eq(provisiones.codPlan, codPlan)))
+        .where(eq(provisiones.id, provisionId))
         .for("update");
-      if (!prov) throw new NotFoundException(`Provisión ${provisionId} no existe en plan ${codPlan}`);
+      if (!prov) throw new NotFoundException(`Provisión ${provisionId} no existe`);
       if (prov.estado !== "Aprobada") {
         throw new BadRequestException("Solo se registran movimientos en provisiones aprobadas");
       }
@@ -210,21 +211,21 @@ export class ProvisionesService {
     });
   }
 
-  private async obtener(codPlan: string, id: string): Promise<Provision> {
+  private async obtener(id: string): Promise<Provision> {
     const [row] = await this.db
       .select()
       .from(provisiones)
-      .where(and(eq(provisiones.id, id), eq(provisiones.codPlan, codPlan)));
-    if (!row) throw new NotFoundException(`Provisión ${id} no existe en plan ${codPlan}`);
+      .where(eq(provisiones.id, id));
+    if (!row) throw new NotFoundException(`Provisión ${id} no existe`);
     return row;
   }
 
-  private async assertAtencionEnPlan(codPlan: string, atencionId: string) {
+  private async assertAtencion(atencionId: string) {
     const [row] = await this.db
       .select({ id: atenciones.id, estado: atenciones.estado })
       .from(atenciones)
-      .where(and(eq(atenciones.id, atencionId), eq(atenciones.codPlan, codPlan)));
-    if (!row) throw new NotFoundException(`Atención ${atencionId} no existe en plan ${codPlan}`);
+      .where(eq(atenciones.id, atencionId));
+    if (!row) throw new NotFoundException(`Atención ${atencionId} no existe`);
     return row;
   }
 }

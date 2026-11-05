@@ -49,11 +49,10 @@ export const AtencionSchema = z.object({
 });
 export type Atencion = z.infer<typeof AtencionSchema>;
 
-// codPlan se inyecta desde el header X-Cod-Plan en el controller.
+// codPlan = plan del afiliado bajo el cual se presta la atención (vigente, o REZAGADO/METLIFE).
 // tipo se setea por el path (/consultas, /asesorias, /juicios).
 export const CreateAtencionSchema = AtencionSchema.omit({
   id: true,
-  codPlan: true,
   correlativo: true,
   tipo: true,
   estado: true,
@@ -68,7 +67,8 @@ export const CreateAtencionSchema = AtencionSchema.omit({
 });
 export type CreateAtencion = z.infer<typeof CreateAtencionSchema>;
 
-export const UpdateAtencionSchema = CreateAtencionSchema.partial();
+// El plan y el afiliado no cambian después de creada la atención.
+export const UpdateAtencionSchema = CreateAtencionSchema.omit({ codPlan: true, afiliadoId: true }).partial();
 export type UpdateAtencion = z.infer<typeof UpdateAtencionSchema>;
 
 export const DerivarAtencionSchema = z.object({

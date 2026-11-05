@@ -22,15 +22,20 @@ test.describe("Aranceles y provisiones", () => {
   });
 
   test("Abogado solicita pero NO aprueba; Supervisor aprueba y el saldo se actualiza", async ({ request }) => {
-    const abogado = { "X-Cod-Plan": COD_PLAN, "X-Dev-User": asUser("Abogado") };
-    const supervisor = { "X-Cod-Plan": COD_PLAN, "X-Dev-User": asUser("Supervisor") };
+    const abogado = { "X-Dev-User": asUser("Abogado") };
+    const supervisor = { "X-Dev-User": asUser("Supervisor") };
 
     const afi = await request.get(`${API}/afiliados`, { headers: abogado }).then((r) => r.json());
-    const activo = afi.data.find((a: { vigencia: string }) => a.vigencia === "Activo");
+    type AfiliadoE2E = { id: string; vigencia: string; planes: { codPlan: string; vigente: boolean }[] };
+    const activo = (afi.data as AfiliadoE2E[]).find(
+      (a) => a.vigencia === "Activo" && a.planes.some((p) => p.vigente),
+    );
+    expect(activo, "Debe existir un afiliado con plan vigente").toBeTruthy();
+    const codPlan = activo!.planes.find((p) => p.vigente)!.codPlan;
     const caso = await request
       .post(`${API}/atenciones/juicios`, {
         headers: abogado,
-        data: { afiliadoId: activo.id, competencia: "Laboral", materia: "E2E provisiones" },
+        data: { afiliadoId: activo!.id, codPlan, competencia: "Laboral", materia: "E2E provisiones" },
       })
       .then((r) => r.json());
 

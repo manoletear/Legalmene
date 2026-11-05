@@ -4,7 +4,7 @@ import { Observable } from "rxjs";
 import { environment } from "../../../environments/environment";
 
 export interface DashboardKpis {
-  codPlan: string;
+  codPlan: string | null;
   afiliados: { total: number; activos: number; eliminados: number };
   atenciones: {
     total: number;

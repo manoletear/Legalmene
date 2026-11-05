@@ -1,15 +1,18 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, count, eq, gte, sql } from "drizzle-orm";
+import { and, count, eq, exists, gte, sql } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { atenciones } from "../../db/schema/atenciones";
-import { afiliados } from "../../db/schema/afiliados";
+import { afiliados, planesAfiliado } from "../../db/schema/afiliados";
 import { gestiones } from "../../db/schema/gestiones";
 import { comites } from "../../db/schema/comites";
 import { usuarios } from "../../db/schema/usuarios";
 import { provisiones } from "../../db/schema/provisiones";
 
+const porPlan = (codPlan?: string) => (codPlan ? eq(atenciones.codPlan, codPlan) : undefined);
+
 export interface DashboardKpis {
-  codPlan: string;
+  // null = todos los planes.
+  codPlan: string | null;
   afiliados: { total: number; activos: number; eliminados: number };
   atenciones: {
     total: number;
@@ -30,7 +33,7 @@ export interface DashboardKpis {
 export class DashboardService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  async kpis(codPlan: string): Promise<DashboardKpis> {
+  async kpis(codPlan?: string): Promise<DashboardKpis> {
     const inicioHoy = new Date();
     inicioHoy.setUTCHours(0, 0, 0, 0);
     const hace30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -44,7 +47,16 @@ export class DashboardService {
         eliminados: sql<number>`count(*) filter (where ${afiliados.vigencia} = 'Eliminado')`,
       })
       .from(afiliados)
-      .where(eq(afiliados.codPlan, codPlan));
+      .where(
+        codPlan
+          ? exists(
+              this.db
+                .select({ id: planesAfiliado.id })
+                .from(planesAfiliado)
+                .where(and(eq(planesAfiliado.afiliadoId, afiliados.id), eq(planesAfiliado.codPlan, codPlan))),
+            )
+          : undefined,
+      );
 
     const [at] = await this.db
       .select({
@@ -60,9 +72,9 @@ export class DashboardService {
         creadas30: sql<number>`count(*) filter (where ${atenciones.fechaApertura} >= ${hace30})`,
       })
       .from(atenciones)
-      .where(eq(atenciones.codPlan, codPlan));
+      .where(porPlan(codPlan));
 
-    // Gestiones requieren join con atenciones para filtrar por codPlan.
+    // Gestiones y comités se filtran por el plan de su atención.
     const [g] = await this.db
       .select({
         pendientes: sql<number>`count(*) filter (where ${gestiones.estado} = 'Pendiente')`,
@@ -70,7 +82,7 @@ export class DashboardService {
       })
       .from(gestiones)
       .innerJoin(atenciones, eq(gestiones.atencionId, atenciones.id))
-      .where(eq(atenciones.codPlan, codPlan));
+      .where(porPlan(codPlan));
 
     const [c] = await this.db
       .select({
@@ -78,7 +90,7 @@ export class DashboardService {
       })
       .from(comites)
       .innerJoin(atenciones, eq(comites.atencionId, atenciones.id))
-      .where(eq(atenciones.codPlan, codPlan));
+      .where(porPlan(codPlan));
 
     const [p] = await this.db
       .select({
@@ -86,10 +98,11 @@ export class DashboardService {
         montoPendiente: sql<number>`coalesce(sum(${provisiones.monto}), 0)`,
       })
       .from(provisiones)
-      .where(and(eq(provisiones.codPlan, codPlan), eq(provisiones.estado, "Solicitada")));
+      .innerJoin(atenciones, eq(provisiones.atencionId, atenciones.id))
+      .where(and(porPlan(codPlan), eq(provisiones.estado, "Solicitada")));
 
     return {
-      codPlan,
+      codPlan: codPlan ?? null,
       afiliados: {
         total: Number(afi?.total ?? 0),
         activos: Number(afi?.activos ?? 0),
@@ -124,7 +137,7 @@ export class DashboardService {
   }
 
   // Serie temporal: atenciones creadas por día en los últimos N días.
-  async timelineAtenciones(codPlan: string, dias = 30): Promise<{ fecha: string; total: number }[]> {
+  async timelineAtenciones(codPlan: string | undefined, dias = 30): Promise<{ fecha: string; total: number }[]> {
     const desde = new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
     desde.setUTCHours(0, 0, 0, 0);
     const rows = await this.db
@@ -133,18 +146,18 @@ export class DashboardService {
         total: count(),
       })
       .from(atenciones)
-      .where(and(eq(atenciones.codPlan, codPlan), gte(atenciones.fechaApertura, desde)))
+      .where(and(porPlan(codPlan), gte(atenciones.fechaApertura, desde)))
       .groupBy(sql`${atenciones.fechaApertura}::date`)
       .orderBy(sql`${atenciones.fechaApertura}::date`);
     return rows.map((r) => ({ fecha: r.fecha, total: Number(r.total) }));
   }
 
   // Distribución por competencia (Civil/Penal/Laboral/...) — donut chart.
-  async porCompetencia(codPlan: string): Promise<{ competencia: string; total: number }[]> {
+  async porCompetencia(codPlan?: string): Promise<{ competencia: string; total: number }[]> {
     const rows = await this.db
       .select({ competencia: atenciones.competencia, total: count() })
       .from(atenciones)
-      .where(eq(atenciones.codPlan, codPlan))
+      .where(porPlan(codPlan))
       .groupBy(atenciones.competencia)
       .orderBy(sql`count(*) desc`);
     return rows.map((r) => ({ competencia: r.competencia, total: Number(r.total) }));
@@ -153,7 +166,7 @@ export class DashboardService {
   // Top abogados por atenciones activas (Abierta/EnGestion/EnComite).
   // Identifica cuellos de botella de carga.
   async cargaPorAbogado(
-    codPlan: string,
+    codPlan: string | undefined,
     limit = 10,
   ): Promise<{ abogadoId: string; email: string; activas: number; total: number }[]> {
     const rows = await this.db
@@ -165,7 +178,7 @@ export class DashboardService {
       })
       .from(atenciones)
       .innerJoin(usuarios, eq(atenciones.abogadoAsignadoId, usuarios.id))
-      .where(eq(atenciones.codPlan, codPlan))
+      .where(porPlan(codPlan))
       .groupBy(atenciones.abogadoAsignadoId, usuarios.email)
       .orderBy(sql`count(*) filter (where ${atenciones.estado} in ('Abierta','EnGestion','EnComite')) desc`)
       .limit(limit);
@@ -178,7 +191,7 @@ export class DashboardService {
   }
 
   // Atenciones creadas por mes (últimos N meses). Tendencia macro.
-  async porMes(codPlan: string, meses = 12): Promise<{ mes: string; total: number }[]> {
+  async porMes(codPlan: string | undefined, meses = 12): Promise<{ mes: string; total: number }[]> {
     const desde = new Date();
     desde.setUTCDate(1);
     desde.setUTCHours(0, 0, 0, 0);
@@ -189,7 +202,7 @@ export class DashboardService {
         total: count(),
       })
       .from(atenciones)
-      .where(and(eq(atenciones.codPlan, codPlan), gte(atenciones.fechaApertura, desde)))
+      .where(and(porPlan(codPlan), gte(atenciones.fechaApertura, desde)))
       .groupBy(sql`date_trunc('month', ${atenciones.fechaApertura})`)
       .orderBy(sql`date_trunc('month', ${atenciones.fechaApertura})`);
     return rows.map((r) => ({ mes: r.mes, total: Number(r.total) }));

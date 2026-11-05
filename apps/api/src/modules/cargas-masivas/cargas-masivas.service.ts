@@ -1,9 +1,11 @@
-import { Inject, Injectable, Logger, BadRequestException } from "@nestjs/common";
+import { Inject, Injectable, Logger, BadRequestException, NotFoundException } from "@nestjs/common";
 import { parse } from "csv-parse/sync";
-import { and, eq, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
-import { afiliados, NuevoAfiliado } from "../../db/schema/afiliados";
+import { afiliados, planesAfiliado, NuevoAfiliado } from "../../db/schema/afiliados";
+import { planes } from "../../db/schema/planes";
 import { formatearRut, rutValido } from "../../common/utils/rut";
+import { hoyChile } from "../afiliados/vigencia";
 import type { CargaMasivaResultado, TipoCargaMasiva } from "@legalmene/shared";
 
 interface FilaCSV {
@@ -17,6 +19,17 @@ interface FilaCSV {
   comuna?: string;
   region?: string;
   fecha_nacimiento?: string;
+  fecha_inicio?: string;
+  fecha_termino?: string;
+}
+
+const FECHA = /^\d{4}-\d{2}-\d{2}$/;
+
+interface RegistroValido {
+  fila: number;
+  persona: NuevoAfiliado;
+  fechaInicio: string | null;
+  fechaTermino: string | null;
 }
 
 @Injectable()
@@ -26,9 +39,12 @@ export class CargasMasivasService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
   /**
-   * FLUJO: actualiza/inserta los registros del archivo. NO toca afiliados no listados.
-   * STOCK: además marca como "Eliminado" todo afiliado del plan que NO venga en el archivo
-   *        (reemplazo total del padrón vigente). Punto 03.2 del Anexo.
+   * Anexo §III. Ambas modalidades:
+   *   - Afiliados: si el RUT no existe se registra; si existe NO se actualizan sus datos.
+   *   - PlanesAfiliado: si la relación RUT–Plan no existe se crea; si existe se actualiza
+   *     la fecha de término (y vuelve a quedar Activa).
+   * STOCK además termina (fecha_termino = hoy, vigencia Eliminado) las relaciones del plan
+   * cuyos RUT no vienen en el archivo.
    */
   async cargarAfiliados(
     codPlan: string,
@@ -36,6 +52,12 @@ export class CargasMasivasService {
     csvBuffer: Buffer,
   ): Promise<CargaMasivaResultado> {
     const inicio = Date.now();
+
+    const [plan] = await this.db
+      .select({ codPlan: planes.codPlan })
+      .from(planes)
+      .where(eq(planes.codPlan, codPlan));
+    if (!plan) throw new NotFoundException(`Plan ${codPlan} no existe`);
 
     let filas: FilaCSV[];
     try {
@@ -66,7 +88,7 @@ export class CargasMasivasService {
 
     // Validar y normalizar todas las filas antes de tocar la DB.
     const rutsValidos = new Set<string>();
-    const registrosValidos: { fila: number; payload: NuevoAfiliado }[] = [];
+    const registros: RegistroValido[] = [];
 
     filas.forEach((fila, idx) => {
       const nroLinea = idx + 2; // +1 por header, +1 por base 1.
@@ -84,10 +106,7 @@ export class CargasMasivasService {
       }
       const rutFmt = formatearRut(fila.rut);
       if (rutsValidos.has(rutFmt)) {
-        resultado.errores.push({
-          fila: nroLinea,
-          mensaje: `RUT duplicado en archivo: ${rutFmt}`,
-        });
+        resultado.errores.push({ fila: nroLinea, mensaje: `RUT duplicado en archivo: ${rutFmt}` });
         return;
       }
       if (!fila.nombres || !fila.apellido_paterno) {
@@ -97,11 +116,16 @@ export class CargasMasivasService {
         });
         return;
       }
+      for (const campo of ["fecha_inicio", "fecha_termino"] as const) {
+        if (fila[campo] && !FECHA.test(fila[campo]!)) {
+          resultado.errores.push({ fila: nroLinea, mensaje: `${campo} debe tener formato AAAA-MM-DD` });
+          return;
+        }
+      }
       rutsValidos.add(rutFmt);
-      registrosValidos.push({
+      registros.push({
         fila: nroLinea,
-        payload: {
-          codPlan,
+        persona: {
           rut: rutFmt,
           nombres: fila.nombres,
           apellidoPaterno: fila.apellido_paterno,
@@ -114,60 +138,66 @@ export class CargasMasivasService {
           fechaNacimiento: fila.fecha_nacimiento || null,
           vigencia: "Activo",
         },
+        fechaInicio: fila.fecha_inicio || null,
+        fechaTermino: fila.fecha_termino || null,
       });
     });
 
-    if (registrosValidos.length === 0) {
+    if (registros.length === 0) {
       resultado.duracionMs = Date.now() - inicio;
       return resultado;
     }
 
-    // Procesar en transacción para garantizar atomicidad del STOCK switch.
+    // Transacción para que el reemplazo de STOCK sea atómico.
     await this.db.transaction(async (tx) => {
-      // UPSERT por (cod_plan, rut). Detectamos insert vs update con xmax.
-      const upserted = await tx
+      await tx
         .insert(afiliados)
-        .values(registrosValidos.map((r) => r.payload))
+        .values(registros.map((r) => r.persona))
+        .onConflictDoNothing({ target: afiliados.rut });
+
+      const personas = await tx
+        .select({ id: afiliados.id, rut: afiliados.rut })
+        .from(afiliados)
+        .where(inArray(afiliados.rut, Array.from(rutsValidos)));
+      const idPorRut = new Map(personas.map((p) => [p.rut, p.id]));
+
+      const relaciones = await tx
+        .insert(planesAfiliado)
+        .values(
+          registros.map((r) => ({
+            afiliadoId: idPorRut.get(r.persona.rut)!,
+            codPlan,
+            fechaInicio: r.fechaInicio ?? sql`${hoyChile}`,
+            fechaTermino: r.fechaTermino,
+            vigencia: "Activo" as const,
+          })),
+        )
         .onConflictDoUpdate({
-          target: [afiliados.codPlan, afiliados.rut],
+          target: [planesAfiliado.afiliadoId, planesAfiliado.codPlan],
           set: {
-            nombres: sql`excluded.nombres`,
-            apellidoPaterno: sql`excluded.apellido_paterno`,
-            apellidoMaterno: sql`excluded.apellido_materno`,
-            email: sql`excluded.email`,
-            telefono: sql`excluded.telefono`,
-            direccion: sql`excluded.direccion`,
-            comuna: sql`excluded.comuna`,
-            region: sql`excluded.region`,
-            fechaNacimiento: sql`excluded.fecha_nacimiento`,
+            fechaTermino: sql`excluded.fecha_termino`,
             vigencia: "Activo",
-            fechaEgreso: null,
             updatedAt: new Date(),
           },
         })
-        .returning({ id: afiliados.id, isNew: sql<boolean>`xmax = 0` });
+        .returning({ id: planesAfiliado.id, isNew: sql<boolean>`xmax = 0` });
 
-      resultado.insertados = upserted.filter((r) => r.isNew).length;
-      resultado.actualizados = upserted.length - resultado.insertados;
+      resultado.insertados = relaciones.filter((r) => r.isNew).length;
+      resultado.actualizados = relaciones.length - resultado.insertados;
 
-      // STOCK: marcar como Eliminado todos los del plan que no estén en el archivo.
       if (tipo === "STOCK") {
-        const result = await tx
-          .update(afiliados)
-          .set({
-            vigencia: "Eliminado",
-            fechaEgreso: new Date(),
-            updatedAt: new Date(),
-          })
+        const terminadas = await tx
+          .update(planesAfiliado)
+          .set({ fechaTermino: sql`${hoyChile}`, vigencia: "Eliminado", updatedAt: new Date() })
           .where(
             and(
-              eq(afiliados.codPlan, codPlan),
-              notInArray(afiliados.rut, Array.from(rutsValidos)),
-              eq(afiliados.vigencia, "Activo"),
+              eq(planesAfiliado.codPlan, codPlan),
+              notInArray(planesAfiliado.afiliadoId, Array.from(idPorRut.values())),
+              ne(planesAfiliado.vigencia, "Eliminado"),
             ),
           )
-          .returning({ id: afiliados.id });
-        resultado.eliminados = result.length;
+          .returning({ id: planesAfiliado.id });
+        resultado.eliminados = terminadas.length;
       }
     });
 

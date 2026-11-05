@@ -1,4 +1,4 @@
-import { Component, inject, signal } from "@angular/core";
+import { Component, OnInit, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { CardModule } from "primeng/card";
@@ -9,6 +9,8 @@ import { ProgressBarModule } from "primeng/progressbar";
 import { ToastModule } from "primeng/toast";
 import { MessageService } from "primeng/api";
 import { CargasMasivasApiService } from "../../core/services/cargas-masivas.service";
+import { PlanesApiService } from "../../core/services/planes.service";
+import { PLANES_SIN_COBERTURA } from "@legalmene/shared";
 import type { CargaMasivaResultado, TipoCargaMasiva } from "@legalmene/shared";
 
 @Component({
@@ -30,11 +32,22 @@ import type { CargaMasivaResultado, TipoCargaMasiva } from "@legalmene/shared";
       <ng-template pTemplate="header">
         <div style="padding:16px 16px 0;">
           <h2 style="margin:0;">Cargas masivas de afiliados</h2>
-          <small class="lm-muted">FLUJO = upsert sin eliminar · STOCK = reemplaza padrón completo (Anexo 03.2)</small>
+          <small class="lm-muted">
+            Nómina de un plan. FLUJO agrega RUT y actualiza fechas de término · STOCK además termina
+            los RUT del plan que no vienen en el archivo (Anexo §III)
+          </small>
         </div>
       </ng-template>
 
       <div class="lm-row" style="margin-bottom:16px;">
+        <p-select
+          [(ngModel)]="codPlan"
+          [options]="planOpts()"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Plan"
+          [style]="{ 'min-width': '240px' }"
+        ></p-select>
         <p-select
           [(ngModel)]="tipo"
           [options]="tipoOpts"
@@ -47,25 +60,28 @@ import type { CargaMasivaResultado, TipoCargaMasiva } from "@legalmene/shared";
         <button pButton [outlined]="true" icon="pi pi-paperclip" label="Seleccionar CSV" (click)="fileInput.click()"></button>
         <span *ngIf="file()" class="lm-muted">{{ file()!.name }} ({{ formatBytes(file()!.size) }})</span>
 
-        <button pButton icon="pi pi-cloud-upload" label="Procesar carga" (click)="subir()" [disabled]="!file() || cargando()"></button>
+        <button pButton icon="pi pi-cloud-upload" label="Procesar carga" (click)="subir()" [disabled]="!file() || !codPlan || cargando()"></button>
       </div>
 
       <p-progressBar *ngIf="cargando()" mode="indeterminate" [style]="{ height: '4px' }"></p-progressBar>
 
       <details style="margin-top:16px;">
         <summary style="cursor:pointer; opacity:0.7;">Formato CSV esperado</summary>
-        <pre style="background:#f5f5f5; padding:8px; border-radius:4px; margin-top:8px;">rut,nombres,apellido_paterno,apellido_materno,email,telefono,comuna,region,fecha_nacimiento
-11111111-1,Juan,Pérez,Soto,juan&#64;ejemplo.cl,+56912345678,Santiago,RM,1985-04-12
-22222222-2,María,González,,maria&#64;ejemplo.cl,,,,</pre>
+        <pre style="background:#f5f5f5; padding:8px; border-radius:4px; margin-top:8px;">rut,nombres,apellido_paterno,apellido_materno,email,telefono,comuna,region,fecha_nacimiento,fecha_inicio,fecha_termino
+11111111-1,Juan,Pérez,Soto,juan&#64;ejemplo.cl,+56912345678,Santiago,RM,1985-04-12,2026-01-01,2026-12-31
+22222222-2,María,González,,maria&#64;ejemplo.cl,,,,,,</pre>
+        <small class="lm-muted">
+          Si el RUT ya existe no se modifican sus datos personales. Sin fecha_inicio se usa la fecha de hoy.
+        </small>
       </details>
 
       <div *ngIf="resultado() as r" style="margin-top:24px;">
         <h3>Resultado</h3>
         <div class="lm-grid lm-grid-4" style="margin-bottom:16px;">
           <p-card><div style="font-size:20px; font-weight:600;">{{ r.totalRegistros }}</div><small>Total filas</small></p-card>
-          <p-card><div style="font-size:20px; font-weight:600; color:#388e3c;">{{ r.insertados }}</div><small>Insertados</small></p-card>
-          <p-card><div style="font-size:20px; font-weight:600; color:#1976d2;">{{ r.actualizados }}</div><small>Actualizados</small></p-card>
-          <p-card><div style="font-size:20px; font-weight:600; color:#7b1fa2;">{{ r.eliminados }}</div><small>Eliminados (STOCK)</small></p-card>
+          <p-card><div style="font-size:20px; font-weight:600; color:#388e3c;">{{ r.insertados }}</div><small>Nuevos en el plan</small></p-card>
+          <p-card><div style="font-size:20px; font-weight:600; color:#1976d2;">{{ r.actualizados }}</div><small>Vigencias actualizadas</small></p-card>
+          <p-card><div style="font-size:20px; font-weight:600; color:#7b1fa2;">{{ r.eliminados }}</div><small>Terminados (STOCK)</small></p-card>
           <p-card><div style="font-size:20px; font-weight:600;" [style.color]="r.errores.length ? '#d32f2f' : undefined">{{ r.errores.length }}</div><small>Errores</small></p-card>
           <p-card><div style="font-size:20px; font-weight:600;">{{ r.duracionMs }} ms</div><small>Duración</small></p-card>
         </div>
@@ -85,11 +101,14 @@ import type { CargaMasivaResultado, TipoCargaMasiva } from "@legalmene/shared";
     </p-card>
   `,
 })
-export class CargasMasivasComponent {
+export class CargasMasivasComponent implements OnInit {
   private api = inject(CargasMasivasApiService);
+  private planesApi = inject(PlanesApiService);
   private msg = inject(MessageService);
 
   protected tipo: TipoCargaMasiva = "FLUJO";
+  protected codPlan: string | null = null;
+  protected planOpts = signal<{ label: string; value: string }[]>([]);
   protected file = signal<File | null>(null);
   protected cargando = signal(false);
   protected resultado = signal<CargaMasivaResultado | null>(null);
@@ -99,6 +118,15 @@ export class CargasMasivasComponent {
     { label: "STOCK (reemplazar padrón)", value: "STOCK" },
   ];
 
+  ngOnInit() {
+    const especiales = PLANES_SIN_COBERTURA as readonly string[];
+    this.planesApi.listar().subscribe((ps) => {
+      const cargables = ps.filter((p) => p.vigente && !especiales.includes(p.codPlan));
+      this.planOpts.set(cargables.map((p) => ({ label: `${p.codPlan} — ${p.nombre}`, value: p.codPlan })));
+      this.codPlan ??= cargables[0]?.codPlan ?? null;
+    });
+  }
+
   onFile(ev: Event) {
     const input = ev.target as HTMLInputElement;
     this.file.set(input.files?.[0] ?? null);
@@ -106,10 +134,10 @@ export class CargasMasivasComponent {
 
   subir() {
     const f = this.file();
-    if (!f) return;
+    if (!f || !this.codPlan) return;
     this.cargando.set(true);
     this.resultado.set(null);
-    this.api.cargarAfiliados(this.tipo, f).subscribe({
+    this.api.cargarAfiliados(this.codPlan, this.tipo, f).subscribe({
       next: (r) => {
         this.resultado.set(r);
         this.cargando.set(false);

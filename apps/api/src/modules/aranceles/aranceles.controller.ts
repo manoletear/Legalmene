@@ -1,7 +1,6 @@
-import { Body, Controller, Get, Inject, Param, Post, Put, Query, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiHeader, ApiTags } from "@nestjs/swagger";
+import { BadRequestException, Body, Controller, Get, Inject, Param, Post, Put, Query, UseGuards } from "@nestjs/common";
+import { ApiBearerAuth, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { CodPlan } from "../../common/decorators/cod-plan.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { ArancelesService } from "./aranceles.service";
@@ -9,27 +8,28 @@ import { CreateArancelDto, FiltroArancelesDto, UpdateArancelDto, ValorUfDto } fr
 
 @ApiTags("aranceles")
 @ApiBearerAuth("EntraID")
-@ApiHeader({ name: "X-Cod-Plan", required: true })
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
 export class ArancelesController {
   constructor(@Inject(ArancelesService) private readonly service: ArancelesService) {}
 
   @Get("aranceles")
-  listar(@CodPlan() codPlan: string, @Query() filtro: FiltroArancelesDto) {
-    return this.service.listar(codPlan, filtro);
+  listar(@Query() filtro: FiltroArancelesDto) {
+    return this.service.listar(filtro);
   }
 
   @Post("aranceles")
   @Roles("Administrador", "Supervisor")
-  crear(@CodPlan() codPlan: string, @Body() body: CreateArancelDto) {
+  @ApiQuery({ name: "codPlan", required: true })
+  crear(@Query("codPlan") codPlan: string, @Body() body: CreateArancelDto) {
+    if (!codPlan) throw new BadRequestException("Query param 'codPlan' es obligatorio");
     return this.service.crear(codPlan, body);
   }
 
   @Put("aranceles/:id")
   @Roles("Administrador", "Supervisor")
-  actualizar(@CodPlan() codPlan: string, @Param("id") id: string, @Body() body: UpdateArancelDto) {
-    return this.service.actualizar(codPlan, id, body);
+  actualizar(@Param("id") id: string, @Body() body: UpdateArancelDto) {
+    return this.service.actualizar(id, body);
   }
 
   @Get("valores-uf/vigente")

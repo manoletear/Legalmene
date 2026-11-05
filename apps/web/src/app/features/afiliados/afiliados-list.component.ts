@@ -7,9 +7,14 @@ import { ButtonModule } from "primeng/button";
 import { InputTextModule } from "primeng/inputtext";
 import { IconFieldModule } from "primeng/iconfield";
 import { InputIconModule } from "primeng/inputicon";
+import { SelectModule } from "primeng/select";
+import { TagModule } from "primeng/tag";
+import { TooltipModule } from "primeng/tooltip";
+import { PlanesApiService } from "../../core/services/planes.service";
 import { AfiliadosApiService } from "../../core/services/afiliados.service";
+import { authHeaders } from "../../core/interceptors/auth.interceptor";
 import { environment } from "../../../environments/environment";
-import type { Afiliado } from "@legalmene/shared";
+import type { AfiliadoConPlanes, PlanAfiliadoDetalle } from "@legalmene/shared";
 import type { TableLazyLoadEvent } from "primeng/table";
 
 @Component({
@@ -24,6 +29,9 @@ import type { TableLazyLoadEvent } from "primeng/table";
     InputTextModule,
     IconFieldModule,
     InputIconModule,
+    SelectModule,
+    TagModule,
+    TooltipModule,
   ],
   template: `
     <p-card>
@@ -34,17 +42,29 @@ import type { TableLazyLoadEvent } from "primeng/table";
         </div>
       </ng-template>
 
-      <p-iconField iconPosition="left" style="width:100%; display:block; margin-bottom:16px;">
-        <p-inputIcon styleClass="pi pi-search" />
-        <input
-          pInputText
-          type="text"
-          [(ngModel)]="query"
-          (keyup.enter)="recargar()"
-          placeholder="Buscar por RUT, nombre o email"
-          style="width:100%;"
-        />
-      </p-iconField>
+      <div class="lm-row" style="gap:12px; margin-bottom:16px;">
+        <p-iconField iconPosition="left" class="lm-grow" style="display:block;">
+          <p-inputIcon styleClass="pi pi-search" />
+          <input
+            pInputText
+            type="text"
+            [(ngModel)]="query"
+            (keyup.enter)="recargar()"
+            placeholder="Buscar por RUT, nombre o email"
+            style="width:100%;"
+          />
+        </p-iconField>
+        <p-select
+          [(ngModel)]="filtroPlan"
+          (onChange)="setPlan($event.value)"
+          [options]="planOpts()"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Todos los planes"
+          [showClear]="true"
+          [style]="{ width: '240px' }"
+        ></p-select>
+      </div>
 
       <p-table
         [value]="data()"
@@ -63,6 +83,7 @@ import type { TableLazyLoadEvent } from "primeng/table";
             <th>RUT</th>
             <th>Nombre</th>
             <th>Email</th>
+            <th>Planes</th>
             <th>Vigencia</th>
           </tr>
         </ng-template>
@@ -71,12 +92,22 @@ import type { TableLazyLoadEvent } from "primeng/table";
             <td>{{ a.rut }}</td>
             <td>{{ a.apellidoPaterno }} {{ a.apellidoMaterno }}, {{ a.nombres }}</td>
             <td>{{ a.email }}</td>
+            <td>
+              <p-tag
+                *ngFor="let p of a.planes"
+                [value]="p.codPlan"
+                [severity]="p.vigente ? 'success' : 'secondary'"
+                [pTooltip]="detallePlan(p)"
+                [style]="{ 'margin-right': '4px' }"
+              ></p-tag>
+              <span *ngIf="a.planes.length === 0" class="lm-muted lm-small">Sin planes</span>
+            </td>
             <td>{{ a.vigencia }}</td>
           </tr>
         </ng-template>
         <ng-template pTemplate="emptymessage">
           <tr>
-            <td colspan="4" style="text-align:center; padding:24px;" class="lm-muted">No hay afiliados.</td>
+            <td colspan="5" style="text-align:center; padding:24px;" class="lm-muted">No hay afiliados.</td>
           </tr>
         </ng-template>
       </p-table>
@@ -85,7 +116,10 @@ import type { TableLazyLoadEvent } from "primeng/table";
 })
 export class AfiliadosListComponent implements OnInit {
   private api = inject(AfiliadosApiService);
-  protected data = signal<Afiliado[]>([]);
+  private planesApi = inject(PlanesApiService);
+  protected data = signal<AfiliadoConPlanes[]>([]);
+  protected planOpts = signal<{ label: string; value: string }[]>([]);
+  protected filtroPlan: string | undefined;
   protected total = signal(0);
   protected page = signal(1);
   protected pageSize = signal(25);
@@ -93,13 +127,32 @@ export class AfiliadosListComponent implements OnInit {
   protected query = "";
 
   ngOnInit() {
+    this.planesApi
+      .listar()
+      .subscribe((ps) => this.planOpts.set(ps.map((p) => ({ label: `${p.codPlan} — ${p.nombre}`, value: p.codPlan }))));
     this.recargar();
+  }
+
+  setPlan(codPlan: string | undefined) {
+    this.filtroPlan = codPlan ?? undefined;
+    this.page.set(1);
+    this.recargar();
+  }
+
+  detallePlan(p: PlanAfiliadoDetalle): string {
+    const termino = p.fechaTermino ?? "sin término";
+    return `${p.nombrePlan} · ${p.fechaInicio} → ${termino} · ${p.vigente ? "Vigente" : "No vigente"}`;
   }
 
   recargar() {
     this.loading.set(true);
     this.api
-      .buscar({ page: this.page(), pageSize: this.pageSize(), q: this.query || undefined })
+      .buscar({
+        page: this.page(),
+        pageSize: this.pageSize(),
+        q: this.query || undefined,
+        codPlan: this.filtroPlan,
+      })
       .subscribe({
         next: (res) => {
           this.data.set(res.data);
@@ -119,14 +172,13 @@ export class AfiliadosListComponent implements OnInit {
   }
 
   exportarCsv() {
-    const codPlan = localStorage.getItem("cod_plan") ?? "DEMO";
     const url = `${environment.apiBaseUrl}/exports/afiliados.csv`;
-    fetch(url, { headers: { "X-Cod-Plan": codPlan } })
+    fetch(url, { headers: authHeaders() })
       .then((r) => r.blob())
       .then((blob) => {
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
-        a.download = `afiliados-${codPlan}-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.download = `afiliados-${new Date().toISOString().slice(0, 10)}.csv`;
         a.click();
         URL.revokeObjectURL(a.href);
       });

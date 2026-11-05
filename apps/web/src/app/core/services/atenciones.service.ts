@@ -17,6 +17,7 @@ export interface BuscarAtencionesOpts {
   estado?: string;
   correlativo?: string;
   afiliadoId?: string;
+  codPlan?: string;
   q?: string;
 }
 

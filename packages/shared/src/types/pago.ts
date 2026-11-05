@@ -30,6 +30,7 @@ export type Pago = z.infer<typeof PagoSchema>;
 
 export const IniciarPagoSchema = z.object({
   afiliadoId: z.string().uuid(),
+  codPlan: z.string().min(1).max(20),
   atencionId: z.string().uuid().optional(),
   monto: z.number().int().positive(),
   returnUrl: z.string().url(),

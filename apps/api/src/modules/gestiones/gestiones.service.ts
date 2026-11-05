@@ -14,6 +14,7 @@ export interface FiltroGestiones {
   tipo?: string;
   responsableId?: string;
   soloVencidas?: boolean;
+  codPlan?: string;
 }
 
 @Injectable()
@@ -23,8 +24,8 @@ export class GestionesService {
     @Inject(NotifInboxService) private readonly notif: NotifInboxService,
   ) {}
 
-  async listarPorAtencion(codPlan: string, atencionId: string): Promise<Gestion[]> {
-    await this.assertAtencionEnPlan(codPlan, atencionId);
+  async listarPorAtencion(atencionId: string): Promise<Gestion[]> {
+    await this.planDeAtencion(atencionId);
     return this.db
       .select()
       .from(gestiones)
@@ -32,13 +33,13 @@ export class GestionesService {
       .orderBy(desc(gestiones.createdAt));
   }
 
-  // Listado global per tenant (join con atenciones para filtrar codPlan).
-  async listarPorPlan(codPlan: string, filtro: FiltroGestiones) {
+  // Listado global, opcionalmente filtrado por el plan de la atención.
+  async listarGlobal(filtro: FiltroGestiones) {
     const ahora = new Date();
     const page = filtro.page ?? 1;
     const pageSize = Math.min(filtro.pageSize ?? 50, 200);
     const where = and(
-      eq(atenciones.codPlan, codPlan),
+      filtro.codPlan ? eq(atenciones.codPlan, filtro.codPlan) : undefined,
       filtro.estado ? eq(gestiones.estado, filtro.estado) : undefined,
       filtro.tipo ? eq(gestiones.tipo, filtro.tipo as "Reunion") : undefined,
       filtro.responsableId ? eq(gestiones.responsableId, filtro.responsableId) : undefined,
@@ -89,8 +90,8 @@ export class GestionesService {
     };
   }
 
-  async crear(codPlan: string, input: CreateGestion): Promise<Gestion> {
-    await this.assertAtencionEnPlan(codPlan, input.atencionId);
+  async crear(input: CreateGestion): Promise<Gestion> {
+    const codPlan = await this.planDeAtencion(input.atencionId);
     const payload: NuevaGestion = {
       atencionId: input.atencionId,
       tipo: input.tipo,
@@ -121,10 +122,10 @@ export class GestionesService {
     return row;
   }
 
-  async completar(codPlan: string, gestionId: string, input: CompletarGestion): Promise<Gestion> {
+  async completar(gestionId: string, input: CompletarGestion): Promise<Gestion> {
     const [row] = await this.db.select().from(gestiones).where(eq(gestiones.id, gestionId));
     if (!row) throw new NotFoundException(`Gestión ${gestionId} no existe`);
-    await this.assertAtencionEnPlan(codPlan, row.atencionId);
+    await this.planDeAtencion(row.atencionId);
     const [updated] = await this.db
       .update(gestiones)
       .set({
@@ -143,11 +144,13 @@ export class GestionesService {
     return updated;
   }
 
-  private async assertAtencionEnPlan(codPlan: string, atencionId: string) {
+  // Devuelve el plan bajo el cual se registró la atención (usado en notificaciones).
+  private async planDeAtencion(atencionId: string): Promise<string> {
     const [a] = await this.db
-      .select({ id: atenciones.id })
+      .select({ codPlan: atenciones.codPlan })
       .from(atenciones)
-      .where(and(eq(atenciones.id, atencionId), eq(atenciones.codPlan, codPlan)));
-    if (!a) throw new NotFoundException(`Atención ${atencionId} no existe en plan ${codPlan}`);
+      .where(eq(atenciones.id, atencionId));
+    if (!a) throw new NotFoundException(`Atención ${atencionId} no existe`);
+    return a.codPlan;
   }
 }

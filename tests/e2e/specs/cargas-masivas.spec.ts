@@ -21,7 +21,7 @@ test.describe("Cargas masivas", () => {
 
     // Espera el resultado (KPI cards aparecen tras post).
     await expect(page.locator("small", { hasText: "Total filas" })).toBeVisible({ timeout: 10000 });
-    await expect(page.locator("small", { hasText: "Insertados" })).toBeVisible();
+    await expect(page.locator("small", { hasText: "Nuevos en el plan" })).toBeVisible();
     await expect(page.locator("h4", { hasText: "Errores" })).toBeVisible();
 
     // Al menos 1 error con texto "RUT inv" en la tabla de errores.

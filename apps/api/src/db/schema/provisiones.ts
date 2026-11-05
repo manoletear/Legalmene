@@ -8,7 +8,6 @@ import {
   pgEnum,
   index,
 } from "drizzle-orm/pg-core";
-import { planes } from "./planes";
 import { atenciones } from "./atenciones";
 import { usuarios } from "./usuarios";
 
@@ -27,9 +26,6 @@ export const provisiones = pgTable(
   "provisiones",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    codPlan: varchar("cod_plan", { length: 20 })
-      .notNull()
-      .references(() => planes.codPlan, { onDelete: "restrict" }),
     atencionId: uuid("atencion_id")
       .notNull()
       .references(() => atenciones.id, { onDelete: "restrict" }),
@@ -47,7 +43,7 @@ export const provisiones = pgTable(
     fechaResolucion: timestamp("fecha_resolucion", { withTimezone: true }),
   },
   (t) => ({
-    planEstadoIdx: index("provisiones_plan_estado_idx").on(t.codPlan, t.estado),
+    estadoIdx: index("provisiones_estado_idx").on(t.estado),
     atencionIdx: index("provisiones_atencion_idx").on(t.atencionId),
   }),
 );

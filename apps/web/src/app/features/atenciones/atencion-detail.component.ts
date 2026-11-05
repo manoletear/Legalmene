@@ -2,6 +2,7 @@ import { Component, OnInit, inject, signal, computed } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from "@angular/forms";
 import { ActivatedRoute, RouterLink } from "@angular/router";
+import { authHeaders } from "../../core/interceptors/auth.interceptor";
 import { environment } from "../../../environments/environment";
 import { CardModule } from "primeng/card";
 import { TagModule } from "primeng/tag";
@@ -582,9 +583,8 @@ export class AtencionDetailComponent implements OnInit {
   }
 
   descargarPdf(atencionId: string) {
-    const codPlan = localStorage.getItem("cod_plan") ?? "DEMO";
     fetch(`${environment.apiBaseUrl}/exports/atenciones/${atencionId}.pdf`, {
-      headers: { "X-Cod-Plan": codPlan },
+      headers: authHeaders(),
     })
       .then((r) => r.blob())
       .then((blob) => {

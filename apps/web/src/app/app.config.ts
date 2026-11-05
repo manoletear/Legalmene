@@ -10,7 +10,7 @@ import Aura from "@primeng/themes/aura";
 import { ConfirmationService, MessageService } from "primeng/api";
 import { DialogService } from "primeng/dynamicdialog";
 import { routes } from "./app.routes";
-import { codPlanInterceptor } from "./core/interceptors/cod-plan.interceptor";
+import { authInterceptor } from "./core/interceptors/auth.interceptor";
 import { maintenanceInterceptor } from "./core/interceptors/maintenance.interceptor";
 
 registerLocaleData(localeEsCl);
@@ -40,7 +40,7 @@ export const appConfig: ApplicationConfig = {
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
     provideAnimations(),
-    provideHttpClient(withInterceptors([codPlanInterceptor, maintenanceInterceptor])),
+    provideHttpClient(withInterceptors([authInterceptor, maintenanceInterceptor])),
     providePrimeNG({
       theme: {
         preset: LegalChilePreset,

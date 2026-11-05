@@ -1,5 +1,5 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { ulid } from "ulid";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { documentos, Documento, NuevoDocumento } from "../../db/schema/documentos";
@@ -37,17 +37,17 @@ export class DocumentosService {
     @Inject(DOC_STORAGE) private readonly storage: DocumentStorage,
   ) {}
 
-  async generateUploadUrl(codPlan: string, input: UploadUrlRequest): Promise<UploadUrlResponse> {
+  async generateUploadUrl(input: UploadUrlRequest): Promise<UploadUrlResponse> {
     if (input.tamanoBytes > 100 * 1024 * 1024) {
       throw new BadRequestException("Archivo excede 100 MB");
     }
     if (input.atencionId) {
-      await this.assertAtencionEnPlan(codPlan, input.atencionId);
+      await this.assertAtencion(input.atencionId);
     }
     const anio = new Date().getUTCFullYear();
     const atencionSeg = input.atencionId ?? "sin-atencion";
     const safeName = input.nombre.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const s3Key = `${codPlan}/${anio}/${atencionSeg}/${ulid()}-${safeName}`;
+    const s3Key = `atenciones/${anio}/${atencionSeg}/${ulid()}-${safeName}`;
     const expiresInSec = 900;
     const uploadUrl = await this.storage.generateUploadUrl({
       key: s3Key,
@@ -58,9 +58,9 @@ export class DocumentosService {
     return { uploadUrl, s3Key, expiresInSec };
   }
 
-  async register(codPlan: string, input: RegisterDocRequest): Promise<Documento> {
+  async register(input: RegisterDocRequest): Promise<Documento> {
     if (input.atencionId) {
-      await this.assertAtencionEnPlan(codPlan, input.atencionId);
+      await this.assertAtencion(input.atencionId);
     }
     if (!(await this.storage.exists(input.s3Key))) {
       throw new BadRequestException(`Objeto ${input.s3Key} no existe en el storage`);
@@ -80,14 +80,10 @@ export class DocumentosService {
   }
 
   async generateDownloadUrl(
-    codPlan: string,
     id: string,
   ): Promise<{ url: string; expiresInSec: number }> {
     const [doc] = await this.db.select().from(documentos).where(eq(documentos.id, id));
     if (!doc) throw new NotFoundException(`Documento ${id} no existe`);
-    if (doc.atencionId) {
-      await this.assertAtencionEnPlan(codPlan, doc.atencionId);
-    }
     const url = await this.storage.generateDownloadUrl({
       key: doc.s3Key,
       filename: doc.nombre,
@@ -96,16 +92,16 @@ export class DocumentosService {
     return { url, expiresInSec: 600 };
   }
 
-  async listarPorAtencion(codPlan: string, atencionId: string): Promise<Documento[]> {
-    await this.assertAtencionEnPlan(codPlan, atencionId);
+  async listarPorAtencion(atencionId: string): Promise<Documento[]> {
+    await this.assertAtencion(atencionId);
     return this.db.select().from(documentos).where(eq(documentos.atencionId, atencionId));
   }
 
-  private async assertAtencionEnPlan(codPlan: string, atencionId: string) {
+  private async assertAtencion(atencionId: string) {
     const [a] = await this.db
       .select({ id: atenciones.id })
       .from(atenciones)
-      .where(and(eq(atenciones.id, atencionId), eq(atenciones.codPlan, codPlan)));
-    if (!a) throw new NotFoundException(`Atención ${atencionId} no existe en plan ${codPlan}`);
+      .where(eq(atenciones.id, atencionId));
+    if (!a) throw new NotFoundException(`Atención ${atencionId} no existe`);
   }
 }

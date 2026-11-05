@@ -2,9 +2,10 @@ import "dotenv/config";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema";
-import { planes } from "./schema/planes";
+import { inArray } from "drizzle-orm";
+import { canales, planes } from "./schema/planes";
 import { usuarios } from "./schema/usuarios";
-import { afiliados } from "./schema/afiliados";
+import { afiliados, planesAfiliado } from "./schema/afiliados";
 import { aranceles, valoresUf } from "./schema/aranceles";
 
 // UF real del día desde mindicador.cl; si falla se deja sin UF (la UI lo indica).
@@ -30,10 +31,32 @@ async function main() {
   console.info("Insertando datos demo...");
 
   await db
+    .insert(canales)
+    .values([{ nombre: "Directo" }, { nombre: "Corredora de seguros" }, { nombre: "Convenio empresa" }])
+    .onConflictDoNothing();
+  const canalPorNombre = new Map(
+    (await db.select().from(canales)).map((c) => [c.nombre, c.id] as const),
+  );
+
+  await db
     .insert(planes)
     .values([
-      { codPlan: "DEMO", nombre: "Plan Demo", descripcion: "Plan para pruebas", vigente: true },
-      { codPlan: "EMP01", nombre: "Empresa Uno", vigente: true },
+      {
+        codPlan: "DEMO",
+        nombre: "Plan Demo",
+        descripcion: "Plan para pruebas",
+        canalId: canalPorNombre.get("Directo"),
+        vigente: true,
+      },
+      {
+        codPlan: "EMP01",
+        nombre: "Empresa Uno",
+        canalId: canalPorNombre.get("Convenio empresa"),
+        vigente: true,
+      },
+      // Planes especiales para RUT sin plan vigente (Anexo §VI 3.1).
+      { codPlan: "REZAGADO", nombre: "Rezagado (sin plan vigente)", vigente: true },
+      { codPlan: "METLIFE", nombre: "Seguro complementario MetLife", vigente: true },
     ])
     .onConflictDoNothing();
 
@@ -64,7 +87,6 @@ async function main() {
     .insert(afiliados)
     .values([
       {
-        codPlan: "DEMO",
         rut: "11111111-1",
         nombres: "Juan",
         apellidoPaterno: "Pérez",
@@ -73,11 +95,37 @@ async function main() {
         telefono: "+56912345678",
       },
       {
-        codPlan: "DEMO",
         rut: "22222222-2",
         nombres: "María",
         apellidoPaterno: "González",
         email: "maria.gonzalez@example.cl",
+      },
+      // Afiliado sin plan vigente: sus atenciones van como REZAGADO.
+      {
+        rut: "33333333-3",
+        nombres: "Pedro",
+        apellidoPaterno: "Rojas",
+        email: "pedro.rojas@example.cl",
+      },
+    ])
+    .onConflictDoNothing();
+
+  const personas = await db
+    .select({ id: afiliados.id, rut: afiliados.rut })
+    .from(afiliados)
+    .where(inArray(afiliados.rut, ["11111111-1", "22222222-2", "33333333-3"]));
+  const idPorRut = new Map(personas.map((p) => [p.rut, p.id] as const));
+  await db
+    .insert(planesAfiliado)
+    .values([
+      { afiliadoId: idPorRut.get("11111111-1")!, codPlan: "DEMO", fechaInicio: "2024-01-01" },
+      { afiliadoId: idPorRut.get("11111111-1")!, codPlan: "EMP01", fechaInicio: "2025-03-01" },
+      { afiliadoId: idPorRut.get("22222222-2")!, codPlan: "DEMO", fechaInicio: "2024-06-01" },
+      {
+        afiliadoId: idPorRut.get("33333333-3")!,
+        codPlan: "EMP01",
+        fechaInicio: "2023-01-01",
+        fechaTermino: "2024-12-31",
       },
     ])
     .onConflictDoNothing();

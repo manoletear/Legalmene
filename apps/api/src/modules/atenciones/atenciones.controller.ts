@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Inject,
   Get,
   Param,
   Patch,
@@ -9,71 +10,61 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { ApiBearerAuth, ApiHeader, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { AtencionesService } from "./atenciones.service";
 import {
   CreateAtencionDto,
   UpdateAtencionDto,
-  DerivarAtencionDto,
+  DerivarCuerpoDto,
   FiltroAtencionesDto,
 } from "./dto";
-import { CodPlan } from "../../common/decorators/cod-plan.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
 
 @ApiTags("atenciones")
 @ApiBearerAuth("EntraID")
-@ApiHeader({ name: "X-Cod-Plan", required: true })
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("atenciones")
 export class AtencionesController {
-  constructor(private readonly service: AtencionesService) {}
+  constructor(@Inject(AtencionesService) private readonly service: AtencionesService) {}
 
   @Get()
-  buscar(@CodPlan() codPlan: string, @Query() filtro: FiltroAtencionesDto) {
-    return this.service.buscar(codPlan, filtro);
+  buscar(@Query() filtro: FiltroAtencionesDto) {
+    return this.service.buscar(filtro);
   }
 
   @Get(":id")
-  obtener(@CodPlan() codPlan: string, @Param("id") id: string) {
-    return this.service.obtener(codPlan, id);
+  obtener(@Param("id") id: string) {
+    return this.service.obtener(id);
   }
 
   @Post("consultas")
   @Roles("Administrador", "Supervisor", "Abogado", "Operador")
-  crearConsulta(@CodPlan() codPlan: string, @Body() body: Omit<CreateAtencionDto, "tipo">) {
-    return this.service.crear(codPlan, { ...body, tipo: "Consulta" });
+  crearConsulta(@Body() body: CreateAtencionDto) {
+    return this.service.crear({ ...body, tipo: "Consulta" });
   }
 
   @Post("asesorias")
   @Roles("Administrador", "Supervisor", "Abogado")
-  crearAsesoria(@CodPlan() codPlan: string, @Body() body: Omit<CreateAtencionDto, "tipo">) {
-    return this.service.crear(codPlan, { ...body, tipo: "Asesoria" });
+  crearAsesoria(@Body() body: CreateAtencionDto) {
+    return this.service.crear({ ...body, tipo: "Asesoria" });
   }
 
   @Post("juicios")
   @Roles("Administrador", "Supervisor", "Abogado")
-  crearJuicio(@CodPlan() codPlan: string, @Body() body: Omit<CreateAtencionDto, "tipo">) {
-    return this.service.crear(codPlan, { ...body, tipo: "Juicio" });
+  crearJuicio(@Body() body: CreateAtencionDto) {
+    return this.service.crear({ ...body, tipo: "Juicio" });
   }
 
   @Patch(":id")
   @Roles("Administrador", "Supervisor", "Abogado")
-  actualizar(
-    @CodPlan() codPlan: string,
-    @Param("id") id: string,
-    @Body() body: UpdateAtencionDto,
-  ) {
-    return this.service.actualizar(codPlan, id, body);
+  actualizar(@Param("id") id: string, @Body() body: UpdateAtencionDto) {
+    return this.service.actualizar(id, body);
   }
 
   @Post(":id/derivar")
   @Roles("Administrador", "Supervisor", "Abogado")
-  derivar(
-    @CodPlan() codPlan: string,
-    @Param("id") id: string,
-    @Body() body: Omit<DerivarAtencionDto, "atencionId">,
-  ) {
-    return this.service.derivar(codPlan, { ...body, atencionId: id });
+  derivar(@Param("id") id: string, @Body() body: DerivarCuerpoDto) {
+    return this.service.derivar({ ...body, atencionId: id });
   }
 }

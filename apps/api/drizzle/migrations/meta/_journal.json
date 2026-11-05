@@ -50,6 +50,13 @@
       "when": 1793829509029,
       "tag": "0006_cuddly_deathbird",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793838339227,
+      "tag": "0007_busy_stingray",
+      "breakpoints": true
     }
   ]
 }

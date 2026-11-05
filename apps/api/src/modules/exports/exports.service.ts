@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { eq } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
-import { afiliados } from "../../db/schema/afiliados";
+import { afiliados, planesAfiliado } from "../../db/schema/afiliados";
 import { atenciones } from "../../db/schema/atenciones";
 
 // Minimal CSV escaping per RFC 4180: quote when needed, double inner quotes.
@@ -24,12 +24,28 @@ function toCsv(headers: string[], rows: unknown[][]): string {
 export class ExportsService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  async afiliadosCsv(codPlan: string): Promise<string> {
+  // Una fila por relación RUT–Plan (PlanesAfiliado).
+  async afiliadosCsv(codPlan?: string): Promise<string> {
     const rows = await this.db
-      .select()
+      .select({
+        rut: afiliados.rut,
+        nombres: afiliados.nombres,
+        apellidoPaterno: afiliados.apellidoPaterno,
+        apellidoMaterno: afiliados.apellidoMaterno,
+        email: afiliados.email,
+        telefono: afiliados.telefono,
+        comuna: afiliados.comuna,
+        region: afiliados.region,
+        vigencia: afiliados.vigencia,
+        codPlan: planesAfiliado.codPlan,
+        fechaInicio: planesAfiliado.fechaInicio,
+        fechaTermino: planesAfiliado.fechaTermino,
+        vigenciaPlan: planesAfiliado.vigencia,
+      })
       .from(afiliados)
-      .where(eq(afiliados.codPlan, codPlan))
-      .orderBy(afiliados.apellidoPaterno, afiliados.nombres);
+      .innerJoin(planesAfiliado, eq(planesAfiliado.afiliadoId, afiliados.id))
+      .where(codPlan ? eq(planesAfiliado.codPlan, codPlan) : undefined)
+      .orderBy(afiliados.apellidoPaterno, afiliados.nombres, planesAfiliado.codPlan);
 
     return toCsv(
       [
@@ -42,8 +58,10 @@ export class ExportsService {
         "comuna",
         "region",
         "vigencia",
-        "fecha_ingreso",
-        "fecha_egreso",
+        "cod_plan",
+        "fecha_inicio",
+        "fecha_termino",
+        "vigencia_plan",
       ],
       rows.map((a) => [
         a.rut,
@@ -55,22 +73,25 @@ export class ExportsService {
         a.comuna,
         a.region,
         a.vigencia,
-        a.fechaIngreso,
-        a.fechaEgreso,
+        a.codPlan,
+        a.fechaInicio,
+        a.fechaTermino,
+        a.vigenciaPlan,
       ]),
     );
   }
 
-  async atencionesCsv(codPlan: string): Promise<string> {
+  async atencionesCsv(codPlan?: string): Promise<string> {
     const rows = await this.db
       .select()
       .from(atenciones)
-      .where(eq(atenciones.codPlan, codPlan))
+      .where(codPlan ? eq(atenciones.codPlan, codPlan) : undefined)
       .orderBy(atenciones.fechaApertura);
 
     return toCsv(
       [
         "correlativo",
+        "cod_plan",
         "tipo",
         "estado",
         "competencia",
@@ -84,6 +105,7 @@ export class ExportsService {
       ],
       rows.map((a) => [
         a.correlativo,
+        a.codPlan,
         a.tipo,
         a.estado,
         a.competencia,

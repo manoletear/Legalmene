@@ -30,10 +30,9 @@ export const atenciones = pgTable(
   "atenciones",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    // Correlativo legible al usuario: ej. "CONS-2026-000123".
-    // Sin unique global: el generador per-plan colisiona entre tenants.
-    // Unicidad real garantizada por índice compuesto (cod_plan, correlativo).
+    // Correlativo legible al usuario, único global: ej. "CONS-2026-000123".
     correlativo: varchar("correlativo", { length: 32 }).notNull(),
+    // Plan bajo el cual se prestó la atención (vigente del RUT, o REZAGADO/METLIFE).
     codPlan: varchar("cod_plan", { length: 20 })
       .notNull()
       .references(() => planes.codPlan, { onDelete: "restrict" }),
@@ -59,7 +58,7 @@ export const atenciones = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
-    planCorrelativoUq: uniqueIndex("atenciones_plan_correlativo_uq").on(t.codPlan, t.correlativo),
+    correlativoUq: uniqueIndex("atenciones_correlativo_uq").on(t.correlativo),
     planEstadoIdx: index("atenciones_plan_estado_idx").on(t.codPlan, t.estado),
     afiliadoIdx: index("atenciones_afiliado_idx").on(t.afiliadoId),
     abogadoIdx: index("atenciones_abogado_idx").on(t.abogadoAsignadoId),
@@ -70,16 +69,15 @@ export const atenciones = pgTable(
 export type Atencion = typeof atenciones.$inferSelect;
 export type NuevaAtencion = typeof atenciones.$inferInsert;
 
-// Tabla de secuencias para generar correlativos atómicos por plan/año/tipo.
+// Tabla de secuencias para generar correlativos atómicos por tipo/año.
 export const correlativos = pgTable(
   "correlativos",
   {
-    codPlan: varchar("cod_plan", { length: 20 }).notNull(),
     tipo: tipoAtencionEnum("tipo").notNull(),
     anio: varchar("anio", { length: 4 }).notNull(),
     valor: jsonb("valor").$type<{ next: number }>().notNull().default({ next: 1 }),
   },
   (t) => ({
-    pk: uniqueIndex("correlativos_pk").on(t.codPlan, t.tipo, t.anio),
+    pk: uniqueIndex("correlativos_tipo_anio_uq").on(t.tipo, t.anio),
   }),
 );

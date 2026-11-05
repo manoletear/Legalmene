@@ -9,6 +9,7 @@ import { ButtonModule } from "primeng/button";
 import { SelectModule } from "primeng/select";
 import { InputTextModule } from "primeng/inputtext";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
+import { authHeaders } from "../../core/interceptors/auth.interceptor";
 import { environment } from "../../../environments/environment";
 import type { Atencion } from "@legalmene/shared";
 import type { TableLazyLoadEvent } from "primeng/table";
@@ -204,14 +205,13 @@ export class AtencionesListComponent implements OnInit {
   }
 
   exportarCsv() {
-    const codPlan = localStorage.getItem("cod_plan") ?? "DEMO";
     const url = `${environment.apiBaseUrl}/exports/atenciones.csv`;
-    fetch(url, { headers: { "X-Cod-Plan": codPlan } })
+    fetch(url, { headers: authHeaders() })
       .then((r) => r.blob())
       .then((blob) => {
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
-        a.download = `atenciones-${codPlan}-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.download = `atenciones-${new Date().toISOString().slice(0, 10)}.csv`;
         a.click();
         URL.revokeObjectURL(a.href);
       });

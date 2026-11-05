@@ -8,7 +8,6 @@ export type TipoMovimientoProvision = z.infer<typeof TipoMovimientoProvisionEnum
 
 export const ProvisionSchema = z.object({
   id: z.string().uuid(),
-  codPlan: z.string(),
   atencionId: z.string().uuid(),
   monto: z.number().int().positive(),
   motivo: z.string().min(3).max(500),

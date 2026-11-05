@@ -14,9 +14,6 @@ export default defineConfig({
     baseURL: WEB_BASE,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
-    extraHTTPHeaders: {
-      "X-Cod-Plan": "DEMO",
-    },
   },
   projects: [
     {

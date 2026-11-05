@@ -11,16 +11,21 @@ import { AfiliadosService } from "../../src/modules/afiliados/afiliados.service"
 import { AtencionesService } from "../../src/modules/atenciones/atenciones.service";
 import { WebhooksService } from "../../src/modules/webhooks/webhooks.service";
 import { NotifInboxService } from "../../src/modules/notif-inbox/notif-inbox.service";
+import { planAleatorio, rutAleatorio } from "./helpers";
 
 const RUN = !!process.env.DATABASE_URL;
+
+const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
 
 (RUN ? describe : describe.skip)("AtencionesService (integration)", () => {
   let moduleRef: TestingModule;
   let atenciones: AtencionesService;
   let afiliadosSrv: AfiliadosService;
   let pool: Pool;
-  const TEST_PLAN = `TEST_${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+  const TEST_PLAN = planAleatorio();
   let afiliadoId: string;
+
+  const base = () => ({ afiliadoId, codPlan: TEST_PLAN });
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
@@ -50,80 +55,68 @@ const RUN = !!process.env.DATABASE_URL;
     await migrate(db, { migrationsFolder: "./drizzle/migrations" });
     await db.insert(planes).values({ codPlan: TEST_PLAN, nombre: `Test ${TEST_PLAN}` }).onConflictDoNothing();
 
-    const afi = await afiliadosSrv.crear(TEST_PLAN, {
-      rut: "12345678-5",
+    const afi = await afiliadosSrv.crear({
+      rut: rutAleatorio(),
       nombres: "Test",
       apellidoPaterno: "Atenciones",
     });
     afiliadoId = afi.id;
+    await afiliadosSrv.asignarPlan(afiliadoId, { codPlan: TEST_PLAN, fechaInicio: "2024-01-01" });
   });
 
   afterAll(async () => {
     const db = drizzle(pool);
     await db.execute(sql`DELETE FROM atenciones WHERE cod_plan = ${TEST_PLAN}`);
-    await db.execute(sql`DELETE FROM correlativos WHERE cod_plan = ${TEST_PLAN}`);
-    await db.execute(sql`DELETE FROM afiliados WHERE cod_plan = ${TEST_PLAN}`);
+    await db.execute(sql`DELETE FROM planes_afiliado WHERE cod_plan = ${TEST_PLAN}`);
+    await db.execute(sql`DELETE FROM afiliados WHERE id = ${afiliadoId}`);
     await db.execute(sql`DELETE FROM planes WHERE cod_plan = ${TEST_PLAN}`);
     await moduleRef.close();
   });
 
-  it("genera correlativo CONS-YYYY-000001 en la primera consulta", async () => {
-    const a = await atenciones.crear(TEST_PLAN, {
-      afiliadoId,
+  it("genera correlativo con formato TIPO-AÑO-NNNNNN y estado Abierta", async () => {
+    const a = await atenciones.crear({
+      ...base(),
       tipo: "Consulta",
       competencia: "Civil",
       materia: "Test correlativo",
     });
-    expect(a.correlativo).toMatch(/^CONS-\d{4}-000001$/);
+    expect(a.correlativo).toMatch(/^CONS-\d{4}-\d{6}$/);
     expect(a.estado).toBe("Abierta");
+    expect(a.codPlan).toBe(TEST_PLAN);
   });
 
-  it("incrementa correlativo atómicamente por tipo", async () => {
-    const a2 = await atenciones.crear(TEST_PLAN, {
-      afiliadoId,
-      tipo: "Consulta",
-      competencia: "Penal",
-      materia: "Test 2",
-    });
-    expect(a2.correlativo).toMatch(/^CONS-\d{4}-000002$/);
+  it("incrementa el correlativo global por tipo", async () => {
+    const c1 = await atenciones.crear({ ...base(), tipo: "Consulta", competencia: "Penal", materia: "Test 1" });
+    const c2 = await atenciones.crear({ ...base(), tipo: "Consulta", competencia: "Penal", materia: "Test 2" });
+    expect(numero(c2.correlativo)).toBeGreaterThan(numero(c1.correlativo));
 
-    const j1 = await atenciones.crear(TEST_PLAN, {
-      afiliadoId,
-      tipo: "Juicio",
-      competencia: "Penal",
-      materia: "Test juicio",
-    });
-    expect(j1.correlativo).toMatch(/^JUIC-\d{4}-000001$/);
+    const j1 = await atenciones.crear({ ...base(), tipo: "Juicio", competencia: "Penal", materia: "Test juicio" });
+    expect(j1.correlativo).toMatch(/^JUIC-\d{4}-\d{6}$/);
   });
 
   it("correlativos son únicos bajo concurrencia (20 inserts paralelos)", async () => {
-    const promises = Array.from({ length: 20 }, () =>
-      atenciones.crear(TEST_PLAN, {
-        afiliadoId,
-        tipo: "Asesoria",
-        competencia: "Laboral",
-        materia: "Concurrencia",
-      }),
+    const results = await Promise.all(
+      Array.from({ length: 20 }, () =>
+        atenciones.crear({ ...base(), tipo: "Asesoria", competencia: "Laboral", materia: "Concurrencia" }),
+      ),
     );
-    const results = await Promise.all(promises);
     const correlativos = results.map((r) => r.correlativo);
     expect(new Set(correlativos).size).toBe(20);
-    // Asegurar que todos tienen prefijo ASES-
     for (const c of correlativos) {
       expect(c).toMatch(/^ASES-\d{4}-\d{6}$/);
     }
   });
 
-  it("derivar Consulta a Asesoria cierra original y crea nueva con metadata", async () => {
-    const origen = await atenciones.crear(TEST_PLAN, {
-      afiliadoId,
+  it("derivar Consulta a Asesoria cierra original y crea nueva con el mismo plan", async () => {
+    const origen = await atenciones.crear({
+      ...base(),
       tipo: "Consulta",
       competencia: "Familia",
       materia: "A derivar",
       descripcion: "Original",
     });
 
-    const nueva = await atenciones.derivar(TEST_PLAN, {
+    const nueva = await atenciones.derivar({
       atencionId: origen.id,
       nuevoTipo: "Asesoria",
       motivo: "Cliente requiere asesoría continua",
@@ -131,38 +124,25 @@ const RUN = !!process.env.DATABASE_URL;
 
     expect(nueva.tipo).toBe("Asesoria");
     expect(nueva.correlativo).toMatch(/^ASES-/);
+    expect(nueva.codPlan).toBe(TEST_PLAN);
     expect(nueva.materia).toBe(origen.materia);
     expect((nueva.metadata as { derivadaDe?: string })?.derivadaDe).toBe(origen.id);
 
-    const cerrada = await atenciones.obtener(TEST_PLAN, origen.id);
+    const cerrada = await atenciones.obtener(origen.id);
     expect(cerrada.estado).toBe("Cerrada");
     expect(cerrada.fechaCierre).toBeTruthy();
   });
 
   it("rechaza derivar un Juicio", async () => {
-    const j = await atenciones.crear(TEST_PLAN, {
-      afiliadoId,
-      tipo: "Juicio",
-      competencia: "Penal",
-      materia: "No derivable",
-    });
+    const j = await atenciones.crear({ ...base(), tipo: "Juicio", competencia: "Penal", materia: "No derivable" });
     await expect(
-      atenciones.derivar(TEST_PLAN, {
-        atencionId: j.id,
-        nuevoTipo: "Asesoria",
-        motivo: "Intento inválido",
-      }),
+      atenciones.derivar({ atencionId: j.id, nuevoTipo: "Asesoria", motivo: "Intento inválido" }),
     ).rejects.toThrow(/No se puede derivar un juicio/);
   });
 
-  it("rechaza crear atención para afiliado de otro plan", async () => {
-    await expect(
-      atenciones.crear("OTRO_PLAN_XYZ", {
-        afiliadoId,
-        tipo: "Consulta",
-        competencia: "Civil",
-        materia: "Cross-tenant",
-      }),
-    ).rejects.toThrow(/no existe en plan/);
+  it("filtra búsqueda por plan", async () => {
+    const res = await atenciones.buscar({ page: 1, pageSize: 200, codPlan: TEST_PLAN });
+    expect(res.total).toBeGreaterThan(0);
+    expect(res.data.every((a) => a.codPlan === TEST_PLAN)).toBe(true);
   });
 });

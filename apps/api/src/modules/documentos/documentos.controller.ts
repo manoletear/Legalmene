@@ -10,10 +10,9 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { Request, Response } from "express";
-import { ApiBearerAuth, ApiExcludeEndpoint, ApiHeader, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiExcludeEndpoint, ApiTags } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { DocumentosService } from "./documentos.service";
-import { CodPlan } from "../../common/decorators/cod-plan.decorator";
 import { CurrentUser, AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -29,22 +28,18 @@ export class DocumentosController {
   ) {}
 
   @Post("documentos/upload-url")
-  @ApiHeader({ name: "X-Cod-Plan", required: true })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("Administrador", "Supervisor", "Abogado", "Operador")
   obtenerUploadUrl(
-    @CodPlan() codPlan: string,
     @Body() body: { atencionId?: string; nombre: string; mimeType: string; tamanoBytes: number },
   ) {
-    return this.service.generateUploadUrl(codPlan, body);
+    return this.service.generateUploadUrl(body);
   }
 
   @Post("documentos")
-  @ApiHeader({ name: "X-Cod-Plan", required: true })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("Administrador", "Supervisor", "Abogado", "Operador")
   registrar(
-    @CodPlan() codPlan: string,
     @CurrentUser() user: AuthenticatedUser,
     @Body() body: {
       atencionId?: string;
@@ -55,21 +50,19 @@ export class DocumentosController {
       sha256: string;
     },
   ) {
-    return this.service.register(codPlan, { ...body, subidoPor: user.id ?? user.entraOid });
+    return this.service.register({ ...body, subidoPor: user.id ?? user.entraOid });
   }
 
   @Get("documentos/:id/download-url")
-  @ApiHeader({ name: "X-Cod-Plan", required: true })
   @UseGuards(JwtAuthGuard, RolesGuard)
-  obtenerDownloadUrl(@CodPlan() codPlan: string, @Param("id") id: string) {
-    return this.service.generateDownloadUrl(codPlan, id);
+  obtenerDownloadUrl(@Param("id") id: string) {
+    return this.service.generateDownloadUrl(id);
   }
 
   @Get("atenciones/:atencionId/documentos")
-  @ApiHeader({ name: "X-Cod-Plan", required: true })
   @UseGuards(JwtAuthGuard, RolesGuard)
-  listarPorAtencion(@CodPlan() codPlan: string, @Param("atencionId") atencionId: string) {
-    return this.service.listarPorAtencion(codPlan, atencionId);
+  listarPorAtencion(@Param("atencionId") atencionId: string) {
+    return this.service.listarPorAtencion(atencionId);
   }
 
   // Endpoints internos del LocalStorage backend (HMAC-firmados, no JWT).

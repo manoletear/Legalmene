@@ -3,57 +3,81 @@ import {
   Controller,
   Delete,
   Get,
+  Inject,
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from "@nestjs/common";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { ApiBearerAuth, ApiTags, ApiHeader } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { AfiliadosService } from "./afiliados.service";
-import { CreateAfiliadoDto, UpdateAfiliadoDto, FiltroAfiliadosDto } from "./dto";
-import { CodPlan } from "../../common/decorators/cod-plan.decorator";
+import {
+  AsignarPlanDto,
+  CreateAfiliadoDto,
+  FiltroAfiliadosDto,
+  TerminarPlanDto,
+  UpdateAfiliadoDto,
+} from "./dto";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
 
 @ApiTags("afiliados")
 @ApiBearerAuth("EntraID")
-@ApiHeader({ name: "X-Cod-Plan", required: true, description: "Plan/Tenant del cliente" })
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("afiliados")
 export class AfiliadosController {
-  constructor(private readonly service: AfiliadosService) {}
+  constructor(@Inject(AfiliadosService) private readonly service: AfiliadosService) {}
 
   @Get()
-  buscar(@CodPlan() codPlan: string, @Query() filtro: FiltroAfiliadosDto) {
-    return this.service.buscar(codPlan, filtro);
+  buscar(@Query() filtro: FiltroAfiliadosDto) {
+    return this.service.buscar(filtro);
+  }
+
+  // Consulta por RUT del Anexo: persona + todos sus planes, vigentes primero.
+  @Get("rut/:rut")
+  consultarPorRut(@Param("rut") rut: string) {
+    return this.service.consultarPorRut(rut);
   }
 
   @Get(":id")
-  obtener(@CodPlan() codPlan: string, @Param("id") id: string) {
-    return this.service.obtener(codPlan, id);
+  obtener(@Param("id") id: string) {
+    return this.service.obtenerConPlanes(id);
   }
 
   @Post()
   @Roles("Administrador", "Supervisor", "Operador")
-  crear(@CodPlan() codPlan: string, @Body() body: CreateAfiliadoDto) {
-    return this.service.crear(codPlan, body);
+  crear(@Body() body: CreateAfiliadoDto) {
+    return this.service.crear(body);
   }
 
   @Patch(":id")
   @Roles("Administrador", "Supervisor")
-  actualizar(
-    @CodPlan() codPlan: string,
-    @Param("id") id: string,
-    @Body() body: UpdateAfiliadoDto,
-  ) {
-    return this.service.actualizar(codPlan, id, body);
+  actualizar(@Param("id") id: string, @Body() body: UpdateAfiliadoDto) {
+    return this.service.actualizar(id, body);
   }
 
   @Delete(":id")
   @Roles("Administrador")
-  eliminar(@CodPlan() codPlan: string, @Param("id") id: string) {
-    return this.service.eliminar(codPlan, id);
+  eliminar(@Param("id") id: string) {
+    return this.service.eliminar(id);
+  }
+
+  @Post(":id/planes")
+  @Roles("Administrador")
+  asignarPlan(@Param("id") id: string, @Body() body: AsignarPlanDto) {
+    return this.service.asignarPlan(id, body);
+  }
+
+  @Put(":id/planes/:codPlan/termino")
+  @Roles("Administrador")
+  terminarPlan(
+    @Param("id") id: string,
+    @Param("codPlan") codPlan: string,
+    @Body() body: TerminarPlanDto,
+  ) {
+    return this.service.terminarPlan(id, codPlan, body.fechaTermino);
   }
 }

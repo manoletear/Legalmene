@@ -5,9 +5,10 @@ import { Pool } from "pg";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { sql } from "drizzle-orm";
-import { DatabaseModule, DRIZZLE, PG_POOL } from "../../src/db/database.module";
+import { DatabaseModule, PG_POOL } from "../../src/db/database.module";
 import { planes } from "../../src/db/schema/planes";
 import { AfiliadosService } from "../../src/modules/afiliados/afiliados.service";
+import { planAleatorio, rutAleatorio } from "./helpers";
 
 // Integration test: requires a Postgres reachable via DATABASE_URL.
 // CI provides one as a service; locally export DATABASE_URL antes de correr.
@@ -18,7 +19,9 @@ const RUN = !!process.env.DATABASE_URL;
   let moduleRef: TestingModule;
   let service: AfiliadosService;
   let pool: Pool;
-  const TEST_PLAN = `TEST_${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+  const TEST_PLAN = planAleatorio();
+  const rut = rutAleatorio();
+  const creados: string[] = [];
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
@@ -28,78 +31,71 @@ const RUN = !!process.env.DATABASE_URL;
     service = moduleRef.get(AfiliadosService);
     pool = moduleRef.get(PG_POOL);
 
-    // Asegura schema aplicado (idempotente).
     const db = drizzle(pool);
     await migrate(db, { migrationsFolder: "./drizzle/migrations" });
     await db.insert(planes).values({ codPlan: TEST_PLAN, nombre: `Test plan ${TEST_PLAN}` }).onConflictDoNothing();
   });
 
   afterAll(async () => {
-    const db = moduleRef.get(DRIZZLE) as ReturnType<typeof drizzle>;
-    // Cleanup: borra afiliados y plan de prueba.
-    await db.execute(sql`DELETE FROM afiliados WHERE cod_plan = ${TEST_PLAN}`);
+    const db = drizzle(pool);
+    for (const id of creados) {
+      await db.execute(sql`DELETE FROM planes_afiliado WHERE afiliado_id = ${id}`);
+      await db.execute(sql`DELETE FROM afiliados WHERE id = ${id}`);
+    }
     await db.execute(sql`DELETE FROM planes WHERE cod_plan = ${TEST_PLAN}`);
     await moduleRef.close();
   });
 
   it("crea afiliado con RUT normalizado", async () => {
-    const created = await service.crear(TEST_PLAN, {
-      rut: "12.345.678-5",
+    const [cuerpo, dv] = rut.split("-");
+    const conPuntos = `${cuerpo.slice(0, 2)}.${cuerpo.slice(2, 5)}.${cuerpo.slice(5)}-${dv}`;
+    const created = await service.crear({
+      rut: conPuntos,
       nombres: "Ana",
       apellidoPaterno: "Test",
       email: "ana@test.cl",
     });
-    expect(created.rut).toBe("12345678-5");
-    expect(created.codPlan).toBe(TEST_PLAN);
+    creados.push(created.id);
+    expect(created.rut).toBe(rut);
     expect(created.vigencia).toBe("Activo");
   });
 
   it("rechaza RUT con DV inválido", async () => {
     await expect(
-      service.crear(TEST_PLAN, {
-        rut: "12345678-9",
-        nombres: "Mal",
-        apellidoPaterno: "RUT",
-      }),
+      service.crear({ rut: "12345678-9", nombres: "Mal", apellidoPaterno: "RUT" }),
     ).rejects.toThrow(/RUT inv/);
   });
 
-  it("rechaza RUT duplicado en mismo plan", async () => {
+  it("rechaza RUT ya registrado (la persona es única por RUT)", async () => {
     await expect(
-      service.crear(TEST_PLAN, {
-        rut: "12.345.678-5",
-        nombres: "Duplicado",
-        apellidoPaterno: "Test",
-      }),
-    ).rejects.toThrow(/ya existe/);
+      service.crear({ rut, nombres: "Duplicado", apellidoPaterno: "Test" }),
+    ).rejects.toThrow(/ya está registrado/);
   });
 
-  it("busca por q matchea rut o nombre", async () => {
-    const result = await service.buscar(TEST_PLAN, {
-      page: 1,
-      pageSize: 25,
-      q: "12345678",
-    });
+  it("busca por q matchea rut", async () => {
+    const result = await service.buscar({ page: 1, pageSize: 25, q: rut.split("-")[0] });
     expect(result.total).toBeGreaterThanOrEqual(1);
-    expect(result.data[0].rut).toBe("12345678-5");
+    expect(result.data[0].rut).toBe(rut);
+  });
+
+  it("filtra por plan usando planes_afiliado", async () => {
+    const [afi] = (await service.buscar({ page: 1, pageSize: 1, q: rut.split("-")[0] })).data;
+    expect((await service.buscar({ page: 1, pageSize: 25, codPlan: TEST_PLAN })).total).toBe(0);
+
+    await service.asignarPlan(afi.id, { codPlan: TEST_PLAN, fechaInicio: "2024-01-01" });
+    const conPlan = await service.buscar({ page: 1, pageSize: 25, codPlan: TEST_PLAN });
+    expect(conPlan.total).toBe(1);
+    expect(conPlan.data[0].planes.map((p) => p.codPlan)).toContain(TEST_PLAN);
   });
 
   it("soft-delete cambia vigencia a Eliminado", async () => {
-    const created = await service.crear(TEST_PLAN, {
-      rut: "11.111.111-1",
+    const created = await service.crear({
+      rut: rutAleatorio(),
       nombres: "Para",
       apellidoPaterno: "Borrar",
     });
-    const deleted = await service.eliminar(TEST_PLAN, created.id);
+    creados.push(created.id);
+    const deleted = await service.eliminar(created.id);
     expect(deleted.vigencia).toBe("Eliminado");
-    expect(deleted.fechaEgreso).toBeTruthy();
-  });
-
-  it("aísla por codPlan: no devuelve afiliados de otro tenant", async () => {
-    const result = await service.buscar("PLAN_INEXISTENTE_XYZ", {
-      page: 1,
-      pageSize: 25,
-    });
-    expect(result.total).toBe(0);
   });
 });

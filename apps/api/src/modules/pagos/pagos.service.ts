@@ -17,13 +17,12 @@ export class PagosService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
   async listar(
-    codPlan: string,
-    opts: { page?: number; pageSize?: number; estado?: string } = {},
+    opts: { page?: number; pageSize?: number; estado?: string; codPlan?: string } = {},
   ) {
     const page = opts.page ?? 1;
     const pageSize = Math.min(opts.pageSize ?? 50, 200);
     const where = and(
-      eq(pagos.codPlan, codPlan),
+      opts.codPlan ? eq(pagos.codPlan, opts.codPlan) : undefined,
       opts.estado ? eq(pagos.estado, opts.estado as "Iniciado") : undefined,
     );
     const [rows, [{ value: total }]] = await Promise.all([
@@ -45,10 +44,10 @@ export class PagosService {
     };
   }
 
-  async iniciar(codPlan: string, input: IniciarPago): Promise<{ pago: Pago; redirectUrl: string }> {
+  async iniciar(input: IniciarPago): Promise<{ pago: Pago; redirectUrl: string }> {
     const ordenCompra = `OC-${ulid()}`;
     const payload: NuevoPago = {
-      codPlan,
+      codPlan: input.codPlan,
       afiliadoId: input.afiliadoId,
       atencionId: input.atencionId ?? null,
       monto: input.monto,

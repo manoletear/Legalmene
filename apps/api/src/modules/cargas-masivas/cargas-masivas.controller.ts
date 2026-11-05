@@ -9,16 +9,14 @@ import {
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags, ApiHeader } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { CargasMasivasService } from "./cargas-masivas.service";
-import { CodPlan } from "../../common/decorators/cod-plan.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import type { TipoCargaMasiva } from "@legalmene/shared";
 
 @ApiTags("cargas-masivas")
 @ApiBearerAuth("EntraID")
-@ApiHeader({ name: "X-Cod-Plan", required: true })
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("cargas-masivas")
 export class CargasMasivasController {
@@ -28,6 +26,7 @@ export class CargasMasivasController {
   @Roles("Administrador", "Supervisor")
   @UseInterceptors(FileInterceptor("archivo", { limits: { fileSize: 50 * 1024 * 1024 } }))
   @ApiConsumes("multipart/form-data")
+  @ApiQuery({ name: "codPlan", required: true, description: "Plan al que corresponde la nómina" })
   @ApiBody({
     schema: {
       type: "object",
@@ -36,11 +35,12 @@ export class CargasMasivasController {
     },
   })
   async cargarAfiliados(
-    @CodPlan() codPlan: string,
+    @Query("codPlan") codPlan: string,
     @Query("tipo") tipo: TipoCargaMasiva,
     @UploadedFile() file?: Express.Multer.File,
   ) {
     if (!file) throw new BadRequestException("Archivo requerido (multipart field 'archivo')");
+    if (!codPlan) throw new BadRequestException("Query param 'codPlan' es obligatorio");
     if (!tipo || (tipo !== "FLUJO" && tipo !== "STOCK")) {
       throw new BadRequestException("Query param 'tipo' debe ser FLUJO o STOCK");
     }

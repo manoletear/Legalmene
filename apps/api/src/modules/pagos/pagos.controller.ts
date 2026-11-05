@@ -1,15 +1,16 @@
 import { Body, Controller, Get, Post, Query, UseGuards } from "@nestjs/common";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { ApiBearerAuth, ApiHeader, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { PagosService } from "./pagos.service";
-import { CodPlan } from "../../common/decorators/cod-plan.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
-import type { IniciarPago } from "@legalmene/shared";
+import { IniciarPagoSchema } from "@legalmene/shared";
+import { createZodDto } from "nestjs-zod";
+
+class IniciarPagoDto extends createZodDto(IniciarPagoSchema) {}
 
 @ApiTags("pagos")
 @ApiBearerAuth("EntraID")
-@ApiHeader({ name: "X-Cod-Plan", required: true })
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("pagos")
 export class PagosController {
@@ -17,12 +18,13 @@ export class PagosController {
 
   @Get()
   listar(
-    @CodPlan() codPlan: string,
     @Query("page") page?: string,
     @Query("pageSize") pageSize?: string,
     @Query("estado") estado?: string,
+    @Query("codPlan") codPlan?: string,
   ) {
-    return this.service.listar(codPlan, {
+    return this.service.listar({
+      codPlan,
       page: page ? parseInt(page, 10) : undefined,
       pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
       estado,
@@ -31,8 +33,8 @@ export class PagosController {
 
   @Post("iniciar")
   @Roles("Administrador", "Supervisor", "Operador")
-  iniciar(@CodPlan() codPlan: string, @Body() body: IniciarPago) {
-    return this.service.iniciar(codPlan, body);
+  iniciar(@Body() body: IniciarPagoDto) {
+    return this.service.iniciar(body);
   }
 
   // Endpoint llamado por el callback de Transbank (sin auth en producción se usa

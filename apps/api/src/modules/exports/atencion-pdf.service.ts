@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { and, eq, desc } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import PDFDocument = require("pdfkit");
 import { Writable } from "stream";
@@ -15,12 +15,12 @@ export class AtencionPdfService {
 
   // Genera un PDF con el detalle de una atención: cabecera, afiliado,
   // timeline de gestiones y comités. Útil para legajo físico/escritos.
-  async generar(codPlan: string, atencionId: string, output: Writable): Promise<void> {
+  async generar(atencionId: string, output: Writable): Promise<void> {
     const [a] = await this.db
       .select()
       .from(atenciones)
-      .where(and(eq(atenciones.id, atencionId), eq(atenciones.codPlan, codPlan)));
-    if (!a) throw new NotFoundException(`Atención ${atencionId} no existe en plan ${codPlan}`);
+      .where(eq(atenciones.id, atencionId));
+    if (!a) throw new NotFoundException(`Atención ${atencionId} no existe`);
 
     const [afi] = await this.db.select().from(afiliados).where(eq(afiliados.id, a.afiliadoId));
     const gs = await this.db
@@ -34,7 +34,7 @@ export class AtencionPdfService {
     doc.pipe(output);
 
     doc.fillColor("#1976d2").fontSize(20).text("LegalChile · PSL", { align: "right" });
-    doc.fillColor("#000").fontSize(10).text(`Plan ${codPlan}`, { align: "right" });
+    doc.fillColor("#000").fontSize(10).text(`Plan ${a.codPlan}`, { align: "right" });
     doc.moveDown(1.5);
 
     doc.fontSize(16).text(a.correlativo, { continued: true }).fontSize(12).text(`  ·  ${a.tipo}`);

@@ -12,7 +12,7 @@ cloud-native en AWS.
 |---|---|
 | Backend NestJS (Atenciones / Afiliados / Gestiones / Comités / Pagos) | ✅ |
 | Frontend Angular 19 (9 vistas branded LegalChile) | ✅ |
-| Multi-tenancy (`X-Cod-Plan` header) | ✅ |
+| Planes por RUT (`planes_afiliado`, vigencias) | ✅ |
 | Auth Entra ID JWT (`AUTH_DISABLED=true` para dev) | ✅ |
 | Cargas masivas FLUJO / STOCK (Anexo 03.2) | ✅ |
 | Documentos: S3 + LocalStorage dev backend | ✅ |
@@ -74,7 +74,7 @@ Detalle operacional, troubleshooting y procedimientos de despliegue:
                      └─────────────┘ └──────┘ └─────────────┘
 
 Auth: Entra ID (OIDC) → MSAL.js → JWT verificado por JWKS
-Tenant: header X-Cod-Plan filtra cada query
+Planes: un RUT puede tener varios; listados filtran con ?codPlan=
 Observabilidad: CloudWatch logs + /metrics Prometheus + Grafana
 ```
 

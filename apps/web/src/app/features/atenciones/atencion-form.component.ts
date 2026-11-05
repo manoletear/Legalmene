@@ -11,7 +11,8 @@ import { ToastModule } from "primeng/toast";
 import { MessageService } from "primeng/api";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { AfiliadosApiService } from "../../core/services/afiliados.service";
-import type { Afiliado } from "@legalmene/shared";
+import { PLANES_SIN_COBERTURA } from "@legalmene/shared";
+import type { AfiliadoConPlanes } from "@legalmene/shared";
 
 @Component({
   selector: "lm-atencion-form",
@@ -52,7 +53,24 @@ import type { Afiliado } from "@legalmene/shared";
             filterBy="label"
             appendTo="body"
             placeholder="Selecciona afiliado"
+            (onChange)="cargarPlanes($event.value)"
           ></p-select>
+        </div>
+
+        <div class="lm-col" style="gap:4px;" *ngIf="form.value.afiliadoId">
+          <label>Plan</label>
+          <p-select
+            formControlName="codPlan"
+            [options]="planOpts()"
+            optionLabel="label"
+            optionValue="value"
+            optionDisabled="disabled"
+            appendTo="body"
+            placeholder="Selecciona plan"
+          ></p-select>
+          <small *ngIf="sinPlanVigente()" class="lm-muted">
+            El RUT no tiene planes vigentes: la atención se registra como Rezagado o MetLife.
+          </small>
         </div>
 
         <div class="lm-col" style="gap:4px;">
@@ -102,7 +120,9 @@ export class AtencionFormComponent {
   private router = inject(Router);
   private msg = inject(MessageService);
 
-  protected afiliados = signal<Afiliado[]>([]);
+  protected afiliados = signal<AfiliadoConPlanes[]>([]);
+  protected planOpts = signal<{ label: string; value: string; disabled: boolean }[]>([]);
+  protected sinPlanVigente = signal(false);
   protected saving = signal(false);
 
   protected tipoOpts = [
@@ -130,6 +150,7 @@ export class AtencionFormComponent {
   protected form = this.fb.group({
     tipo: ["Consulta", Validators.required],
     afiliadoId: ["", Validators.required],
+    codPlan: ["", Validators.required],
     competencia: ["Civil", Validators.required],
     materia: ["", [Validators.required, Validators.maxLength(250)]],
     descripcion: [""],
@@ -140,12 +161,36 @@ export class AtencionFormComponent {
     this.afiliadosApi.buscar({ pageSize: 200 }).subscribe((res) => this.afiliados.set(res.data));
   }
 
+  // Solo los planes vigentes del RUT son seleccionables; sin ninguno, Rezagado/MetLife.
+  cargarPlanes(afiliadoId: string | null) {
+    this.form.patchValue({ codPlan: "" });
+    this.planOpts.set([]);
+    if (!afiliadoId) return;
+    this.afiliadosApi.obtener(afiliadoId).subscribe((afi) => {
+      const vigentes = afi.planes.filter((p) => p.vigente);
+      const opciones = afi.planes.map((p) => ({
+        label: `${p.codPlan} — ${p.nombrePlan}${p.vigente ? "" : " (no vigente)"}`,
+        value: p.codPlan,
+        disabled: !p.vigente,
+      }));
+      if (vigentes.length === 0) {
+        opciones.unshift(
+          ...PLANES_SIN_COBERTURA.map((c) => ({ label: c === "REZAGADO" ? "Rezagado" : "MetLife", value: c, disabled: false })),
+        );
+      }
+      this.sinPlanVigente.set(vigentes.length === 0);
+      this.planOpts.set(opciones);
+      this.form.patchValue({ codPlan: vigentes[0]?.codPlan ?? "REZAGADO" });
+    });
+  }
+
   submit() {
     if (this.form.invalid) return;
     this.saving.set(true);
     const v = this.form.value;
     const payload = {
       afiliadoId: v.afiliadoId!,
+      codPlan: v.codPlan!,
       competencia: v.competencia as "Civil",
       materia: v.materia!,
       descripcion: v.descripcion || undefined,

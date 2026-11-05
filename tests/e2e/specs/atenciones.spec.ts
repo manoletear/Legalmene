@@ -5,8 +5,12 @@ const API = process.env.API_BASE ?? "http://localhost:3001/api/v1";
 test.describe("Atenciones flow", () => {
   test("crea consulta, genera correlativo, aparece en lista", async ({ page, request }) => {
     const afi = await request.get(`${API}/afiliados`).then((r) => r.json());
-    const activo = afi.data.find((a: { vigencia: string }) => a.vigencia === "Activo");
-    expect(activo, "Debe existir al menos 1 afiliado activo en plan DEMO").toBeTruthy();
+    type AfiliadoE2E = { rut: string; vigencia: string; planes: { codPlan: string; vigente: boolean }[] };
+    const activo = (afi.data as AfiliadoE2E[]).find(
+      (a) => a.vigencia === "Activo" && a.planes.some((p) => p.vigente),
+    );
+    expect(activo, "Debe existir al menos 1 afiliado con plan vigente").toBeTruthy();
+    const planVigente = activo!.planes.find((p) => p.vigente)!.codPlan;
 
     await page.goto("/atenciones/nueva");
 
@@ -15,8 +19,11 @@ test.describe("Atenciones flow", () => {
     await page.locator(".p-select-overlay .p-select-option", { hasText: "Consulta" }).click();
 
     await page.locator("p-select[formcontrolname='afiliadoId']").click();
-    const escaped = activo.rut.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const escaped = activo!.rut.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     await page.locator(".p-select-overlay .p-select-option").filter({ hasText: new RegExp(escaped) }).first().click();
+
+    // Al elegir el afiliado se carga su plan vigente como plan de la atención.
+    await expect(page.locator("p-select[formcontrolname='codPlan']")).toContainText(planVigente);
 
     await page.locator("p-select[formcontrolname='competencia']").click();
     await page.locator(".p-select-overlay .p-select-option", { hasText: "Laboral" }).click();

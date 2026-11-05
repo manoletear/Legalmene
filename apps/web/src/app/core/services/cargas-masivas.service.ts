@@ -9,10 +9,10 @@ export class CargasMasivasApiService {
   private http = inject(HttpClient);
   private base = `${environment.apiBaseUrl}/cargas-masivas`;
 
-  cargarAfiliados(tipo: TipoCargaMasiva, file: File): Observable<CargaMasivaResultado> {
+  cargarAfiliados(codPlan: string, tipo: TipoCargaMasiva, file: File): Observable<CargaMasivaResultado> {
     const form = new FormData();
     form.append("archivo", file);
-    const params = new HttpParams().set("tipo", tipo);
+    const params = new HttpParams().set("tipo", tipo).set("codPlan", codPlan);
     return this.http.post<CargaMasivaResultado>(`${this.base}/afiliados`, form, { params });
   }
 }

@@ -10,6 +10,7 @@ import { DatePickerModule } from "primeng/datepicker";
 import { TableModule } from "primeng/table";
 import { TagModule } from "primeng/tag";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
+import { PlanesApiService } from "../../core/services/planes.service";
 import type { Atencion } from "@legalmene/shared";
 
 type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast";
@@ -47,7 +48,7 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
             </div>
             <div class="lm-col" style="gap:6px;">
               <label class="lm-small">Plan</label>
-              <p-select [(ngModel)]="filtros.plan" [options]="planOpts" optionLabel="label" optionValue="value" placeholder="Seleccione plan..." [showClear]="true"></p-select>
+              <p-select [(ngModel)]="filtros.plan" [options]="planOpts()" optionLabel="label" optionValue="value" placeholder="Seleccione plan..." [showClear]="true"></p-select>
             </div>
             <div class="lm-col" style="gap:6px;">
               <label class="lm-small">Canal</label>
@@ -162,7 +163,7 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
                 <td>{{ r.materia || r.tipo }}</td>
                 <td><p-tag [value]="estadoLabel(r.estado)" [severity]="estadoSeverity(r.estado)"></p-tag></td>
                 <td>{{ r.responsable || '—' }}</td>
-                <td>{{ r.plan || codPlanActual }}</td>
+                <td>{{ r.codPlan }}</td>
                 <td>{{ r.fechaApertura | date: 'dd/MM/yyyy' }}</td>
               </tr>
             </ng-template>
@@ -221,7 +222,6 @@ export class ReportesComponent implements OnInit {
   private api = inject(AtencionesApiService);
   private route = inject(ActivatedRoute);
 
-  protected codPlanActual = "DEMO";
   protected data = signal<Atencion[]>([]);
   protected resultados = signal({ total: 0, activos: 0, consultas: 0 });
 
@@ -262,11 +262,8 @@ export class ReportesComponent implements OnInit {
     { label: "En comité", value: "EnComite" },
     { label: "Cerrada", value: "Cerrada" },
   ];
-  protected planOpts = [
-    { label: "Corporativo Premium", value: "CORP-PREM" },
-    { label: "Corporativo Plus", value: "CORP-PLUS" },
-    { label: "Básico", value: "BASIC" },
-  ];
+  private planesApi = inject(PlanesApiService);
+  protected planOpts = signal<{ label: string; value: string }[]>([]);
   protected canalOpts = [
     { label: "Web", value: "Web" },
     { label: "Teléfono", value: "Telefono" },
@@ -289,6 +286,9 @@ export class ReportesComponent implements OnInit {
   ];
 
   ngOnInit() {
+    this.planesApi
+      .listar()
+      .subscribe((ps) => this.planOpts.set(ps.map((p) => ({ label: `${p.codPlan} — ${p.nombre}`, value: p.codPlan }))));
     const q = this.route.snapshot.queryParamMap.get("q");
     if (q) this.filtros.q = q;
     this.buscar();
@@ -301,6 +301,7 @@ export class ReportesComponent implements OnInit {
         pageSize: 50,
         tipo: this.filtros.tipo as "Consulta" | undefined,
         estado: this.filtros.estado,
+        codPlan: this.filtros.plan,
         q: this.filtros.q || undefined,
       })
       .subscribe((res) => {

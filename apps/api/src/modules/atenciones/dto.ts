@@ -5,6 +5,7 @@ import { z } from "zod";
 export class CreateAtencionDto extends createZodDto(CreateAtencionSchema) {}
 export class UpdateAtencionDto extends createZodDto(UpdateAtencionSchema) {}
 export class DerivarAtencionDto extends createZodDto(DerivarAtencionSchema) {}
+export class DerivarCuerpoDto extends createZodDto(DerivarAtencionSchema.omit({ atencionId: true })) {}
 
 export const FiltroAtencionesSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -16,6 +17,7 @@ export const FiltroAtencionesSchema = z.object({
   abogadoId: z.string().uuid().optional(),
   afiliadoId: z.string().uuid().optional(),
   correlativo: z.string().optional(),
+  codPlan: z.string().optional(),
   // Búsqueda full-text en materia/descripcion/correlativo/competencia.
   q: z.string().min(2).optional(),
 });

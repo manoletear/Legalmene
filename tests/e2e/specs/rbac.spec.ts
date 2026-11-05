@@ -19,7 +19,7 @@ function asUser(rol: string, email = `${rol.toLowerCase()}@test.cl`) {
 test.describe("RBAC", () => {
   test("Auditor puede leer pero NO puede crear afiliado (403)", async ({ request }) => {
     const auditor = asUser("Auditor");
-    const headers = { "X-Cod-Plan": COD_PLAN, "X-Dev-User": auditor };
+    const headers = { "X-Dev-User": auditor };
 
     // Lectura OK
     const list = await request.get(`${API}/afiliados`, { headers });
@@ -39,7 +39,7 @@ test.describe("RBAC", () => {
 
   test("Operador puede crear afiliados pero NO puede borrarlos (403)", async ({ request }) => {
     const operador = asUser("Operador");
-    const headers = { "X-Cod-Plan": COD_PLAN, "X-Dev-User": operador };
+    const headers = { "X-Dev-User": operador };
 
     // Crear válido (Operador autorizado)
     const create = await request.post(`${API}/afiliados`, {
@@ -66,8 +66,8 @@ test.describe("RBAC", () => {
 
   test("Abogado puede crear gestiones pero NO puede convocar comité (403)", async ({ request }) => {
     const abogado = asUser("Abogado");
-    const adminHdr = { "X-Cod-Plan": COD_PLAN, "X-Dev-User": asUser("Administrador") };
-    const abogadoHdr = { "X-Cod-Plan": COD_PLAN, "X-Dev-User": abogado };
+    const adminHdr = { "X-Dev-User": asUser("Administrador") };
+    const abogadoHdr = { "X-Dev-User": abogado };
 
     // Necesitamos una atención existente (creada por admin)
     const list = await request.get(`${API}/atenciones?tipo=Consulta&pageSize=1`, {
@@ -85,9 +85,7 @@ test.describe("RBAC", () => {
   });
 
   test("Sin X-Dev-User cae al admin default (smoke)", async ({ request }) => {
-    const res = await request.get(`${API}/afiliados`, {
-      headers: { "X-Cod-Plan": COD_PLAN },
-    });
+    const res = await request.get(`${API}/afiliados`);
     expect(res.ok()).toBeTruthy();
   });
 });

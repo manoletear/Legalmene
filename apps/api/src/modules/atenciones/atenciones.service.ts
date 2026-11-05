@@ -9,6 +9,8 @@ import { and, eq, count, ilike, sql, desc } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { atenciones, Atencion, NuevaAtencion } from "../../db/schema/atenciones";
 import { afiliados } from "../../db/schema/afiliados";
+import { PLANES_SIN_COBERTURA } from "@legalmene/shared";
+import { planesDeAfiliados } from "../afiliados/vigencia";
 import { aranceles } from "../../db/schema/aranceles";
 import { siguienteCorrelativo } from "../../common/utils/correlativo";
 import { WebhooksService } from "../webhooks/webhooks.service";
@@ -28,13 +30,13 @@ export class AtencionesService {
     @Inject(NotifInboxService) private readonly notif: NotifInboxService,
   ) {}
 
-  async buscar(codPlan: string, filtro: FiltroAtencionesDto) {
+  async buscar(filtro: FiltroAtencionesDto) {
     // q usa full-text search (tsvector + spanish dict) con ranking;
     // ordena por relevancia cuando hay query, sino por fechaApertura.
     const ftQuery = filtro.q ? sql`plainto_tsquery('spanish', ${filtro.q})` : null;
 
     const where = and(
-      eq(atenciones.codPlan, codPlan),
+      filtro.codPlan ? eq(atenciones.codPlan, filtro.codPlan) : undefined,
       filtro.estado ? eq(atenciones.estado, filtro.estado) : undefined,
       filtro.tipo ? eq(atenciones.tipo, filtro.tipo) : undefined,
       filtro.abogadoId ? eq(atenciones.abogadoAsignadoId, filtro.abogadoId) : undefined,
@@ -67,34 +69,46 @@ export class AtencionesService {
     };
   }
 
-  async obtener(codPlan: string, id: string): Promise<Atencion> {
-    const [row] = await this.db
-      .select()
-      .from(atenciones)
-      .where(and(eq(atenciones.id, id), eq(atenciones.codPlan, codPlan)));
-    if (!row) throw new NotFoundException(`Atención ${id} no existe en plan ${codPlan}`);
+  async obtener(id: string): Promise<Atencion> {
+    const [row] = await this.db.select().from(atenciones).where(eq(atenciones.id, id));
+    if (!row) throw new NotFoundException(`Atención ${id} no existe`);
     return row;
   }
 
+  // Anexo §VI 3.1: la atención se registra bajo un plan vigente del RUT; si no tiene
+  // ninguno, solo bajo REZAGADO o METLIFE.
+  private async validarPlanDeAtencion(afiliadoId: string, codPlan: string): Promise<void> {
+    const [afi] = await this.db
+      .select({ id: afiliados.id, rut: afiliados.rut, vigencia: afiliados.vigencia })
+      .from(afiliados)
+      .where(eq(afiliados.id, afiliadoId));
+    if (!afi) throw new NotFoundException(`Afiliado ${afiliadoId} no existe`);
+    if (afi.vigencia === "Eliminado") {
+      throw new ConflictException(`El afiliado ${afi.rut} está eliminado`);
+    }
+    const planes = (await planesDeAfiliados(this.db, [afiliadoId])).get(afiliadoId) ?? [];
+    const vigentes = planes.filter((p) => p.vigente).map((p) => p.codPlan);
+    if (vigentes.includes(codPlan)) return;
+    const sinCobertura = (PLANES_SIN_COBERTURA as readonly string[]).includes(codPlan);
+    if (vigentes.length === 0 && sinCobertura) return;
+    if (vigentes.length === 0) {
+      throw new BadRequestException(
+        `El RUT ${afi.rut} no tiene planes vigentes; registre la atención como ${PLANES_SIN_COBERTURA.join(" o ")}`,
+      );
+    }
+    throw new BadRequestException(
+      `El plan ${codPlan} no está vigente para el RUT ${afi.rut}. Planes vigentes: ${vigentes.join(", ")}`,
+    );
+  }
+
   async crear(
-    codPlan: string,
     input: CreateAtencionDto & { tipo: "Consulta" | "Asesoria" | "Juicio" },
   ): Promise<Atencion> {
-    // Verifica que el afiliado exista en el plan.
-    const [afi] = await this.db
-      .select({ id: afiliados.id, vigencia: afiliados.vigencia })
-      .from(afiliados)
-      .where(and(eq(afiliados.id, input.afiliadoId), eq(afiliados.codPlan, codPlan)));
-    if (!afi) {
-      throw new NotFoundException(`Afiliado ${input.afiliadoId} no existe en plan ${codPlan}`);
-    }
-    if (afi.vigencia !== "Activo") {
-      throw new ConflictException("No se puede crear atención para afiliado no vigente");
-    }
-
+    const codPlan = input.codPlan;
+    await this.validarPlanDeAtencion(input.afiliadoId, codPlan);
     if (input.arancelId) await this.assertArancelEnPlan(codPlan, input.arancelId);
 
-    const correlativo = await siguienteCorrelativo(this.db, codPlan, input.tipo);
+    const correlativo = await siguienteCorrelativo(this.db, input.tipo);
     const payload: NuevaAtencion = {
       ...input,
       tipo: input.tipo,
@@ -118,13 +132,13 @@ export class AtencionesService {
     return row;
   }
 
-  async actualizar(codPlan: string, id: string, patch: UpdateAtencionDto): Promise<Atencion> {
-    await this.obtener(codPlan, id);
-    if (patch.arancelId) await this.assertArancelEnPlan(codPlan, patch.arancelId);
+  async actualizar(id: string, patch: UpdateAtencionDto): Promise<Atencion> {
+    const actual = await this.obtener(id);
+    if (patch.arancelId) await this.assertArancelEnPlan(actual.codPlan, patch.arancelId);
     const [row] = await this.db
       .update(atenciones)
       .set({ ...patch, updatedAt: new Date() })
-      .where(and(eq(atenciones.id, id), eq(atenciones.codPlan, codPlan)))
+      .where(eq(atenciones.id, id))
       .returning();
     return row;
   }
@@ -138,8 +152,9 @@ export class AtencionesService {
   }
 
   // Derivar: Consulta -> Asesoría -> Juicio. Crea nueva atención enlazada por metadata.
-  async derivar(codPlan: string, payload: DerivarAtencionDto): Promise<Atencion> {
-    const origen = await this.obtener(codPlan, payload.atencionId);
+  async derivar(payload: DerivarAtencionDto): Promise<Atencion> {
+    const origen = await this.obtener(payload.atencionId);
+    const codPlan = origen.codPlan;
     if (origen.tipo === "Juicio") {
       throw new BadRequestException("No se puede derivar un juicio");
     }
@@ -147,7 +162,7 @@ export class AtencionesService {
       throw new BadRequestException("Asesoría ya está en ese estado; use Juicio");
     }
 
-    const correlativo = await siguienteCorrelativo(this.db, codPlan, payload.nuevoTipo);
+    const correlativo = await siguienteCorrelativo(this.db, payload.nuevoTipo);
     const [nueva] = await this.db
       .insert(atenciones)
       .values({

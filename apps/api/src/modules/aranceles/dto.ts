@@ -7,6 +7,7 @@ export class UpdateArancelDto extends createZodDto(UpdateArancelSchema) {}
 export class ValorUfDto extends createZodDto(ValorUfSchema) {}
 
 export const FiltroArancelesSchema = z.object({
+  codPlan: z.string().optional(),
   competencia: CompetenciaEnum.optional(),
   soloVigentes: z
     .enum(["true", "false"])

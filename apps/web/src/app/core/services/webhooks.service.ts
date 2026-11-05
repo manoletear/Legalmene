@@ -55,31 +55,40 @@ export class WebhooksApiService {
   private http = inject(HttpClient);
   private base = `${environment.apiBaseUrl}/webhooks`;
 
-  listar(): Observable<WebhookSus[]> {
-    return this.http.get<WebhookSus[]>(this.base);
+  // Las suscripciones pertenecen a un plan (filtro de eventos), por eso todas las
+  // llamadas llevan ?codPlan=.
+  private plan(codPlan: string, params = new HttpParams()): HttpParams {
+    return params.set("codPlan", codPlan);
   }
 
-  crear(body: { nombre: string; url: string; eventos: string[]; headers?: Record<string, string> }): Observable<WebhookSus> {
-    return this.http.post<WebhookSus>(this.base, body);
+  listar(codPlan: string): Observable<WebhookSus[]> {
+    return this.http.get<WebhookSus[]>(this.base, { params: this.plan(codPlan) });
   }
 
-  actualizar(id: string, patch: Partial<WebhookSus>): Observable<WebhookSus> {
-    return this.http.patch<WebhookSus>(`${this.base}/${id}`, patch);
+  crear(
+    codPlan: string,
+    body: { nombre: string; url: string; eventos: string[]; headers?: Record<string, string> },
+  ): Observable<WebhookSus> {
+    return this.http.post<WebhookSus>(this.base, body, { params: this.plan(codPlan) });
   }
 
-  eliminar(id: string): Observable<unknown> {
-    return this.http.delete(`${this.base}/${id}`);
+  actualizar(codPlan: string, id: string, patch: Partial<WebhookSus>): Observable<WebhookSus> {
+    return this.http.patch<WebhookSus>(`${this.base}/${id}`, patch, { params: this.plan(codPlan) });
   }
 
-  entregas(opts: { page?: number; pageSize?: number; estado?: string }): Observable<EntregasPage> {
-    let params = new HttpParams();
+  eliminar(codPlan: string, id: string): Observable<unknown> {
+    return this.http.delete(`${this.base}/${id}`, { params: this.plan(codPlan) });
+  }
+
+  entregas(codPlan: string, opts: { page?: number; pageSize?: number; estado?: string }): Observable<EntregasPage> {
+    let params = this.plan(codPlan);
     Object.entries(opts).forEach(([k, v]) => {
       if (v !== undefined && v !== null && v !== "") params = params.set(k, String(v));
     });
     return this.http.get<EntregasPage>(`${this.base}/entregas`, { params });
   }
 
-  reintentar(id: string): Observable<WebhookEntrega> {
-    return this.http.post<WebhookEntrega>(`${this.base}/entregas/${id}/reintentar`, {});
+  reintentar(codPlan: string, id: string): Observable<WebhookEntrega> {
+    return this.http.post<WebhookEntrega>(`${this.base}/entregas/${id}/reintentar`, {}, { params: this.plan(codPlan) });
   }
 }

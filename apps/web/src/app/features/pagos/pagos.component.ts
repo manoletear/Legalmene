@@ -12,7 +12,7 @@ import { ToastModule } from "primeng/toast";
 import { MessageService } from "primeng/api";
 import { PagosApiService } from "../../core/services/pagos.service";
 import { AfiliadosApiService } from "../../core/services/afiliados.service";
-import type { Afiliado, Pago } from "@legalmene/shared";
+import type { AfiliadoConPlanes, Pago } from "@legalmene/shared";
 
 type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast";
 
@@ -55,6 +55,16 @@ import type { TableLazyLoadEvent } from "primeng/table";
           placeholder="Selecciona afiliado"
           [style]="{ 'min-width': '280px' }"
           styleClass="lm-grow"
+          (onChange)="elegirAfiliado($event.value)"
+        ></p-select>
+        <p-select
+          formControlName="codPlan"
+          [options]="planOpts()"
+          optionLabel="label"
+          optionValue="value"
+          appendTo="body"
+          placeholder="Plan"
+          [style]="{ 'min-width': '200px' }"
         ></p-select>
         <p-inputNumber formControlName="monto" mode="decimal" [min]="1" placeholder="Monto (CLP)" [style]="{ width: '160px' }"></p-inputNumber>
         <button pButton type="submit" label="Iniciar pago" [disabled]="form.invalid || iniciando()"></button>
@@ -122,7 +132,8 @@ export class PagosComponent implements OnInit {
   private msg = inject(MessageService);
 
   protected data = signal<Pago[]>([]);
-  protected afiliados = signal<Afiliado[]>([]);
+  protected afiliados = signal<AfiliadoConPlanes[]>([]);
+  protected planOpts = signal<{ label: string; value: string }[]>([]);
   protected total = signal(0);
   protected page = signal(1);
   protected pageSize = signal(25);
@@ -146,6 +157,7 @@ export class PagosComponent implements OnInit {
 
   protected form = this.fb.group({
     afiliadoId: ["", Validators.required],
+    codPlan: ["", Validators.required],
     monto: [10000, [Validators.required, Validators.min(1)]],
   });
 
@@ -180,6 +192,16 @@ export class PagosComponent implements OnInit {
     this.recargar();
   }
 
+  // El pago queda asociado a un plan del afiliado (vigente primero).
+  elegirAfiliado(afiliadoId: string | null) {
+    const afi = this.afiliados().find((a) => a.id === afiliadoId);
+    const planes = afi?.planes ?? [];
+    this.planOpts.set(
+      planes.map((p) => ({ label: `${p.codPlan}${p.vigente ? "" : " (no vigente)"}`, value: p.codPlan })),
+    );
+    this.form.patchValue({ codPlan: planes[0]?.codPlan ?? "" });
+  }
+
   iniciar() {
     if (this.form.invalid) return;
     this.iniciando.set(true);
@@ -187,6 +209,7 @@ export class PagosComponent implements OnInit {
     this.api
       .iniciar({
         afiliadoId: v.afiliadoId!,
+        codPlan: v.codPlan!,
         monto: v.monto!,
         returnUrl: `${window.location.origin}/pagos/return`,
       })

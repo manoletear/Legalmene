@@ -6,6 +6,7 @@ import type { CreateArancel, UpdateArancel, ValorUf as ValorUfInput } from "@leg
 
 export interface FiltroAranceles {
   competencia?: Arancel["competencia"];
+  codPlan?: string;
   soloVigentes?: boolean;
 }
 
@@ -32,14 +33,14 @@ export class ArancelesService {
     return row;
   }
 
-  async listar(codPlan: string, filtro: FiltroAranceles = {}) {
+  async listar(filtro: FiltroAranceles = {}) {
     const [rows, uf] = await Promise.all([
       this.db
         .select()
         .from(aranceles)
         .where(
           and(
-            eq(aranceles.codPlan, codPlan),
+            filtro.codPlan ? eq(aranceles.codPlan, filtro.codPlan) : undefined,
             filtro.competencia ? eq(aranceles.competencia, filtro.competencia) : undefined,
             filtro.soloVigentes ? eq(aranceles.vigente, true) : undefined,
           ),
@@ -53,12 +54,12 @@ export class ArancelesService {
     };
   }
 
-  async obtener(codPlan: string, id: string): Promise<Arancel> {
+  async obtener(id: string): Promise<Arancel> {
     const [row] = await this.db
       .select()
       .from(aranceles)
-      .where(and(eq(aranceles.id, id), eq(aranceles.codPlan, codPlan)));
-    if (!row) throw new NotFoundException(`Arancel ${id} no existe en plan ${codPlan}`);
+      .where(eq(aranceles.id, id));
+    if (!row) throw new NotFoundException(`Arancel ${id} no existe`);
     return row;
   }
 
@@ -74,13 +75,13 @@ export class ArancelesService {
     }
   }
 
-  async actualizar(codPlan: string, id: string, patch: UpdateArancel): Promise<Arancel> {
-    await this.obtener(codPlan, id);
+  async actualizar(id: string, patch: UpdateArancel): Promise<Arancel> {
+    await this.obtener(id);
     try {
       const [row] = await this.db
         .update(aranceles)
         .set({ ...patch, updatedAt: new Date() })
-        .where(and(eq(aranceles.id, id), eq(aranceles.codPlan, codPlan)))
+        .where(eq(aranceles.id, id))
         .returning();
       return row;
     } catch (err) {
