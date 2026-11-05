@@ -58,7 +58,7 @@ export const routes: Routes = [
   },
   {
     path: "pagos",
-    canActivate: [permisoGuard("pagos.iniciar", "finanzas.ver")],
+    canActivate: [permisoGuard("pagos.ver")],
     loadComponent: () =>
       import("./features/pagos/pagos.component").then((m) => m.PagosComponent),
   },

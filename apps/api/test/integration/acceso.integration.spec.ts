@@ -243,6 +243,32 @@ const como = (u: UsuarioPrueba): Acceso => ({ usuarioId: u.id, permisos: new Set
     await db.update(usuarios).set({ perfilId: abogadoPerfil.id }).where(eq(usuarios.id, u.id));
   });
 
+  it("login Entra: un usuario nuevo queda inactivo salvo los correos de BOOTSTRAP_ADMIN_EMAILS", async () => {
+    const db = drizzle(pool);
+    const sufijo = Math.random().toString(36).slice(2, 8);
+    const prev = process.env.BOOTSTRAP_ADMIN_EMAILS;
+    process.env.BOOTSTRAP_ADMIN_EMAILS = ` Jefa.TI-${sufijo}@legalchile.cl , otro@legalchile.cl`;
+    try {
+      const nuevo = await usuariosSrv.resolveByEntraOid({ entraOid: `oid-n-${sufijo}`, email: `nuevo-${sufijo}@legalchile.cl`, nombre: "Nuevo" });
+      creados.push(nuevo.id);
+      expect(nuevo.activo).toBe(false);
+      await expect(usuariosSrv.contextoAcceso(nuevo.id)).rejects.toBeInstanceOf(UsuarioNoHabilitadoError);
+
+      const admin = await usuariosSrv.resolveByEntraOid({ entraOid: `oid-b-${sufijo}`, email: `jefa.ti-${sufijo}@legalchile.cl`, nombre: "Jefa TI" });
+      creados.push(admin.id);
+      expect(admin.activo).toBe(true);
+      const ctx = await usuariosSrv.contextoAcceso(admin.id);
+      expect(ctx.perfilCodigo).toBe(PERFIL_ADMIN);
+
+      // Un login posterior no reactiva ni cambia el perfil de un usuario existente.
+      await db.update(usuarios).set({ activo: false }).where(eq(usuarios.id, admin.id));
+      const otraVez = await usuariosSrv.resolveByEntraOid({ entraOid: `oid-b-${sufijo}`, email: `jefa.ti-${sufijo}@legalchile.cl`, nombre: "Jefa TI" });
+      expect(otraVez.activo).toBe(false);
+    } finally {
+      process.env.BOOTSTRAP_ADMIN_EMAILS = prev;
+    }
+  });
+
   it("usuarios bloqueados o inactivos no operan (403) y queda registro", async () => {
     const db = drizzle(pool);
     const u = await usuarioDePrueba(db, "ABOGADO");

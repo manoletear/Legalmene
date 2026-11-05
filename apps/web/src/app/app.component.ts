@@ -239,7 +239,7 @@ export class AppComponent implements OnInit {
     { label: "Reportes", icon: "pi-chart-bar", route: "/reportes", permisos: ["reportes.ver"] },
     { label: "Gestiones", icon: "pi-check-square", route: "/gestiones" },
     { label: "Cargas masivas", icon: "pi-cloud-upload", route: "/cargas-masivas", permisos: ["cargas.ejecutar"] },
-    { label: "Pagos", icon: "pi-credit-card", route: "/pagos", permisos: ["pagos.iniciar", "finanzas.ver"] },
+    { label: "Pagos", icon: "pi-credit-card", route: "/pagos", permisos: ["pagos.ver"] },
     { label: "Auditoría", icon: "pi-history", route: "/auditoria", permisos: ["auditoria.ver"] },
     { label: "Usuarios", icon: "pi-shield", route: "/admin/usuarios", permisos: ["usuarios.administrar"] },
     { label: "Perfiles", icon: "pi-key", route: "/admin/perfiles", permisos: ["perfiles.administrar"] },

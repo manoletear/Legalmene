@@ -82,6 +82,18 @@ test.describe("RBAC", () => {
     expect(conv.status()).toBe(403);
   });
 
+  test("Pagos: Abogado no lista pagos y solo el Administrador confirma a mano (403)", async ({ request }) => {
+    const abogado = { "X-Dev-User": asUser("ABOGADO") };
+    expect((await request.get(`${API}/pagos`, { headers: abogado })).status()).toBe(403);
+    expect((await request.get(`${API}/pagos`, { headers: { "X-Dev-User": asUser("CONTADOR") } })).ok()).toBeTruthy();
+
+    const confirmar = await request.post(`${API}/pagos/confirmar`, {
+      headers: { "X-Dev-User": asUser("GERENCIA_FINANZAS"), "Content-Type": "application/json" },
+      data: { ordenCompra: "OC-INEXISTENTE", authCode: "x", exitoso: true },
+    });
+    expect(confirmar.status()).toBe(403);
+  });
+
   test("Sin X-Dev-User cae al admin default (smoke)", async ({ request }) => {
     const res = await request.get(`${API}/afiliados`);
     expect(res.ok()).toBeTruthy();

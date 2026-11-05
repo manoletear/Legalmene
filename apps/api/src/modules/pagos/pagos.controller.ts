@@ -17,6 +17,7 @@ export class PagosController {
   constructor(private readonly service: PagosService) {}
 
   @Get()
+  @Permiso("pagos.ver")
   listar(
     @Query("page") page?: string,
     @Query("pageSize") pageSize?: string,
@@ -37,9 +38,10 @@ export class PagosController {
     return this.service.iniciar(body);
   }
 
-  // Endpoint llamado por el callback de Transbank (sin auth en producción se usa
-  // verificación HMAC del token en vez de JWT).
+  // Mientras WebPay sea un stub, confirmar a mano un pago lo marca como cobrado: solo con
+  // permiso explícito. El callback real de Transbank se validará con HMAC, no con JWT.
   @Post("confirmar")
+  @Permiso("pagos.confirmar")
   confirmar(@Body() body: { ordenCompra: string; authCode: string; exitoso: boolean }) {
     return this.service.confirmar(body.ordenCompra, body.authCode, body.exitoso);
   }

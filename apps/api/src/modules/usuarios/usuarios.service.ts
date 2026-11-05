@@ -17,6 +17,11 @@ import { DRIZZLE, Database } from "../../db/database.module";
 import { perfiles, perfilPermisos, usuarios, Usuario } from "../../db/schema/usuarios";
 import type { AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 
+export function esAdminBootstrap(email: string, config = process.env.BOOTSTRAP_ADMIN_EMAILS): boolean {
+  const lista = (config ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  return lista.includes(email.trim().toLowerCase());
+}
+
 export interface ClaimsSpec {
   entraOid: string;
   email: string;
@@ -76,7 +81,9 @@ export class UsuariosService {
       .where(eq(usuarios.id, id));
     if (!row) throw new NotFoundException(`Usuario ${id} no existe`);
     const u = row.usuario;
-    if (!u.activo) throw new UsuarioNoHabilitadoError("Su usuario está desactivado. Contacte al administrador.", u);
+    if (!u.activo) {
+      throw new UsuarioNoHabilitadoError("Su usuario no está habilitado. Solicite acceso al administrador del sistema.", u);
+    }
     if (u.bloqueado) {
       throw new UsuarioNoHabilitadoError(
         `Su usuario está bloqueado${u.motivoBloqueo ? `: ${u.motivoBloqueo}` : ""}. Contacte al administrador.`,
@@ -231,13 +238,16 @@ export class UsuariosService {
     return row;
   }
 
-  // Login con Entra ID: crea el usuario con el perfil básico; el perfil lo administra la
-  // aplicación y nunca se sobrescribe desde el token.
+  // Login con Entra ID: un usuario nuevo queda inactivo hasta que un administrador lo
+  // habilite (el perfil por defecto ve atenciones). Los correos de BOOTSTRAP_ADMIN_EMAILS
+  // entran como administradores activos para poder hacer la primera habilitación.
+  // El perfil lo administra la aplicación y nunca se sobrescribe desde el token.
   async resolveByEntraOid(claims: ClaimsSpec): Promise<Usuario> {
-    const perfilId = await this.perfilIdPorCodigo(PERFIL_POR_DEFECTO);
+    const esBootstrap = esAdminBootstrap(claims.email);
+    const perfilId = await this.perfilIdPorCodigo(esBootstrap ? PERFIL_ADMIN : PERFIL_POR_DEFECTO);
     const [row] = await this.db
       .insert(usuarios)
-      .values({ ...claims, perfilId, ultimoLogin: new Date() })
+      .values({ ...claims, perfilId, activo: esBootstrap, ultimoLogin: new Date() })
       .onConflictDoUpdate({
         target: usuarios.entraOid,
         set: {
