@@ -32,12 +32,19 @@ test.describe("Perfiles y permisos", () => {
     await expect(nav.getByRole("link", { name: "Usuarios", exact: true })).toHaveCount(0);
     await expect(nav.getByRole("link", { name: "Perfiles", exact: true })).toHaveCount(0);
     await expect(nav.getByRole("link", { name: "Auditoría", exact: true })).toHaveCount(0);
-    // El menú parte colapsado (solo íconos) y se expande con el botón inferior.
+    // El menú parte colapsado (solo íconos) y se expande con el botón superior.
     await expect(nav.getByText("Juicios", { exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Expandir menú" }).click();
+    // Expandido, los grupos parten cerrados: se abren con + y se cierran con −.
+    const atenciones = nav.getByRole("button", { name: "Atenciones" });
+    await expect(atenciones).toHaveAttribute("aria-expanded", "false");
+    await expect(nav.getByText("Juicios", { exact: true })).toHaveCount(0);
+    await atenciones.click();
+    await expect(atenciones).toHaveAttribute("aria-expanded", "true");
     await expect(nav.getByText("Juicios", { exact: true })).toBeVisible();
-    await expect(nav.getByText("Atenciones", { exact: true })).toBeVisible();
-    await expect(nav.getByText("Administración", { exact: true })).toHaveCount(0);
+    await atenciones.click();
+    await expect(nav.getByText("Juicios", { exact: true })).toHaveCount(0);
+    await expect(nav.getByRole("button", { name: "Administración" })).toHaveCount(0);
     await page.goto("/admin/usuarios");
     await expect(page).toHaveURL(/\/dashboard$/);
     await expect(page.getByText("Sin acceso").first()).toBeVisible();

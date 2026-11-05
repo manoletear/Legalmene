@@ -203,8 +203,18 @@ const CLAVE_MENU_EXPANDIDO = "lm.menuExpandido";
       <ng-template #navegacion let-compacto="compacto">
         <nav>
           <div class="lm-nav-grupo" *ngFor="let grupo of gruposVisibles(); let primero = first">
-            <div class="lm-nav-titulo" *ngIf="!compacto && grupo.titulo">{{ grupo.titulo }}</div>
+            <button
+              type="button"
+              class="lm-nav-titulo"
+              *ngIf="!compacto && grupo.titulo"
+              (click)="alternarGrupo(grupo.titulo, $event)"
+              [attr.aria-expanded]="grupoAbierto(grupo.titulo)"
+            >
+              <span>{{ grupo.titulo }}</span>
+              <i class="pi {{ grupoAbierto(grupo.titulo) ? 'pi-minus' : 'pi-plus' }}" aria-hidden="true"></i>
+            </button>
             <hr class="lm-nav-separador" *ngIf="compacto && !primero" />
+            <ng-container *ngIf="compacto || !grupo.titulo || grupoAbierto(grupo.titulo)">
             <a
               *ngFor="let item of grupo.items"
               [routerLink]="item.route"
@@ -217,6 +227,7 @@ const CLAVE_MENU_EXPANDIDO = "lm.menuExpandido";
               <i class="pi {{ item.icon }}"></i>
               <span *ngIf="!compacto">{{ item.label }}</span>
             </a>
+            </ng-container>
           </div>
         </nav>
       </ng-template>
@@ -322,6 +333,22 @@ export class AppComponent implements OnInit {
       .map((g) => ({ ...g, items: g.items.filter((i) => !i.permisos || this.me.algunoDe(i.permisos)) }))
       .filter((g) => g.items.length > 0);
   });
+
+  // Con el menú expandido los grupos parten cerrados; el usuario los abre con + y cierra con −.
+  private gruposAbiertos = signal<ReadonlySet<string>>(new Set());
+
+  protected grupoAbierto(titulo: string): boolean {
+    return this.gruposAbiertos().has(titulo);
+  }
+
+  protected alternarGrupo(titulo: string, ev: Event) {
+    // En el drawer móvil un clic en el título no debe cerrar el menú.
+    ev.stopPropagation();
+    const abiertos = new Set(this.gruposAbiertos());
+    if (abiertos.has(titulo)) abiertos.delete(titulo);
+    else abiertos.add(titulo);
+    this.gruposAbiertos.set(abiertos);
+  }
 
   protected alternarMenu() {
     const valor = !this.menuExpandido();
