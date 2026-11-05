@@ -9,7 +9,7 @@ import { ButtonModule } from "primeng/button";
 import { SelectModule } from "primeng/select";
 import { MessageService } from "primeng/api";
 import type { TableLazyLoadEvent } from "primeng/table";
-import type { AtencionConMaestros, BusquedaExportable, TipoAtencion } from "@legalmene/shared";
+import { estadosDeTipo, type AtencionConMaestros, type BusquedaExportable, type TipoAtencion } from "@legalmene/shared";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { PermisoDirective } from "../../core/permisos";
 import { ESTADO_OPCIONES, estadoSeverity as severidadEstado } from "../../shared/estado-atencion";
@@ -20,6 +20,7 @@ const EXPORTACION: Record<string, BusquedaExportable> = {
   Consulta: "consultas",
   Asesoria: "asesorias",
   Juicio: "juicios",
+  PosesionEfectiva: "posesiones",
 };
 
 // Búsqueda de atenciones (Anexo §XI A): no carga datos hasta que el usuario presiona "Buscar".
@@ -43,12 +44,14 @@ const EXPORTACION: Record<string, BusquedaExportable> = {
       <ng-template pTemplate="header">
         <div style="display:flex; align-items:center; gap:8px; padding:16px 16px 0;">
           <h2 style="margin:0; flex:1;">{{ titulo }}</h2>
-          <button *lmPermiso="['atenciones.crear_consulta', 'atenciones.crear_caso']" pButton icon="pi pi-plus" label="Nueva atención" routerLink="/atenciones/nueva"></button>
+          <button *lmPermiso="['atenciones.crear_consulta', 'atenciones.crear_caso', 'posesiones.crear']" pButton icon="pi pi-plus"
+            [label]="filtroTipo === 'PosesionEfectiva' ? 'Nueva posesión efectiva' : 'Nueva atención'" routerLink="/atenciones/nueva"
+            [queryParams]="filtroTipo ? { tipo: filtroTipo } : {}"></button>
         </div>
       </ng-template>
 
       <lm-criterios-busqueda
-        [campos]="['correlativo', 'rut', 'texto', 'abogado', 'plan', 'canal', 'competencia', 'materia', 'fechas']"
+        [campos]="['correlativo', 'rut', 'texto', 'abogado', 'plan', 'canal', 'competencia', 'materia', 'bien', 'fechas']"
         [estados]="estadoOpts"
         [iniciales]="iniciales"
         etiquetaFecha="Apertura"
@@ -130,6 +133,7 @@ export class AtencionesListComponent implements OnInit {
     { label: "Consulta", value: "Consulta" },
     { label: "Asesoría", value: "Asesoria" },
     { label: "Juicio", value: "Juicio" },
+    { label: "Posesión efectiva", value: "PosesionEfectiva" },
   ];
   protected estadoOpts = ESTADO_OPCIONES;
   protected estadoSeverity = severidadEstado;
@@ -139,12 +143,16 @@ export class AtencionesListComponent implements OnInit {
     if (tipoFiltro) {
       this.filtroTipo = tipoFiltro;
       this.tipoBloqueado = true;
+      const propios = new Set<string>(estadosDeTipo(tipoFiltro));
+      this.estadoOpts = ESTADO_OPCIONES.filter((o) => propios.has(o.value));
     }
     // ?q= viene de la búsqueda global del encabezado: es una búsqueda explícita.
-    const q = this.route.snapshot.queryParamMap.get("q");
-    if (q) {
-      this.iniciales = { q };
-      this.buscar({ q });
+    // ?q= viene de la búsqueda global y ?rut= de la ficha del afiliado: son búsquedas explícitas.
+    const q = this.route.snapshot.queryParamMap.get("q") ?? undefined;
+    const rut = this.route.snapshot.queryParamMap.get("rut") ?? undefined;
+    if (q || rut) {
+      this.iniciales = { q, rut };
+      this.buscar({ ...(q ? { q } : {}), ...(rut ? { rut } : {}) });
     }
   }
 
@@ -153,6 +161,7 @@ export class AtencionesListComponent implements OnInit {
       case "Consulta": return "Consultas";
       case "Asesoria": return "Asesorías";
       case "Juicio": return "Juicios";
+      case "PosesionEfectiva": return "Posesiones efectivas";
       default: return "Atenciones";
     }
   }
@@ -200,13 +209,13 @@ export class AtencionesListComponent implements OnInit {
   }
 
   tipoSeverity(t: string): "success" | "info" | "warn" | "danger" | "secondary" | "contrast" {
-    return t === "Juicio" ? "danger" : t === "Asesoria" ? "warn" : "info";
+    return t === "Juicio" ? "danger" : t === "Asesoria" ? "warn" : t === "PosesionEfectiva" ? "contrast" : "info";
   }
 
   async exportar(c: Criterios) {
     const tipo = this.tipoExportacion();
     if (!tipo) {
-      this.msg.add({ severity: "warn", summary: "Elija un tipo", detail: "La exportación es por tipo de atención (consultas, asesorías o juicios)", life: 4000 });
+      this.msg.add({ severity: "warn", summary: "Elija un tipo", detail: "La exportación es por tipo de atención (consultas, asesorías, juicios o posesiones efectivas)", life: 4000 });
       return;
     }
     try {

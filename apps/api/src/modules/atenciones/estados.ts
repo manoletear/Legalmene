@@ -1,5 +1,7 @@
 import {
   ESTADO_LABEL,
+  faltantesCausante,
+  type Causante,
   UMBRAL_RIESGO_COMITE,
   puedeTransicionar,
   riesgoTotal,
@@ -28,6 +30,8 @@ export interface ContextoTransicion {
   provisionesAbiertas?: number;
   // Motivo de retención por arancel impago; null si no aplica.
   bloqueoArancel?: string | null;
+  // Posesión efectiva: antecedentes del causante y herederos vigentes.
+  posesion?: { causante: Partial<Causante> | null; herederos: number };
 }
 
 // Estados en que se trabaja el caso: no se puede entrar a ellos con el arancel impago.
@@ -37,6 +41,9 @@ export const ESTADOS_DE_TRABAJO: readonly EstadoAtencion[] = [
   "EnEsperaAntecedentes",
   "EnEsperaProvision",
   "EnComite",
+  "EnPreparacion",
+  "DocumentosPendientes",
+  "ListaEmision",
   "Terminada",
 ];
 
@@ -57,6 +64,10 @@ export function validarTransicion(
 
   if (ctx.bloqueoArancel && ESTADOS_DE_TRABAJO.includes(destino)) faltan.push(ctx.bloqueoArancel);
 
+  if (a.tipo === "PosesionEfectiva" && ["EnPreparacion", "DocumentosPendientes", "ListaEmision", "Terminada"].includes(destino)) {
+    faltan.push(...faltantesCausante(ctx.posesion?.causante));
+    if (["ListaEmision", "Terminada"].includes(destino) && (ctx.posesion?.herederos ?? 0) === 0) faltan.push("al menos un heredero");
+  }
   if (a.tipo === "Juicio" && destino === "Pendiente") {
     if (!a.tribunalId) faltan.push("tribunal");
     if (!a.rolCausa) faltan.push("ROL/RIT de la causa");

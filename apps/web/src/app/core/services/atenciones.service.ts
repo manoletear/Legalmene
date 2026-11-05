@@ -3,6 +3,11 @@ import { HttpClient, HttpParams } from "@angular/common/http";
 import { Observable } from "rxjs";
 import { environment } from "../../../environments/environment";
 import type {
+  Causante,
+  CreatePosesion,
+  Heredero,
+  HerederoInput,
+  PosesionEfectiva,
   AprobarDerivacion,
   ArancelAtencion,
   ArancelAtencionRow,
@@ -79,6 +84,26 @@ export class AtencionesApiService {
 
   crearJuicio(payload: Omit<CreateAtencion, "tipo">): Observable<Atencion> {
     return this.http.post<Atencion>(`${this.base}/juicios`, payload);
+  }
+
+  crearPosesion(payload: Omit<CreatePosesion, "causante"> & { causante?: Causante }): Observable<Atencion> {
+    return this.http.post<Atencion>(`${this.base}/posesiones`, payload);
+  }
+
+  posesion(id: string): Observable<PosesionEfectiva> {
+    return this.http.get<PosesionEfectiva>(`${this.base}/${id}/posesion`);
+  }
+
+  actualizarCausante(id: string, causante: Causante): Observable<PosesionEfectiva> {
+    return this.http.put<PosesionEfectiva>(`${this.base}/${id}/posesion`, causante);
+  }
+
+  agregarHeredero(id: string, h: HerederoInput): Observable<Heredero> {
+    return this.http.post<Heredero>(`${this.base}/${id}/herederos`, h);
+  }
+
+  quitarHeredero(herederoId: string): Observable<{ id: string }> {
+    return this.http.delete<{ id: string }>(`${this.api}/herederos/${herederoId}`);
   }
 
   // --- Derivaciones ---

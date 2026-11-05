@@ -13,6 +13,11 @@ export const EstadoAtencionEnum = z.enum([
   "EnEsperaArancel",
   "EnEsperaProvision",
   "EnComite",
+  // Posesión efectiva.
+  "Ingresada",
+  "EnPreparacion",
+  "DocumentosPendientes",
+  "ListaEmision",
   "Terminada",
   "Abandonada",
 ]);
@@ -29,6 +34,10 @@ export const ESTADO_LABEL: Record<EstadoAtencion, string> = {
   EnEsperaArancel: "Espera arancel",
   EnEsperaProvision: "Espera provisión",
   EnComite: "En comité",
+  Ingresada: "Ingresada",
+  EnPreparacion: "En preparación",
+  DocumentosPendientes: "Documentos pendientes",
+  ListaEmision: "Lista para emisión",
   Terminada: "Terminada",
   Abandonada: "Abandonada",
 };
@@ -57,16 +66,29 @@ const ASESORIA_JUICIO: Mapa = {
   Abandonada: [],
 };
 
+// Posesión efectiva: se ingresa, se preparan antecedentes del causante y herederos, se esperan
+// documentos y queda lista para emitir la solicitud ante el Registro Civil.
+const POSESION: Mapa = {
+  Ingresada: ["EnPreparacion", "Abandonada"],
+  EnPreparacion: ["DocumentosPendientes", "ListaEmision", "Abandonada"],
+  DocumentosPendientes: ["EnPreparacion", "ListaEmision", "Abandonada"],
+  ListaEmision: ["DocumentosPendientes", "Terminada", "Abandonada"],
+  Terminada: [],
+  Abandonada: [],
+};
+
 export const TRANSICIONES: Record<TipoAtencion, Mapa> = {
   Consulta: CONSULTA,
   Asesoria: ASESORIA_JUICIO,
   Juicio: ASESORIA_JUICIO,
+  PosesionEfectiva: POSESION,
 };
 
 export const ESTADO_INICIAL: Record<TipoAtencion, EstadoAtencion> = {
   Consulta: "Iniciada",
   Asesoria: "Asignada",
   Juicio: "Asignada",
+  PosesionEfectiva: "Ingresada",
 };
 
 // Etapas que muestra el pipeline de la ficha, en orden.
@@ -74,6 +96,7 @@ export const ETAPAS_PIPELINE: Record<TipoAtencion, readonly EstadoAtencion[]> = 
   Consulta: ["Iniciada", "Respondida", "Terminada"],
   Asesoria: ["Asignada", "Pendiente", "EnGestion", "EnComite", "Terminada"],
   Juicio: ["Asignada", "Pendiente", "EnGestion", "EnComite", "Terminada"],
+  PosesionEfectiva: ["Ingresada", "EnPreparacion", "DocumentosPendientes", "ListaEmision", "Terminada"],
 };
 
 export const ESTADOS_TERMINALES: readonly EstadoAtencion[] = ["Derivada", "Terminada", "Abandonada"];
@@ -88,6 +111,10 @@ export const ESTADOS_ACTIVOS: readonly EstadoAtencion[] = [
   "EnEsperaArancel",
   "EnEsperaProvision",
   "EnComite",
+  "Ingresada",
+  "EnPreparacion",
+  "DocumentosPendientes",
+  "ListaEmision",
 ];
 
 export function estadosDeTipo(tipo: TipoAtencion): EstadoAtencion[] {

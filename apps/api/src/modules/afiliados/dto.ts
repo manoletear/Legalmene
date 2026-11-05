@@ -20,5 +20,6 @@ export const FiltroAfiliadosSchema = z.object({
   codPlan: z.string().optional(),
   canalId: z.string().uuid().optional(),
   rut: z.string().trim().min(1).optional(),
+  bien: z.string().trim().min(1).optional(),
 });
 export class FiltroAfiliadosDto extends createZodDto(FiltroAfiliadosSchema) {}

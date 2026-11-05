@@ -19,7 +19,7 @@ const sinPendientes = { gestionesPendientes: 0, comitesAbiertos: 0 };
 
 describe("mapa de transiciones", () => {
   it("cada destino pertenece a los estados del tipo", () => {
-    for (const tipo of ["Consulta", "Asesoria", "Juicio"] as const) {
+    for (const tipo of ["Consulta", "Asesoria", "Juicio", "PosesionEfectiva"] as const) {
       const estados = estadosDeTipo(tipo);
       expect(estados).toContain(ESTADO_INICIAL[tipo]);
       for (const destinos of Object.values(TRANSICIONES[tipo])) {
@@ -92,5 +92,28 @@ describe("requisitos por etapa", () => {
     expect(validarTransicion(asesoria, "Pendiente", ctx)).toEqual(["pago del arancel"]);
     expect(validarTransicion(asesoria, "EnEsperaArancel", ctx)).toEqual([]);
     expect(validarTransicion({ ...asesoria, causaTerminoId: "c" }, "Abandonada", ctx)).toEqual([]);
+  });
+});
+
+describe("posesión efectiva", () => {
+  const pe: AtencionParaTransicion = { ...base, tipo: "PosesionEfectiva", estado: "Ingresada" };
+  const causante = { causanteRut: "11111111-1", causanteNombre: "Causante", causanteFechaDefuncion: "2025-01-01", causanteUltimoDomicilio: "Calle 1" };
+
+  it("Ingresada → En preparación exige los antecedentes del causante", () => {
+    const faltan = validarTransicion(pe, "EnPreparacion", { ...sinPendientes, posesion: { causante: null, herederos: 0 } });
+    expect(faltan).toEqual(["RUT del causante", "nombre del causante", "fecha de defunción", "último domicilio del causante"]);
+    expect(validarTransicion(pe, "EnPreparacion", { ...sinPendientes, posesion: { causante, herederos: 0 } })).toEqual([]);
+  });
+
+  it("Lista para emisión exige al menos un heredero", () => {
+    const enPrep = { ...pe, estado: "EnPreparacion" as const };
+    expect(validarTransicion(enPrep, "ListaEmision", { ...sinPendientes, posesion: { causante, herederos: 0 } })).toEqual(["al menos un heredero"]);
+    expect(validarTransicion(enPrep, "ListaEmision", { ...sinPendientes, posesion: { causante, herederos: 2 } })).toEqual([]);
+  });
+
+  it("no salta etapas ni termina sin causa de término", () => {
+    expect(validarTransicion(pe, "Terminada", sinPendientes)[0]).toMatch(/No se puede pasar/);
+    const lista = { ...pe, estado: "ListaEmision" as const };
+    expect(validarTransicion(lista, "Terminada", { ...sinPendientes, posesion: { causante, herederos: 1 } })).toEqual(["causa de término"]);
   });
 });

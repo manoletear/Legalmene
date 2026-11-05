@@ -13,7 +13,7 @@ import {
   smallint,
 } from "drizzle-orm/pg-core";
 import { planes } from "./planes";
-import { afiliados } from "./afiliados";
+import { afiliados, cargasAfiliado } from "./afiliados";
 import { usuarios } from "./usuarios";
 import {
   calidadesProcesales,
@@ -42,6 +42,11 @@ export const estadoAtencionEnum = pgEnum("estado_atencion", [
   "EnComite",
   "Terminada",
   "Abandonada",
+  // Posesión efectiva (al final: ALTER TYPE ... ADD VALUE agrega al final).
+  "Ingresada",
+  "EnPreparacion",
+  "DocumentosPendientes",
+  "ListaEmision",
 ]);
 export const canalContactoEnum = pgEnum("canal_contacto", [
   "Telefonico",
@@ -111,6 +116,8 @@ export const atenciones = pgTable(
     riesgoCliente: smallint("riesgo_cliente"),
     revisadoPorComite: boolean("revisado_por_comite").notNull().default(false),
     causaTerminoId: uuid("causa_termino_id").references(() => causasTermino.id, { onDelete: "restrict" }),
+    // Carga (familiar) del titular atendida bajo su plan; null si se atiende al titular.
+    cargaId: uuid("carga_id").references(() => cargasAfiliado.id, { onDelete: "restrict" }),
     metadata: jsonb("metadata").$type<Record<string, unknown>>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

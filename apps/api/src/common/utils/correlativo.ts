@@ -6,13 +6,14 @@ const PREFIJO: Record<string, string> = {
   Consulta: "CONS",
   Asesoria: "ASES",
   Juicio: "JUIC",
+  PosesionEfectiva: "POSE",
 };
 
 // Genera correlativo atómico y global por tipo+año.
 // Formato: TIPO-AÑO-NNNNNN (ej: CONS-2026-000123).
 export async function siguienteCorrelativo(
   db: Database,
-  tipo: "Consulta" | "Asesoria" | "Juicio",
+  tipo: "Consulta" | "Asesoria" | "Juicio" | "PosesionEfectiva",
 ): Promise<string> {
   const anio = String(new Date().getUTCFullYear());
 

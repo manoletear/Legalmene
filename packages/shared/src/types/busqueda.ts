@@ -15,6 +15,8 @@ export const CriteriosBusquedaSchema = z.object({
   materiaId: z.string().uuid().optional(),
   fechaDesde: fecha.optional(),
   fechaHasta: fecha.optional(),
+  // Identificador o descripción de un bien cubierto del afiliado (rol, patente…).
+  bien: z.string().trim().min(1).optional(),
 });
 export type CriteriosBusqueda = z.infer<typeof CriteriosBusquedaSchema>;
 
@@ -34,6 +36,7 @@ export const BUSQUEDAS_EXPORTABLES = [
   "aranceles",
   "provisiones",
   "pagos",
+  "posesiones",
 ] as const;
 export type BusquedaExportable = (typeof BUSQUEDAS_EXPORTABLES)[number];
 

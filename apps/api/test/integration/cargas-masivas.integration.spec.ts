@@ -9,6 +9,8 @@ import { DatabaseModule, PG_POOL } from "../../src/db/database.module";
 import { planes } from "../../src/db/schema/planes";
 import { afiliados, planesAfiliado } from "../../src/db/schema/afiliados";
 import { CargasMasivasService } from "../../src/modules/cargas-masivas/cargas-masivas.service";
+import { NotifInboxService } from "../../src/modules/notif-inbox/notif-inbox.service";
+import ExcelJS from "exceljs";
 import { planAleatorio, rutAleatorio } from "./helpers";
 
 const RUN = !!process.env.DATABASE_URL;
@@ -20,11 +22,12 @@ const RUN = !!process.env.DATABASE_URL;
   const TEST_PLAN = planAleatorio();
   const OTRO_PLAN = planAleatorio("TESTB");
   const [JUAN, MARIA, CARLOS] = [rutAleatorio(), rutAleatorio(), rutAleatorio()];
+  const notificadas: unknown[] = [];
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true }), DatabaseModule],
-      providers: [CargasMasivasService],
+      providers: [CargasMasivasService, { provide: NotifInboxService, useValue: { crearBulk: async (items: unknown[]) => { notificadas.push(items); return []; } } }],
     }).compile();
     service = moduleRef.get(CargasMasivasService);
     pool = moduleRef.get(PG_POOL);
@@ -42,6 +45,8 @@ const RUN = !!process.env.DATABASE_URL;
 
   afterAll(async () => {
     const db = drizzle(pool);
+    await db.execute(sql`DELETE FROM cargas_afiliado WHERE cod_plan IN (${TEST_PLAN}, ${OTRO_PLAN})`);
+    await db.execute(sql`DELETE FROM bienes_afiliado WHERE cod_plan IN (${TEST_PLAN}, ${OTRO_PLAN})`);
     await db.execute(sql`DELETE FROM planes_afiliado WHERE cod_plan IN (${TEST_PLAN}, ${OTRO_PLAN})`);
     await db.execute(sql`DELETE FROM afiliados WHERE rut IN (${JUAN}, ${MARIA}, ${CARLOS})`);
     await db.execute(sql`DELETE FROM planes WHERE cod_plan IN (${TEST_PLAN}, ${OTRO_PLAN})`);
@@ -155,5 +160,63 @@ const RUN = !!process.env.DATABASE_URL;
     expect(res.totalRegistros).toBe(0);
     expect(res.insertados).toBe(0);
     expect(res.errores).toHaveLength(0);
+  });
+
+  describe("cargas y bienes por RUT–Plan", () => {
+    const CARGA1 = rutAleatorio();
+    const CARGA2 = rutAleatorio();
+    const buf = (lines: string[]) => Buffer.from(lines.join("\n"), "utf-8");
+
+    beforeAll(async () => {
+      await service.cargarAfiliados(OTRO_PLAN, "FLUJO", csv([[JUAN, "Juan", "Pérez", "", "2024-01-01", ""]]));
+    });
+
+    it("FLUJO de cargas: crea las del titular del plan y rechaza titulares fuera de la nómina", async () => {
+      const r = await service.cargarCargas(
+        OTRO_PLAN,
+        "FLUJO",
+        buf([
+          "rut_titular,rut,nombres,apellido_paterno,parentesco,fecha_inicio",
+          `${JUAN},${CARGA1},Ana,Pérez,Hijo,2024-01-01`,
+          `${JUAN},${CARGA2},Luis,Pérez,cónyuge,2024-01-01`,
+          `${CARLOS},${rutAleatorio()},Otro,Sin Plan,Hijo,2024-01-01`,
+          `${JUAN},${CARGA1},Ana,Pérez,Hijo,2024-01-01`,
+          `${JUAN},${rutAleatorio()},X,Y,Sobrino,2024-01-01`,
+        ]),
+      );
+      expect(r).toMatchObject({ entidad: "cargas", insertados: 2, actualizados: 0, eliminados: 0 });
+      expect(r.errores.map((e) => e.fila).sort()).toEqual([4, 5, 6]);
+      expect(r.errores.find((e) => e.fila === 4)!.mensaje).toMatch(/no está en la nómina/);
+      // Se avisa en la aplicación al terminar (una llamada por carga, a quienes ejecutan cargas).
+      expect(notificadas.length).toBeGreaterThan(0);
+    });
+
+    it("STOCK de cargas termina las que no vienen en el archivo", async () => {
+      const r = await service.cargarCargas(OTRO_PLAN, "STOCK", buf(["rut_titular,rut,nombres,apellido_paterno", `${JUAN},${CARGA1},Ana María,Pérez`]));
+      expect(r).toMatchObject({ insertados: 0, actualizados: 1, eliminados: 1 });
+      const db = drizzle(pool);
+      const rows = await db.execute(sql`SELECT rut, vigencia, nombres FROM cargas_afiliado WHERE cod_plan = ${OTRO_PLAN} ORDER BY rut`);
+      const porRut = new Map(rows.rows.map((x) => [x.rut as string, x]));
+      expect(porRut.get(CARGA1)).toMatchObject({ vigencia: "Activo", nombres: "Ana María" });
+      expect(porRut.get(CARGA2)).toMatchObject({ vigencia: "Eliminado" });
+    });
+
+    it("bienes: valida tipo e identificador y normaliza a mayúsculas; el reporte XLSX trae resumen y errores", async () => {
+      const r = await service.cargarBienes(
+        OTRO_PLAN,
+        "FLUJO",
+        buf(["rut_titular,tipo,identificador,descripcion", `${JUAN},Vehículo,ab-cd-12,Auto familiar`, `${JUAN},Barco,X1,`, `${JUAN},Inmueble,,Casa`]),
+      );
+      expect(r).toMatchObject({ entidad: "bienes", insertados: 1 });
+      expect(r.errores).toHaveLength(2);
+      const db = drizzle(pool);
+      const rows = await db.execute(sql`SELECT tipo, identificador FROM bienes_afiliado WHERE cod_plan = ${OTRO_PLAN}`);
+      expect(rows.rows).toEqual([{ tipo: "Vehiculo", identificador: "AB-CD-12" }]);
+
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load((await service.resumenXlsx(r)) as unknown as ArrayBuffer);
+      expect(wb.worksheets.map((w) => w.name)).toEqual(["Resumen", "Errores"]);
+      expect(wb.getWorksheet("Errores")!.rowCount).toBe(3);
+    });
   });
 });

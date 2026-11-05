@@ -6,10 +6,12 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { and, eq, exists, ilike, or, sql, count, desc } from "drizzle-orm";
-import type { AsignarPlan } from "@legalmene/shared";
+import type { AsignarPlan, BienAfiliado, CargaAfiliado } from "@legalmene/shared";
 import { DRIZZLE, Database } from "../../db/database.module";
 import {
   afiliados,
+  bienesAfiliado,
+  cargasAfiliado,
   planesAfiliado,
   Afiliado,
   NuevoAfiliado,
@@ -17,8 +19,8 @@ import {
 } from "../../db/schema/afiliados";
 import { planes } from "../../db/schema/planes";
 import { formatearRut, rutValido } from "../../common/utils/rut";
-import { planesDeAfiliados } from "./vigencia";
-import { rutComparable } from "../../common/busqueda/criterios";
+import { hoyChile, planVigenteSql, planesDeAfiliados } from "./vigencia";
+import { condicionBien, rutComparable } from "../../common/busqueda/criterios";
 import type { CreateAfiliadoDto, UpdateAfiliadoDto, FiltroAfiliadosDto } from "./dto";
 
 @Injectable()
@@ -52,6 +54,7 @@ export class AfiliadosService {
         ? sql`upper(regexp_replace(${afiliados.rut}, '[^0-9kK]', '', 'g')) like ${`%${rutComparable(filtro.rut)}%`}`
         : undefined,
       filtro.vigencia ? eq(afiliados.vigencia, filtro.vigencia) : undefined,
+      filtro.bien ? sql`${afiliados.id} in (${condicionBien(filtro.bien)})` : undefined,
       filtro.q && !useFts
         ? or(
             ilike(afiliados.rut, `%${filtro.q}%`),
@@ -103,6 +106,58 @@ export class AfiliadosService {
     const afiliado = await this.obtener(id);
     const planesMap = await planesDeAfiliados(this.db, [id]);
     return { ...afiliado, planes: planesMap.get(id) ?? [] };
+  }
+
+  // Cargas del titular por plan; vigente = vigencia y fechas propias + plan del titular vigente.
+  async cargas(id: string): Promise<CargaAfiliado[]> {
+    await this.obtener(id);
+    const propia = sql`${cargasAfiliado.vigencia} = 'Activo' and ${cargasAfiliado.fechaInicio} <= ${hoyChile} and (${cargasAfiliado.fechaTermino} is null or ${cargasAfiliado.fechaTermino} >= ${hoyChile})`;
+    const rows = await this.db
+      .select({
+        id: cargasAfiliado.id,
+        afiliadoId: cargasAfiliado.afiliadoId,
+        codPlan: cargasAfiliado.codPlan,
+        rut: cargasAfiliado.rut,
+        nombres: cargasAfiliado.nombres,
+        apellidoPaterno: cargasAfiliado.apellidoPaterno,
+        apellidoMaterno: cargasAfiliado.apellidoMaterno,
+        parentesco: cargasAfiliado.parentesco,
+        fechaNacimiento: cargasAfiliado.fechaNacimiento,
+        fechaInicio: cargasAfiliado.fechaInicio,
+        fechaTermino: cargasAfiliado.fechaTermino,
+        vigencia: cargasAfiliado.vigencia,
+        vigente: sql<boolean>`(${propia} and coalesce(${planVigenteSql}, false))`,
+      })
+      .from(cargasAfiliado)
+      .leftJoin(planesAfiliado, and(eq(planesAfiliado.afiliadoId, cargasAfiliado.afiliadoId), eq(planesAfiliado.codPlan, cargasAfiliado.codPlan)))
+      .leftJoin(planes, eq(planes.codPlan, cargasAfiliado.codPlan))
+      .where(eq(cargasAfiliado.afiliadoId, id))
+      .orderBy(cargasAfiliado.codPlan, cargasAfiliado.apellidoPaterno);
+    return rows;
+  }
+
+  async bienes(id: string): Promise<BienAfiliado[]> {
+    await this.obtener(id);
+    const propia = sql`${bienesAfiliado.vigencia} = 'Activo' and ${bienesAfiliado.fechaInicio} <= ${hoyChile} and (${bienesAfiliado.fechaTermino} is null or ${bienesAfiliado.fechaTermino} >= ${hoyChile})`;
+    return this.db
+      .select({
+        id: bienesAfiliado.id,
+        afiliadoId: bienesAfiliado.afiliadoId,
+        codPlan: bienesAfiliado.codPlan,
+        tipo: bienesAfiliado.tipo,
+        identificador: bienesAfiliado.identificador,
+        descripcion: bienesAfiliado.descripcion,
+        comuna: bienesAfiliado.comuna,
+        fechaInicio: bienesAfiliado.fechaInicio,
+        fechaTermino: bienesAfiliado.fechaTermino,
+        vigencia: bienesAfiliado.vigencia,
+        vigente: sql<boolean>`(${propia} and coalesce(${planVigenteSql}, false))`,
+      })
+      .from(bienesAfiliado)
+      .leftJoin(planesAfiliado, and(eq(planesAfiliado.afiliadoId, bienesAfiliado.afiliadoId), eq(planesAfiliado.codPlan, bienesAfiliado.codPlan)))
+      .leftJoin(planes, eq(planes.codPlan, bienesAfiliado.codPlan))
+      .where(eq(bienesAfiliado.afiliadoId, id))
+      .orderBy(bienesAfiliado.codPlan, bienesAfiliado.tipo);
   }
 
   async obtenerPorRut(rut: string): Promise<Afiliado | null> {

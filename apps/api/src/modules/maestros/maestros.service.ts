@@ -83,6 +83,8 @@ const COLUMNA_APLICA: Record<TipoAtencion, keyof MateriaRow> = {
   Consulta: "aplicaConsulta",
   Asesoria: "aplicaAsesoria",
   Juicio: "aplicaJuicio",
+  // Posesión efectiva usa las materias de asesoría (trámite no contencioso).
+  PosesionEfectiva: "aplicaAsesoria",
 };
 
 @Injectable()

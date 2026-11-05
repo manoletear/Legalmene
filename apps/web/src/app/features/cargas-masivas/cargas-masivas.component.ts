@@ -1,3 +1,4 @@
+import { descargarArchivo } from "../../shared/descarga";
 import { Component, OnInit, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
@@ -10,7 +11,7 @@ import { MessageService } from "primeng/api";
 import { CargasMasivasApiService } from "../../core/services/cargas-masivas.service";
 import { PlanesApiService } from "../../core/services/planes.service";
 import { PLANES_SIN_COBERTURA } from "@legalmene/shared";
-import type { CargaMasivaResultado, TipoCargaMasiva } from "@legalmene/shared";
+import type { CargaMasivaResultado, EntidadCargaMasiva, TipoCargaMasiva } from "@legalmene/shared";
 
 @Component({
   selector: "lm-cargas-masivas",
@@ -28,15 +29,23 @@ import type { CargaMasivaResultado, TipoCargaMasiva } from "@legalmene/shared";
     <p-card>
       <ng-template pTemplate="header">
         <div style="padding:16px 16px 0;">
-          <h2 style="margin:0;">Cargas masivas de afiliados</h2>
+          <h2 style="margin:0;">Cargas masivas</h2>
           <small class="lm-muted">
-            Nómina de un plan. FLUJO agrega RUT y actualiza fechas de término · STOCK además termina
-            los RUT del plan que no vienen en el archivo (Anexo §III)
+            Nómina, cargas (familiares) o bienes de un plan. FLUJO agrega y actualiza · STOCK además termina
+            lo del plan que no viene en el archivo (Anexo §III). Al terminar se avisa en la aplicación a quienes ejecutan cargas.
           </small>
         </div>
       </ng-template>
 
       <div class="lm-row" style="margin-bottom:16px;">
+        <p-select
+          [(ngModel)]="entidad"
+          [options]="entidadOpts"
+          optionLabel="label"
+          optionValue="value"
+          [style]="{ 'min-width': '180px' }"
+          (onChange)="resultado.set(null)"
+        ></p-select>
         <p-select
           [(ngModel)]="codPlan"
           [options]="planOpts()"
@@ -64,16 +73,25 @@ import type { CargaMasivaResultado, TipoCargaMasiva } from "@legalmene/shared";
 
       <details style="margin-top:16px;">
         <summary style="cursor:pointer; opacity:0.7;">Formato CSV esperado</summary>
-        <pre style="background:#f5f5f5; padding:8px; border-radius:4px; margin-top:8px;">rut,nombres,apellido_paterno,apellido_materno,email,telefono,comuna,region,fecha_nacimiento,fecha_inicio,fecha_termino
+        <pre *ngIf="entidad === 'cargas'" style="background:#f5f5f5; padding:8px; border-radius:4px; margin-top:8px;">rut_titular,rut,nombres,apellido_paterno,apellido_materno,parentesco,fecha_nacimiento,fecha_inicio,fecha_termino
+11111111-1,33333333-3,Ana,Pérez,Soto,Hijo,2010-05-02,2026-01-01,</pre>
+        <pre *ngIf="entidad === 'bienes'" style="background:#f5f5f5; padding:8px; border-radius:4px; margin-top:8px;">rut_titular,tipo,identificador,descripcion,comuna,fecha_inicio,fecha_termino
+11111111-1,Vehiculo,ABCD12,Auto familiar,Santiago,2026-01-01,
+11111111-1,Inmueble,123-45,Casa habitación,Ñuñoa,,</pre>
+        <small *ngIf="entidad !== 'afiliados'" class="lm-muted">
+          El titular debe estar en la nómina del plan. Parentesco: Conyuge, ConvivienteCivil, Hijo, Padre, Madre u Otro. Tipo de bien: Inmueble, Vehiculo u Otro.
+        </small>
+        <pre *ngIf="entidad === 'afiliados'" style="background:#f5f5f5; padding:8px; border-radius:4px; margin-top:8px;">rut,nombres,apellido_paterno,apellido_materno,email,telefono,comuna,region,fecha_nacimiento,fecha_inicio,fecha_termino
 11111111-1,Juan,Pérez,Soto,juan&#64;ejemplo.cl,+56912345678,Santiago,RM,1985-04-12,2026-01-01,2026-12-31
 22222222-2,María,González,,maria&#64;ejemplo.cl,,,,,,</pre>
-        <small class="lm-muted">
+        <small *ngIf="entidad === 'afiliados'" class="lm-muted">
           Si el RUT ya existe no se modifican sus datos personales. Sin fecha_inicio se usa la fecha de hoy.
         </small>
       </details>
 
       <div *ngIf="resultado() as r" style="margin-top:24px;">
-        <h3>Resultado</h3>
+        <div class="lm-row"><h3 style="flex:1;">Resultado</h3>
+          <button pButton icon="pi pi-file-excel" label="Descargar reporte" [outlined]="true" size="small" (click)="reporte(r)"></button></div>
         <div class="lm-grid lm-grid-4" style="margin-bottom:16px;">
           <p-card><div style="font-size:20px; font-weight:600;">{{ r.totalRegistros }}</div><small>Total filas</small></p-card>
           <p-card><div style="font-size:20px; font-weight:600; color:#388e3c;">{{ r.insertados }}</div><small>Nuevos en el plan</small></p-card>
@@ -104,6 +122,12 @@ export class CargasMasivasComponent implements OnInit {
   private msg = inject(MessageService);
 
   protected tipo: TipoCargaMasiva = "FLUJO";
+  protected entidad: EntidadCargaMasiva = "afiliados";
+  protected entidadOpts = [
+    { label: "Nómina (afiliados)", value: "afiliados" },
+    { label: "Cargas", value: "cargas" },
+    { label: "Bienes", value: "bienes" },
+  ];
   protected codPlan: string | null = null;
   protected planOpts = signal<{ label: string; value: string }[]>([]);
   protected file = signal<File | null>(null);
@@ -134,7 +158,7 @@ export class CargasMasivasComponent implements OnInit {
     if (!f || !this.codPlan) return;
     this.cargando.set(true);
     this.resultado.set(null);
-    this.api.cargarAfiliados(this.codPlan, this.tipo, f).subscribe({
+    this.api.cargar(this.entidad, this.codPlan, this.tipo, f).subscribe({
       next: (r) => {
         this.resultado.set(r);
         this.cargando.set(false);
@@ -146,6 +170,14 @@ export class CargasMasivasComponent implements OnInit {
         this.msg.add({ severity: "error", summary: "Error", detail: err.error?.message ?? err.message, life: 5000 });
       },
     });
+  }
+
+  async reporte(r: CargaMasivaResultado) {
+    try {
+      await descargarArchivo("/cargas-masivas/resumen.xlsx", `carga-${r.entidad}-${r.codPlan}.xlsx`, { body: r });
+    } catch (e) {
+      this.msg.add({ severity: "error", summary: "No se pudo descargar", detail: (e as Error).message, life: 6000 });
+    }
   }
 
   formatBytes(b: number): string {

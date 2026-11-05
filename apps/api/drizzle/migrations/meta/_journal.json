@@ -99,6 +99,13 @@
       "when": 1793892025942,
       "tag": "0013_controller_permiso",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793892853468,
+      "tag": "0014_cargas_bienes_posesion",
+      "breakpoints": true
     }
   ]
 }

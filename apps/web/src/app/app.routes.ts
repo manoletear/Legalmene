@@ -17,6 +17,11 @@ export const routes: Routes = [
       import("./features/dashboard/dashboard.component").then((m) => m.DashboardComponent),
   },
   {
+    path: "afiliados/:id",
+    canActivate: [permisoGuard("afiliados.ver")],
+    loadComponent: () => import("./features/afiliados/afiliado-detail.component").then((m) => m.AfiliadoDetailComponent),
+  },
+  {
     path: "afiliados",
     canActivate: [permisoGuard("afiliados.ver")],
     loadComponent: () =>
@@ -41,6 +46,7 @@ export const routes: Routes = [
   { path: "consultas", loadComponent: atencionesList, data: { tipoFiltro: "Consulta" } },
   { path: "asesorias", loadComponent: atencionesList, data: { tipoFiltro: "Asesoria" } },
   { path: "juicios", loadComponent: atencionesList, data: { tipoFiltro: "Juicio" } },
+  { path: "posesiones", loadComponent: atencionesList, data: { tipoFiltro: "PosesionEfectiva" } },
   {
     path: "gestiones",
     loadComponent: () =>

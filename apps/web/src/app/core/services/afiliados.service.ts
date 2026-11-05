@@ -2,7 +2,7 @@ import { Injectable, inject } from "@angular/core";
 import { HttpClient, HttpParams } from "@angular/common/http";
 import { Observable } from "rxjs";
 import { environment } from "../../../environments/environment";
-import type { Afiliado, AfiliadoConPlanes, CreateAfiliado, PaginatedResult } from "@legalmene/shared";
+import type { Afiliado, AfiliadoConPlanes, BienAfiliado, CargaAfiliado, CreateAfiliado, PaginatedResult } from "@legalmene/shared";
 
 @Injectable({ providedIn: "root" })
 export class AfiliadosApiService {
@@ -23,6 +23,14 @@ export class AfiliadosApiService {
       if (v !== undefined && v !== null && v !== "") params = params.set(k, String(v));
     });
     return this.http.get<PaginatedResult<AfiliadoConPlanes>>(this.base, { params });
+  }
+
+  cargas(id: string): Observable<CargaAfiliado[]> {
+    return this.http.get<CargaAfiliado[]>(`${this.base}/${id}/cargas`);
+  }
+
+  bienes(id: string): Observable<BienAfiliado[]> {
+    return this.http.get<BienAfiliado[]>(`${this.base}/${id}/bienes`);
   }
 
   obtener(id: string): Observable<AfiliadoConPlanes> {

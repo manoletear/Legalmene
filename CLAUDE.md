@@ -25,7 +25,7 @@ ejemplo y nunca deben quedar fijas en el código.
 | Módulos Afiliados / Atenciones / Gestiones / Comités / Pagos | ✅ CRUD base + flujos clave |
 | Cargas masivas FLUJO/STOCK | ✅ Implementado |
 | Frontend Angular 19 | ✅ Shell + Dashboard + Afiliados + Atenciones + Aranceles + Provisiones + Derivaciones + Finanzas |
-| Alineación con Anexo PSL | 🟡 Pasos 1 (modelo núcleo), 2 (maestros, aranceles, coberturas), 3 (estados, derivaciones, juicios, gestiones predefinidas, arancel por atención, provisiones) y 4 (perfiles y permisos configurables, alcance por propiedad) listos; 5 pendiente (ver `docs/requerimientos-anexo-psl.md` §5) |
+| Alineación con Anexo PSL | ✅ Pasos 1–5 (5a búsquedas sin precarga, XLSX, reportes, controller; 5b cargas, bienes, posesión efectiva). Pendientes en `docs/requerimientos-anexo-psl.md` §5 |
 | Infraestructura AWS (CDK) | ⏳ Pendiente |
 | Migración SQL Server → Postgres | ⏳ Pendiente |
 | WebPay producción | ⏳ Stub (esperar SDK Transbank) |
@@ -54,7 +54,8 @@ apps/
       common/         # acceso/ (contexto y alcance), decorators (CurrentUser, Permiso), guards, utils
       modules/        # auth, planes, afiliados, atenciones, gestiones,
                       # comites, pagos, cargas-masivas, maestros, aranceles,
-                      # coberturas, provisiones, exports, reportes, health
+                      # coberturas, provisiones, exports, reportes,
+                      # posesiones, health
   web/                # Frontend Angular 19
     src/app/
       core/           # Interceptors, services compartidos
@@ -155,6 +156,12 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
 - **Búsquedas (Anexo §XI)**: usar `lm-criterios-busqueda` (`apps/web/src/app/shared`) y no pedir datos
   hasta "Buscar"; en la API, los criterios comunes son `CriteriosBusquedaSchema` (shared) y se aplican
   con `condicionAtencion()` (`common/busqueda/criterios.ts`) junto con `filtroAtenciones()`.
+- **Cargas y bienes**: cuelgan de la relación titular–plan (`cargas_afiliado`, `bienes_afiliado`); se
+  cargan por `POST /cargas-masivas/:entidad` (FLUJO/STOCK). Una atención para una carga lleva
+  `carga_id`, validada en `AtencionesService.crear()` (mismo titular y plan, vigente hoy).
+- **Posesión efectiva**: es un tipo de atención (`PosesionEfectiva`, prefijo POSE); causante y
+  herederos se manejan solo vía `PosesionesService`. La ficha PDF es un resumen interno, nunca el
+  formulario oficial del Registro Civil.
 - **Exportaciones y reportes**: XLSX con `libroXlsx()` (`modules/exports/xlsx.ts`, exceljs), nunca CSV;
   tope `MAX_FILAS_EXPORTACION`; las descargas del frontend pasan por `descargarArchivo()`. Las
   fórmulas de reportes viven en `modules/reportes` (`calculo.ts` + `reportes.service.ts`); la tasa de
@@ -182,6 +189,7 @@ El orden funcional está en `docs/requerimientos-anexo-psl.md` §5 (primero el m
 afiliado único + `planes_afiliado`). Pendientes técnicos:
 
 1. Integración real Transbank WebPay (reemplazar stub en `pagos.service.ts`).
-2. Notificaciones por correo de vencimientos y flujos (SES).
+2. Notificaciones por correo de vencimientos y flujos (SES), incluido el resumen de cargas masivas.
 3. AWS CDK en `infra/` para Aurora + ECS + ALB + S3 (corregir `apps/api/Dockerfile`, que no copia `pnpm-lock.yaml`).
 4. Migración SQL Server 2008 → Aurora (AWS DMS + SCT) — ver plan en `docs/`.
+5. Feriados chilenos en `dias-habiles.ts`; formularios oficiales de posesión efectiva (discovery).

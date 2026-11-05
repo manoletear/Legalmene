@@ -236,6 +236,7 @@ export class AppComponent implements OnInit {
     { label: "Consultas", icon: "pi-comment", route: "/consultas" },
     { label: "Asesorías", icon: "pi-id-card", route: "/asesorias" },
     { label: "Juicios", icon: "pi-briefcase", route: "/juicios" },
+    { label: "Posesiones efectivas", icon: "pi-book", route: "/posesiones" },
     { label: "Derivaciones", icon: "pi-share-alt", route: "/derivaciones", permisos: ["derivaciones.solicitar", "derivaciones.aprobar"] },
     { label: "Aranceles", icon: "pi-dollar", route: "/aranceles" },
     { label: "Coberturas", icon: "pi-percentage", route: "/admin/coberturas" },

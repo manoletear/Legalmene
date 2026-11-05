@@ -30,6 +30,7 @@ import { CoberturasModule } from "./modules/coberturas/coberturas.module";
 import { MaestrosModule } from "./modules/maestros/maestros.module";
 import { ProvisionesModule } from "./modules/provisiones/provisiones.module";
 import { ReportesModule } from "./modules/reportes/reportes.module";
+import { PosesionesModule } from "./modules/posesiones/posesiones.module";
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { ReportesModule } from "./modules/reportes/reportes.module";
     MaestrosModule,
     ProvisionesModule,
     ReportesModule,
+    PosesionesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantThrottlerGuard },

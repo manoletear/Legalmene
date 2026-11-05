@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { EstadoAtencionEnum } from "./estados-atencion";
 
-export const TipoAtencionEnum = z.enum(["Consulta", "Asesoria", "Juicio"]);
+export const TipoAtencionEnum = z.enum(["Consulta", "Asesoria", "Juicio", "PosesionEfectiva"]);
 export type TipoAtencion = z.infer<typeof TipoAtencionEnum>;
 
 export const CanalContactoEnum = z.enum(["Telefonico", "Presencial", "Email", "Chat", "Videoconferencia"]);
@@ -52,6 +52,8 @@ export const AtencionSchema = z.object({
   riesgoCliente: riesgo.optional().nullable(),
   revisadoPorComite: z.boolean().optional(),
   causaTerminoId: z.string().uuid().optional().nullable(),
+  // Carga (familiar) del titular por la que se presta la atención, si aplica.
+  cargaId: z.string().uuid().optional().nullable(),
   metadata: z.record(z.unknown()).optional().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -71,6 +73,7 @@ export type FichaAtencion = AtencionConMaestros & {
   // fecha_inicio de la relación RUT–Plan bajo la que se atendió (null si es REZAGADO/METLIFE).
   afiliadoDesde: string | null;
   planNombre: string | null;
+  carga: { id: string; rut: string; nombre: string; parentesco: string | null } | null;
   responsable: { id: string; nombre: string; email: string; perfil: string } | null;
 };
 
@@ -81,7 +84,7 @@ export function riesgoTotal(a: { riesgoMateria?: number | null; riesgoCuantia?: 
 }
 
 // codPlan = plan del afiliado bajo el cual se presta la atención (vigente, o REZAGADO/METLIFE).
-// tipo se setea por el path (/consultas, /asesorias, /juicios).
+// tipo se setea por el path (/consultas, /asesorias, /juicios, /posesiones).
 export const CreateAtencionSchema = AtencionSchema.omit({
   id: true,
   correlativo: true,
@@ -103,7 +106,7 @@ export type CreateAtencion = z.infer<typeof CreateAtencionSchema>;
 
 // El plan y el afiliado no cambian después de creada la atención. El estado cambia solo
 // por POST /atenciones/:id/estado. revisadoPorComite solo lo marca Supervisor/Administrador.
-export const UpdateAtencionSchema = CreateAtencionSchema.omit({ codPlan: true, afiliadoId: true, tipo: true })
+export const UpdateAtencionSchema = CreateAtencionSchema.omit({ codPlan: true, afiliadoId: true, tipo: true, cargaId: true })
   .partial()
   .extend({ revisadoPorComite: z.boolean().optional() });
 export type UpdateAtencion = z.infer<typeof UpdateAtencionSchema>;

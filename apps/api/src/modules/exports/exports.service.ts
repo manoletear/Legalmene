@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable } from "@nestjs/common";
-import { and, count, desc, eq, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { posesionesEfectivas } from "../../db/schema/posesiones";
 import { alias } from "drizzle-orm/pg-core";
 import {
   MAX_FILAS_EXPORTACION,
@@ -11,7 +12,7 @@ import {
 import { DRIZZLE, Database } from "../../db/database.module";
 import { filtroAtenciones } from "../../common/acceso/alcance";
 import { accesoActual } from "../../common/acceso/contexto";
-import { condicionAtencion, rutComparable } from "../../common/busqueda/criterios";
+import { condicionAtencion, condicionBien, rutComparable } from "../../common/busqueda/criterios";
 import { afiliados, planesAfiliado } from "../../db/schema/afiliados";
 import { atenciones, derivaciones } from "../../db/schema/atenciones";
 import { competencias, materias, organismos, tiposConsulta, tribunales } from "../../db/schema/maestros";
@@ -34,6 +35,7 @@ const TIPO_POR_BUSQUEDA: Partial<Record<BusquedaExportable, TipoAtencion>> = {
   consultas: "Consulta",
   asesorias: "Asesoria",
   juicios: "Juicio",
+  posesiones: "PosesionEfectiva",
 };
 
 // Permiso adicional a exportar.datos según la búsqueda (el mismo que exige su listado).
@@ -153,6 +155,21 @@ export class ExportsService {
     await this.contar(() => this.db.select({ value: count() }).from(atenciones).where(where));
     const filas = await filasAtencionDetalle(this.db, where);
     type Fila = FilaAtencionDetalle;
+    const ids = filas.map((r) => r.id);
+    const causantes =
+      tipo === "PosesionEfectiva" && ids.length
+        ? await this.db
+            .select({
+              atencionId: posesionesEfectivas.atencionId,
+              rut: posesionesEfectivas.causanteRut,
+              nombre: posesionesEfectivas.causanteNombre,
+              defuncion: posesionesEfectivas.causanteFechaDefuncion,
+              herederos: sql<number>`(select count(*) from herederos_posesion h where h.atencion_id = ${posesionesEfectivas.atencionId} and h.vigente)`,
+            })
+            .from(posesionesEfectivas)
+            .where(inArray(posesionesEfectivas.atencionId, ids))
+        : [];
+    const causante = new Map(causantes.map((c) => [c.atencionId, c]));
 
     const comunes: ColumnaXlsx<Fila>[] = [
       { titulo: "Correlativo", valor: (r) => r.correlativo, ancho: 18 },
@@ -182,8 +199,15 @@ export class ExportsService {
         { titulo: "Tribunal", valor: (r) => r.tribunal, ancho: 24 },
         { titulo: "ROL/RIT", valor: (r) => r.rolCausa },
       ],
+      PosesionEfectiva: [
+        ...comunes,
+        { titulo: "RUT causante", valor: (r) => causante.get(r.id)?.rut ?? "" },
+        { titulo: "Causante", valor: (r) => causante.get(r.id)?.nombre ?? "", ancho: 28 },
+        { titulo: "Fecha defunción", valor: (r) => causante.get(r.id)?.defuncion ?? "" },
+        { titulo: "Herederos", valor: (r) => Number(causante.get(r.id)?.herederos ?? 0) },
+      ],
     };
-    const nombre = { Consulta: "Consultas", Asesoria: "Asesorías", Juicio: "Juicios" }[tipo];
+    const nombre = { Consulta: "Consultas", Asesoria: "Asesorías", Juicio: "Juicios", PosesionEfectiva: "Posesiones efectivas" }[tipo];
     return this.libro(nombre, porTipo[tipo], filas);
   }
 
@@ -195,6 +219,7 @@ export class ExportsService {
       f.canalId ? eq(planes.canalId, f.canalId) : undefined,
       rut ? sql`upper(regexp_replace(${afiliados.rut}, '[^0-9kK]', '', 'g')) like ${`%${rut}%`}` : undefined,
       f.vigencia ? sql`${afiliados.vigencia} = ${f.vigencia}` : undefined,
+      f.bien ? sql`${afiliados.id} in (${condicionBien(f.bien)})` : undefined,
       f.q
         ? sql`(${afiliados.rut} ilike ${`%${f.q}%`} or ${afiliados.nombres} ilike ${`%${f.q}%`} or ${afiliados.apellidoPaterno} ilike ${`%${f.q}%`} or ${afiliados.email} ilike ${`%${f.q}%`})`
         : undefined,

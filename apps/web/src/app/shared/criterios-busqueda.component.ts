@@ -10,10 +10,10 @@ import { MaestrosApiService } from "../core/services/maestros.service";
 import { UsuariosAdminService } from "../core/services/usuarios-admin.service";
 import { PermisoDirective } from "../core/permisos";
 
-export type CampoCriterio = "correlativo" | "rut" | "abogado" | "plan" | "canal" | "competencia" | "materia" | "fechas" | "texto";
+export type CampoCriterio = "correlativo" | "rut" | "abogado" | "plan" | "canal" | "competencia" | "materia" | "fechas" | "texto" | "bien";
 export type Criterios = Record<string, string | undefined>;
 
-type ClaveCriterio = "correlativo" | "rut" | "q" | "abogadoId" | "codPlan" | "canalId" | "competenciaId" | "materiaId" | "estado" | "fechaDesde" | "fechaHasta";
+type ClaveCriterio = "correlativo" | "rut" | "q" | "bien" | "abogadoId" | "codPlan" | "canalId" | "competenciaId" | "materiaId" | "estado" | "fechaDesde" | "fechaHasta";
 type Valores = Partial<Record<ClaveCriterio, string>>;
 
 interface Opcion {
@@ -65,6 +65,10 @@ interface Opcion {
         <label class="lm-small">Materia</label>
         <p-select name="materiaId" [(ngModel)]="valores.materiaId" [options]="materiaOpts()" optionLabel="label" optionValue="value"
           placeholder="Todas" [showClear]="true" [filter]="true" appendTo="body"></p-select>
+      </div>
+      <div *ngIf="tiene('bien')" class="lm-col" style="gap:4px;">
+        <label class="lm-small">Bien cubierto</label>
+        <input pInputText name="bien" [(ngModel)]="valores.bien" placeholder="Rol, patente o descripción" />
       </div>
       <div *ngIf="estados()" class="lm-col" style="gap:4px;">
         <label class="lm-small">Estado</label>

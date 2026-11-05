@@ -5,6 +5,7 @@ import {
   Get,
   Inject,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Put,
@@ -42,6 +43,18 @@ export class AfiliadosController {
   @Permiso("afiliados.ver")
   consultarPorRut(@Param("rut") rut: string) {
     return this.service.consultarPorRut(rut);
+  }
+
+  @Get(":id/cargas")
+  @Permiso("afiliados.ver")
+  cargas(@Param("id", ParseUUIDPipe) id: string) {
+    return this.service.cargas(id);
+  }
+
+  @Get(":id/bienes")
+  @Permiso("afiliados.ver")
+  bienes(@Param("id", ParseUUIDPipe) id: string) {
+    return this.service.bienes(id);
   }
 
   @Get(":id")

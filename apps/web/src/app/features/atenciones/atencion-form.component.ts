@@ -1,7 +1,7 @@
-import { Component, inject, signal } from "@angular/core";
+import { Component, computed, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormBuilder, ReactiveFormsModule, Validators } from "@angular/forms";
-import { Router } from "@angular/router";
+import { ActivatedRoute, Router } from "@angular/router";
 import { CardModule } from "primeng/card";
 import { InputTextModule } from "primeng/inputtext";
 import { TextareaModule } from "primeng/textarea";
@@ -12,7 +12,7 @@ import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { AfiliadosApiService } from "../../core/services/afiliados.service";
 import { MaestrosApiService } from "../../core/services/maestros.service";
 import { CoberturasApiService } from "../../core/services/coberturas.service";
-import { PLANES_SIN_COBERTURA } from "@legalmene/shared";
+import { PARENTESCO_LABEL, PLANES_SIN_COBERTURA, type CargaAfiliado } from "@legalmene/shared";
 import type { AfiliadoConPlanes, CanalContacto, Competencia, CopagoResultado, MaestroSimple, Materia, TipoAtencion } from "@legalmene/shared";
 
 @Component({
@@ -67,11 +67,17 @@ import type { AfiliadoConPlanes, CanalContacto, Competencia, CopagoResultado, Ma
             optionDisabled="disabled"
             appendTo="body"
             placeholder="Selecciona plan"
-            (onChange)="previsualizarCopago()"
+            (onChange)="codPlanSel.set($event.value ?? ''); form.patchValue({ cargaId: null }); previsualizarCopago()"
           ></p-select>
           <small *ngIf="sinPlanVigente()" class="lm-muted">
             El RUT no tiene planes vigentes: la atención se registra como Rezagado o MetLife.
           </small>
+        </div>
+        <div class="lm-col" style="gap:4px;" *ngIf="cargaOpts().length">
+          <label>Atención para una carga</label>
+          <p-select formControlName="cargaId" [options]="cargaOpts()" optionLabel="label" optionValue="value" appendTo="body"
+            placeholder="El titular" [showClear]="true"></p-select>
+          <small class="lm-muted">Cargas vigentes del titular en el plan elegido.</small>
         </div>
 
         <div class="lm-col" style="gap:4px;">
@@ -134,6 +140,29 @@ import type { AfiliadoConPlanes, CanalContacto, Competencia, CopagoResultado, Ma
           </div>
         </ng-container>
 
+        <ng-container *ngIf="form.value.tipo === 'PosesionEfectiva'">
+          <h3 style="margin:8px 0 0;">Causante</h3>
+          <small class="lm-muted">Puede completarse después en la ficha; se exige para pasar a "En preparación".</small>
+          <div class="lm-row" style="gap:12px; flex-wrap:wrap;">
+            <div class="lm-col" style="gap:4px; flex:2; min-width:220px;">
+              <label>Nombre del causante</label>
+              <input pInputText formControlName="causanteNombre" />
+            </div>
+            <div class="lm-col" style="gap:4px; flex:1; min-width:160px;">
+              <label>RUT del causante</label>
+              <input pInputText formControlName="causanteRut" placeholder="12.345.678-5" />
+            </div>
+            <div class="lm-col" style="gap:4px; flex:1; min-width:160px;">
+              <label>Fecha de defunción</label>
+              <input pInputText type="date" formControlName="causanteFechaDefuncion" />
+            </div>
+          </div>
+          <div class="lm-col" style="gap:4px;">
+            <label>Último domicilio</label>
+            <input pInputText formControlName="causanteUltimoDomicilio" />
+          </div>
+        </ng-container>
+
         <div class="lm-col" style="gap:4px;">
           <label>Descripción</label>
           <textarea pTextarea rows="4" formControlName="descripcion"></textarea>
@@ -165,6 +194,7 @@ export class AtencionFormComponent {
   private maestrosApi = inject(MaestrosApiService);
   private coberturasApi = inject(CoberturasApiService);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
   private msg = inject(MessageService);
 
   protected competencias = signal<Competencia[]>([]);
@@ -188,7 +218,15 @@ export class AtencionFormComponent {
     { label: "Consulta", value: "Consulta" },
     { label: "Asesoría", value: "Asesoria" },
     { label: "Juicio", value: "Juicio" },
+    { label: "Posesión efectiva", value: "PosesionEfectiva" },
   ];
+  protected cargas = signal<CargaAfiliado[]>([]);
+  protected codPlanSel = signal<string>("");
+  protected cargaOpts = computed(() =>
+    this.cargas()
+      .filter((c) => c.vigente && c.codPlan === this.codPlanSel())
+      .map((c) => ({ label: `${c.nombres} ${c.apellidoPaterno} (${c.rut}${c.parentesco ? " · " + PARENTESCO_LABEL[c.parentesco] : ""})`, value: c.id })),
+  );
   protected prioridadOpts = [
     { label: "Baja", value: "Baja" },
     { label: "Media", value: "Media" },
@@ -214,9 +252,17 @@ export class AtencionFormComponent {
     canalContacto: ["Telefonico"],
     tipoConsultaId: [null as string | null],
     codigoGrabacion: [""],
+    cargaId: [null as string | null],
+    causanteNombre: [""],
+    causanteRut: [""],
+    causanteFechaDefuncion: [""],
+    causanteUltimoDomicilio: [""],
   });
 
   constructor() {
+    // ?tipo=PosesionEfectiva (desde la búsqueda de posesiones) preselecciona el tipo.
+    const tipo = this.route.snapshot.queryParamMap.get("tipo");
+    if (tipo && this.tipoOpts.some((o) => o.value === tipo)) this.form.patchValue({ tipo });
     this.afiliadosApi.buscar({ pageSize: 200 }).subscribe((res) => this.afiliados.set(res.data));
     this.maestrosApi.listar("competencias", { vigente: true }).subscribe((c) => this.competencias.set(c));
     this.maestrosApi.listar("tipos-consulta", { vigente: true }).subscribe((t) => this.tiposConsulta.set(t));
@@ -253,9 +299,11 @@ export class AtencionFormComponent {
 
   // Solo los planes vigentes del RUT son seleccionables; sin ninguno, Rezagado/MetLife.
   cargarPlanes(afiliadoId: string | null) {
-    this.form.patchValue({ codPlan: "" });
+    this.form.patchValue({ codPlan: "", cargaId: null });
     this.planOpts.set([]);
+    this.cargas.set([]);
     if (!afiliadoId) return;
+    this.afiliadosApi.cargas(afiliadoId).subscribe((cs) => this.cargas.set(cs));
     this.afiliadosApi.obtener(afiliadoId).subscribe((afi) => {
       const vigentes = afi.planes.filter((p) => p.vigente);
       const opciones = afi.planes.map((p) => ({
@@ -271,6 +319,7 @@ export class AtencionFormComponent {
       this.sinPlanVigente.set(vigentes.length === 0);
       this.planOpts.set(opciones);
       this.form.patchValue({ codPlan: vigentes[0]?.codPlan ?? "REZAGADO" });
+      this.codPlanSel.set(this.form.value.codPlan ?? "");
       this.previsualizarCopago();
     });
   }
@@ -287,6 +336,7 @@ export class AtencionFormComponent {
       asunto: v.asunto!,
       descripcion: v.descripcion || undefined,
       prioridad: v.prioridad as "Media",
+      cargaId: v.cargaId || undefined,
       ...(v.tipo === "Consulta"
         ? {
             canalContacto: (v.canalContacto as CanalContacto) || undefined,
@@ -300,7 +350,17 @@ export class AtencionFormComponent {
         ? this.api.crearConsulta(payload)
         : v.tipo === "Asesoria"
           ? this.api.crearAsesoria(payload)
-          : this.api.crearJuicio(payload);
+          : v.tipo === "PosesionEfectiva"
+            ? this.api.crearPosesion({
+                ...payload,
+                causante: {
+                  causanteNombre: v.causanteNombre || null,
+                  causanteRut: v.causanteRut || null,
+                  causanteFechaDefuncion: v.causanteFechaDefuncion || null,
+                  causanteUltimoDomicilio: v.causanteUltimoDomicilio || null,
+                },
+              })
+            : this.api.crearJuicio(payload);
     obs.subscribe({
       next: (atencion) => {
         this.msg.add({ severity: "success", summary: "Creada", detail: atencion.correlativo, life: 3000 });

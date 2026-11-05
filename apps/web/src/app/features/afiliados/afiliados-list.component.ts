@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
-import { ActivatedRoute } from "@angular/router";
+import { ActivatedRoute, RouterLink } from "@angular/router";
 import { CardModule } from "primeng/card";
 import { TableModule } from "primeng/table";
 import { ButtonModule } from "primeng/button";
@@ -19,7 +19,7 @@ import { descargarArchivo } from "../../shared/descarga";
 @Component({
   selector: "lm-afiliados-list",
   standalone: true,
-  imports: [CommonModule, FormsModule, CardModule, TableModule, ButtonModule, SelectModule, TagModule, TooltipModule, CriteriosBusquedaComponent],
+  imports: [CommonModule, FormsModule, RouterLink, CardModule, TableModule, ButtonModule, SelectModule, TagModule, TooltipModule, CriteriosBusquedaComponent],
   template: `
     <p-card>
       <ng-template pTemplate="header">
@@ -29,7 +29,7 @@ import { descargarArchivo } from "../../shared/descarga";
       </ng-template>
 
       <lm-criterios-busqueda
-        [campos]="['rut', 'texto', 'plan', 'canal']"
+        [campos]="['rut', 'texto', 'plan', 'canal', 'bien']"
         [estados]="vigenciaOpts"
         [iniciales]="iniciales"
         etiquetaTexto="Nombre o correo"
@@ -70,7 +70,7 @@ import { descargarArchivo } from "../../shared/descarga";
           </ng-template>
           <ng-template pTemplate="body" let-a>
             <tr>
-              <td>{{ a.rut }}</td>
+              <td><a [routerLink]="['/afiliados', a.id]" style="text-decoration:none; color:#1976d2;">{{ a.rut }}</a></td>
               <td>{{ a.apellidoPaterno }} {{ a.apellidoMaterno }}, {{ a.nombres }}</td>
               <td>{{ a.email }}</td>
               <td>

@@ -21,7 +21,8 @@ import {
 } from "@legalmene/shared";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { atenciones, contrapartes, Atencion, ContraparteRow, NuevaAtencion } from "../../db/schema/atenciones";
-import { afiliados } from "../../db/schema/afiliados";
+import { afiliados, cargasAfiliado } from "../../db/schema/afiliados";
+import { herederosPosesion, posesionesEfectivas } from "../../db/schema/posesiones";
 import { usuarios } from "../../db/schema/usuarios";
 import { gestiones } from "../../db/schema/gestiones";
 import { comites } from "../../db/schema/comites";
@@ -52,6 +53,8 @@ const APLICA: Record<TipoAtencion, "aplicaConsulta" | "aplicaAsesoria" | "aplica
   Consulta: "aplicaConsulta",
   Asesoria: "aplicaAsesoria",
   Juicio: "aplicaJuicio",
+  // La posesión efectiva es un trámite no contencioso: usa las materias de asesoría.
+  PosesionEfectiva: "aplicaAsesoria",
 };
 
 // Campos que solo existen para un tipo de atención.
@@ -136,12 +139,16 @@ export class AtencionesService {
         responsableNombre: usuarios.nombre,
         responsableEmail: usuarios.email,
         responsablePerfil: sql<string | null>`(select pf.nombre from perfiles pf where pf.id = ${usuarios.perfilId})`,
+        cargaRut: cargasAfiliado.rut,
+        cargaNombre: sql<string | null>`${cargasAfiliado.nombres} || ' ' || ${cargasAfiliado.apellidoPaterno}`,
+        cargaParentesco: cargasAfiliado.parentesco,
       })
       .from(atenciones)
       .innerJoin(competencias, eq(competencias.id, atenciones.competenciaId))
       .innerJoin(materias, eq(materias.id, atenciones.materiaId))
       .innerJoin(afiliados, eq(afiliados.id, atenciones.afiliadoId))
       .leftJoin(usuarios, eq(usuarios.id, atenciones.abogadoAsignadoId))
+      .leftJoin(cargasAfiliado, eq(cargasAfiliado.id, atenciones.cargaId))
       .where(and(eq(atenciones.id, id), filtroAtenciones()));
     if (!row) throw new NotFoundException(`Atención ${id} no existe`);
     const {
@@ -154,6 +161,9 @@ export class AtencionesService {
       responsableNombre,
       responsableEmail,
       responsablePerfil,
+      cargaRut,
+      cargaNombre,
+      cargaParentesco,
       ...atencion
     } = row;
     return {
@@ -162,6 +172,7 @@ export class AtencionesService {
       afiliado: { rut: afiliadoRut, nombre: afiliadoNombre, email: afiliadoEmail, telefono: afiliadoTelefono },
       afiliadoDesde,
       planNombre,
+      carga: atencion.cargaId && cargaRut ? { id: atencion.cargaId, rut: cargaRut, nombre: cargaNombre ?? "", parentesco: cargaParentesco } : null,
       responsable:
         atencion.abogadoAsignadoId && responsableNombre
           ? { id: atencion.abogadoAsignadoId, nombre: responsableNombre, email: responsableEmail ?? "", perfil: responsablePerfil ?? "" }
@@ -215,6 +226,21 @@ export class AtencionesService {
     );
   }
 
+  // La carga debe ser del titular, del plan de la atención y estar vigente hoy (Chile).
+  private async validarCarga(afiliadoId: string, codPlan: string, cargaId: string): Promise<void> {
+    const [c] = await this.db
+      .select({
+        afiliadoId: cargasAfiliado.afiliadoId,
+        codPlan: cargasAfiliado.codPlan,
+        vigente: sql<boolean>`${cargasAfiliado.vigencia} = 'Activo' and ${cargasAfiliado.fechaInicio} <= (now() at time zone 'America/Santiago')::date and (${cargasAfiliado.fechaTermino} is null or ${cargasAfiliado.fechaTermino} >= (now() at time zone 'America/Santiago')::date)`,
+      })
+      .from(cargasAfiliado)
+      .where(eq(cargasAfiliado.id, cargaId));
+    if (!c || c.afiliadoId !== afiliadoId) throw new BadRequestException("La carga no pertenece al afiliado");
+    if (c.codPlan !== codPlan) throw new BadRequestException(`La carga no está cubierta por el plan ${codPlan}`);
+    if (!c.vigente) throw new BadRequestException("La carga no está vigente");
+  }
+
   // Quita los campos que no corresponden al tipo (p. ej. tribunal en una consulta).
   private limpiarPorTipo<T extends Record<string, unknown>>(tipo: TipoAtencion, data: T): T {
     const fuera: readonly string[] = tipo === "Consulta" ? CAMPOS_CASO : CAMPOS_CONSULTA;
@@ -231,6 +257,7 @@ export class AtencionesService {
     const codPlan = input.codPlan;
     await this.validarPlanDeAtencion(input.afiliadoId, codPlan);
     await this.validarMateria(input.competenciaId, input.materiaId, input.tipo);
+    if (input.cargaId) await this.validarCarga(input.afiliadoId, codPlan, input.cargaId);
 
     const correlativo = await siguienteCorrelativo(this.db, input.tipo);
     const datos = this.limpiarPorTipo(input.tipo, { ...input });
@@ -336,12 +363,22 @@ export class AtencionesService {
         .where(and(eq(provisiones.atencionId, id), inArray(provisiones.estado, [...ESTADOS_PROVISION_ABIERTOS]))),
       actual.tipo === "Consulta" ? Promise.resolve(null) : this.arancelesAtencion.bloqueo(id),
     ]);
+    let posesion: { causante: Record<string, unknown> | null; herederos: number } | undefined;
+    if (actual.tipo === "PosesionEfectiva") {
+      const [pe] = await this.db.select().from(posesionesEfectivas).where(eq(posesionesEfectivas.atencionId, id));
+      const [h] = await this.db
+        .select({ n: count() })
+        .from(herederosPosesion)
+        .where(and(eq(herederosPosesion.atencionId, id), eq(herederosPosesion.vigente, true)));
+      posesion = { causante: pe ?? null, herederos: Number(h?.n ?? 0) };
+    }
 
     const faltan = validarTransicion({ ...actual, causaTerminoId }, input.estado, {
       gestionesPendientes: Number(g?.n ?? 0),
       comitesAbiertos: Number(c?.n ?? 0),
       provisionesAbiertas: Number(p?.n ?? 0),
       bloqueoArancel,
+      posesion,
     });
     if (faltan.length > 0) throw new BadRequestException(mensajeFaltantes(input.estado, faltan));
 

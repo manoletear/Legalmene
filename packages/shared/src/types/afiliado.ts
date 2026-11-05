@@ -70,7 +70,12 @@ export type TerminarPlan = z.infer<typeof TerminarPlanSchema>;
 export const TipoCargaMasivaEnum = z.enum(["FLUJO", "STOCK"]);
 export type TipoCargaMasiva = z.infer<typeof TipoCargaMasivaEnum>;
 
+// Qué se carga: la nómina del plan, las cargas (familiares) o los bienes cubiertos (Anexo §III).
+export const EntidadCargaMasivaEnum = z.enum(["afiliados", "cargas", "bienes"]);
+export type EntidadCargaMasiva = z.infer<typeof EntidadCargaMasivaEnum>;
+
 export const CargaMasivaResultadoSchema = z.object({
+  entidad: EntidadCargaMasivaEnum.default("afiliados"),
   tipo: TipoCargaMasivaEnum,
   codPlan: z.string(),
   totalRegistros: z.number().int(),
@@ -87,3 +92,51 @@ export const CargaMasivaResultadoSchema = z.object({
   duracionMs: z.number().int(),
 });
 export type CargaMasivaResultado = z.infer<typeof CargaMasivaResultadoSchema>;
+
+// Carga (familiar) cubierta por la relación RUT–Plan del titular.
+export const ParentescoEnum = z.enum(["Conyuge", "ConvivienteCivil", "Hijo", "Padre", "Madre", "Otro"]);
+export type Parentesco = z.infer<typeof ParentescoEnum>;
+export const PARENTESCO_LABEL: Record<Parentesco, string> = {
+  Conyuge: "Cónyuge",
+  ConvivienteCivil: "Conviviente civil",
+  Hijo: "Hijo/a",
+  Padre: "Padre",
+  Madre: "Madre",
+  Otro: "Otro",
+};
+
+export interface CargaAfiliado {
+  id: string;
+  afiliadoId: string;
+  codPlan: string;
+  rut: string;
+  nombres: string;
+  apellidoPaterno: string;
+  apellidoMaterno: string | null;
+  parentesco: Parentesco | null;
+  fechaNacimiento: string | null;
+  fechaInicio: string;
+  fechaTermino: string | null;
+  vigencia: VigenciaAfiliado;
+  // Hoy da derecho a atención (vigencia Activo y dentro de fechas, con el plan del titular vigente).
+  vigente: boolean;
+}
+
+// Bien cubierto por la relación RUT–Plan (p. ej. inmueble o vehículo de un plan hogar/auto).
+export const TipoBienEnum = z.enum(["Inmueble", "Vehiculo", "Otro"]);
+export type TipoBien = z.infer<typeof TipoBienEnum>;
+
+export interface BienAfiliado {
+  id: string;
+  afiliadoId: string;
+  codPlan: string;
+  tipo: TipoBien;
+  // Rol SII, patente u otro identificador del bien.
+  identificador: string;
+  descripcion: string | null;
+  comuna: string | null;
+  fechaInicio: string;
+  fechaTermino: string | null;
+  vigencia: VigenciaAfiliado;
+  vigente: boolean;
+}

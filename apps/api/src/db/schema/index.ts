@@ -13,3 +13,4 @@ export * from "./notificaciones";
 export * from "./aranceles";
 export * from "./provisiones";
 export * from "./finanzas";
+export * from "./posesiones";

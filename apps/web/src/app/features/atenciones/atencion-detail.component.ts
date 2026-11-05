@@ -1,3 +1,4 @@
+import { PosesionPanelComponent } from "./posesion-panel.component";
 import { Component, OnInit, inject, signal, computed } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormBuilder, ReactiveFormsModule, Validators } from "@angular/forms";
@@ -70,6 +71,7 @@ interface PipelineStep {
   selector: "lm-atencion-detail",
   standalone: true,
   imports: [
+    PosesionPanelComponent,
     CommonModule,
     ReactiveFormsModule,
     RouterLink,
@@ -112,7 +114,8 @@ interface PipelineStep {
               <div class="lm-info-row"><span>RUT</span><strong>{{ a.afiliado.rut }}</strong></div>
               <div class="lm-info-row"><span>Afiliado desde</span><strong>{{ a.afiliadoDesde ? (a.afiliadoDesde | date: 'dd/MM/yyyy') : '—' }}</strong></div>
               <div class="lm-info-row" *ngIf="a.afiliado.telefono"><span>Teléfono</span><strong>{{ a.afiliado.telefono }}</strong></div>
-              <div class="lm-info-card-footer"><a routerLink="/afiliados" [queryParams]="{ rut: a.afiliado.rut }">Ver ficha del afiliado →</a></div>
+              <div class="lm-info-row" *ngIf="a.carga as c"><span>Atención para</span><strong>{{ c.nombre }} ({{ c.rut }})</strong></div>
+              <div class="lm-info-card-footer"><a [routerLink]="['/afiliados', a.afiliadoId]">Ver ficha del afiliado →</a></div>
             </div>
 
             <div class="lm-info-card">
@@ -232,6 +235,9 @@ interface PipelineStep {
               </div>
             </div>
           </p-card>
+
+          <lm-posesion-panel *ngIf="a.tipo === 'PosesionEfectiva'" [atencionId]="a.id" [correlativo]="a.correlativo"
+            [cerrada]="a.estado === 'Terminada' || a.estado === 'Abandonada'"></lm-posesion-panel>
 
           <!-- Tabs -->
           <p-card>

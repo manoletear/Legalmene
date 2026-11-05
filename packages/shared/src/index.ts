@@ -15,3 +15,4 @@ export * from "./types/estados-atencion";
 export * from "./types/flujos";
 export * from "./types/arancel-atencion";
 export * from "./types/busqueda";
+export * from "./types/posesion";

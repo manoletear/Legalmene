@@ -53,7 +53,7 @@ const RUN = !!process.env.DATABASE_URL;
         ArancelesService,
         CargasMasivasService,
         { provide: WebhooksService, useValue: { emitir: async () => undefined } },
-        { provide: NotifInboxService, useValue: { crear: async () => null } },
+        { provide: NotifInboxService, useValue: { crear: async () => null, crearBulk: async () => [] } },
       ],
     }).compile();
     afiliadosSrv = moduleRef.get(AfiliadosService);

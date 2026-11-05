@@ -231,6 +231,7 @@ export class ReportesComponent implements OnInit {
     { label: "Consultas", value: "Consulta" },
     { label: "Asesorías", value: "Asesoria" },
     { label: "Juicios", value: "Juicio" },
+    { label: "Posesiones efectivas", value: "PosesionEfectiva" },
   ];
   protected campoOpts = (Object.entries(CAMPOS_INFORME_ATENCIONES) as [CampoInformeAtencion, string][]).map(([value, label]) => ({ label, value }));
 

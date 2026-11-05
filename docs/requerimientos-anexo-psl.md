@@ -79,7 +79,7 @@ Logs (accesos, acciones, errores con aviso al admin), alta disponibilidad, docum
 | Área | Estado actual | Brecha |
 |---|---|---|
 | Plan / multi-tenancy | ✅ Paso 1: plan como producto, sin header `X-Cod-Plan`; filtro opcional `?codPlan=`. ✅ Paso 4: acceso por perfil y por propiedad de la atención; `usuarios.cod_planes` eliminado | — |
-| Afiliados | ✅ Paso 1: persona única por RUT + `planes_afiliado` con vigencias, consulta `GET /afiliados/rut/:rut` | Cargas familiares y bienes |
+| Afiliados | ✅ Paso 1: persona única por RUT + `planes_afiliado` con vigencias, consulta `GET /afiliados/rut/:rut`. ✅ Paso 5b: cargas y bienes por RUT–Plan, ficha `/afiliados/:id` | Mantención manual (alta/edición) de cargas y bienes fuera de la carga masiva |
 | Coberturas | ✅ Paso 2: reglas por plan (materia/tipo opcionales; % del arancel, precio fijo UF o sin cobertura) y `GET /copago` | — |
 | Aranceles | ✅ Paso 2: por materia (y tipo opcional), comunes a todos los planes. ✅ Paso 3b: estado por atención (rojo → naranjo → amarillo → verde), aprobación de jefatura, pago con UF del día (Contador) y bloqueo de la atención mientras esté impago | Correo a aprueba.arancel@; comprobante de pago; WebPay real |
 | Maestros | ✅ Paso 2: competencias, materias, procedimientos, tribunales, organismos, tipos de consulta, causas de término, calidades procesales (`/maestros/:tipo`, pantalla Admin › Maestros) | Regiones/ciudades/comunas, tipos de acción, gestiones por materia (paso 3), horarios por perfil |
@@ -90,9 +90,9 @@ Logs (accesos, acciones, errores con aviso al admin), alta disponibilidad, docum
 | Juicios | ✅ Paso 3a: tribunal, ROL/RIT, RUC, cuantía con moneda, procedimiento, calidad procesal, riesgo (materia+cuantía+cliente), contraparte | Audiencias en agenda |
 | Gestiones | ✅ Paso 3a: plantillas por materia/procedimiento con orden y plazo en días hábiles; no se cierra con gestiones o comité pendientes | Feriados chilenos en el cálculo de plazos; correo al cliente al iniciar/terminar gestiones |
 | Provisiones | ✅ Paso 3b: Solicitada → Pagada → En aprobación → Autorizada/Rechazada → Disponible → Entregada → Rendida → Cerrada, con roles Contador/Finanzas, bitácora de eventos, rendición con gastos/reintegros y bloqueo de nuevas entregas con montos por rendir; vuelve de Disponible a Pagada si no se retira en 2 días hábiles | Rendición ligada a "Rendido a cliente"; comprobantes de gasto obligatorios |
-| Carga masiva | ✅ Paso 1: flujo/stock sobre `planes_afiliado` (persona solo se crea, no se actualiza) | Cargas y bienes; correo de resumen |
+| Carga masiva | ✅ Paso 1: flujo/stock sobre `planes_afiliado`. ✅ Paso 5b: cargas y bienes (flujo/stock), reporte XLSX y aviso en la aplicación | Correo de resumen a operaciones@ (SES) |
 | Búsquedas y reportes | ✅ Paso 5a: búsquedas sin precarga con exportación XLSX (tope 50.000 filas, permiso `exportar.datos`), reportes por plan/canal, afiliados activos por mes, informe con selección de campos y controller de usuarios | Validar con LegalChile la fórmula de tasa de uso; envío programado de informes por correo |
-| Posesión efectiva | No existe | Módulo nuevo |
+| Posesión efectiva | ✅ Paso 5b: tipo de atención con causante, herederos, estados propios y ficha PDF interna | Formularios oficiales del Registro Civil (a definir en discovery) |
 
 ## 5. Plan de trabajo
 
@@ -134,3 +134,21 @@ Logs (accesos, acciones, errores con aviso al admin), alta disponibilidad, docum
    - Controller de usuarios (`/reportes?vista=controller`, permiso nuevo `controller.ver` para jefaturas y Gerencia de Servicios, migración 0013): por abogado asignado, atenciones asignadas, pendientes (no terminales), terminadas, por estado, gestiones pendientes y vencidas, y comités abiertos donde participa; filtros período, plan, canal, perfil y jefatura; dentro del alcance del usuario.
    - Dashboard y ficha del caso sin cifras de maqueta: consultas de hoy vs. ayer, SLA = gestiones pendientes que vencen en 3 días, escritos judiciales por vencer en 5 días hábiles, consultas sin asignar; la ficha muestra afiliado, plan, responsable, próxima audiencia, alertas y vencimientos reales (se ocultan si no hay).
    - La búsqueda global del encabezado lleva un RUT a Afiliados y el resto a Atenciones.
+   - 5b ✅ Cargas y bienes (migración 0014): `cargas_afiliado` (RUT, nombre, parentesco, vigencia propia) y `bienes_afiliado` (tipo Inmueble/Vehículo/Otro, identificador en mayúsculas), ambas colgando de la relación titular–plan. Una carga o bien está vigente si su vigencia y fechas lo están **y** el plan del titular está vigente.
+     - Carga masiva `POST /cargas-masivas/:entidad` (`afiliados`, `cargas`, `bienes`) con FLUJO/STOCK: el titular debe estar en la nómina del plan; STOCK termina (fecha de término hoy, Eliminado) lo del plan que no viene en el archivo. Al terminar se notifica en la aplicación a los usuarios con `cargas.ejecutar`, y `POST /cargas-masivas/resumen.xlsx` entrega el reporte (Resumen + Errores). El correo a operaciones@ queda pendiente (SES).
+     - Ficha del afiliado `/afiliados/:id` con planes, cargas y bienes. La atención acepta `cargaId` opcional (carga del mismo titular y plan, vigente hoy); la ficha del caso muestra para quién es.
+     - Criterio de búsqueda "Bien cubierto" (identificador o descripción) en Afiliados y Atenciones, también en la exportación.
+   - 5b ✅ Posesión efectiva: tipo `PosesionEfectiva`, correlativo `POSE-AÑO-NNNNNN`, estados Ingresada → En preparación → Documentos pendientes ↔ Lista para emisión → Terminada, o Abandonada.
+     - Requisitos: "En preparación" y siguientes exigen RUT, nombre, fecha de defunción y último domicilio del causante; "Lista para emisión" y "Terminada" exigen al menos un heredero; Terminada/Abandonada usan las reglas generales (causa de término, sin gestiones ni comité pendientes). El arancel impago detiene los estados de trabajo.
+     - Tablas `posesiones_efectivas` (causante, 1:1 con la atención) y `herederos_posesion` (se desactivan, no se borran). Usa las materias marcadas para asesoría.
+     - Permiso nuevo `posesiones.crear` (crear y editar causante/herederos), otorgado por la migración a los perfiles que ya creaban asesorías y juicios. Menú "Posesiones efectivas" (`/posesiones`), búsqueda sin precarga con exportación XLSX y conteo en los reportes.
+     - `GET /atenciones/:id/posesion.pdf`: "Ficha de antecedentes para posesión efectiva", rotulada como resumen interno; **no** es el formulario oficial del Registro Civil.
+
+### Pendiente fuera de estos pasos
+- Correos (SES): resumen de cargas a operaciones@, aprobación de aranceles, avisos de vencimiento y al cliente.
+- Feriados chilenos en el cálculo de días hábiles.
+- WebPay real (Transbank) en lugar del stub.
+- Despliegue AWS (CDK: Aurora, ECS, ALB, S3).
+- Migración SQL Server 2008 → Aurora.
+- Formularios oficiales de posesión efectiva del Registro Civil (definir en discovery).
+- Validar con LegalChile la fórmula de tasa de uso.
