@@ -175,84 +175,120 @@ body {
 .lm-user-chip .lm-user-meta strong { font-size: 13px; color: #0f172a; }
 .lm-user-chip .lm-user-meta small { font-size: 11px; color: #64748b; }
 
+// Shell: sidebar oscuro a toda la altura + columna de contenido (header, banner, página).
+.lm-shell { display: flex; height: 100vh; overflow: hidden; background: #f5f7fa; }
+.lm-main-col { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.lm-main { flex: 1; overflow: auto; }
+
 // Sidebar
 .lm-sidebar {
   width: 240px;
   flex-shrink: 0;
-  background: #ffffff;
-  border-right: 1px solid #e2e8f0;
+  height: 100vh;
+  background: linear-gradient(180deg, #3d64a8 0%, #2c4a7f 45%, #22385f 100%);
+  border-radius: 0 28px 28px 0;
+  box-shadow: 4px 0 18px rgba(15, 23, 42, 0.18);
+  color: #fff;
   display: flex;
   flex-direction: column;
-  padding-top: 8px;
   transition: width 160ms ease;
+  position: relative;
+  z-index: 2;
 }
 
-.lm-sidebar nav { flex: 1; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; }
+.lm-sidebar-top {
+  height: 64px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px 0 16px;
+}
 
-.lm-nav-grupo { display: flex; flex-direction: column; padding-bottom: 6px; }
+.lm-sidebar.colapsado .lm-sidebar-top { justify-content: center; padding: 0; }
+
+.lm-sidebar-toggle {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.lm-sidebar-toggle i { font-size: 18px; }
+.lm-sidebar-toggle:hover { background: rgba(255, 255, 255, 0.12); }
+.lm-sidebar-toggle:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.7); outline-offset: 2px; }
+
+.lm-brand-claro { min-width: 0; gap: 8px; }
+.lm-brand-claro .lm-brand-text { white-space: nowrap; }
+.lm-brand-claro .lm-brand-mark { background: rgba(255, 255, 255, 0.16); box-shadow: none; }
+.lm-brand-claro .lm-brand-text strong { background: none; -webkit-text-fill-color: #fff; color: #fff; }
+.lm-brand-claro .lm-brand-text small { color: rgba(255, 255, 255, 0.6); letter-spacing: 1px; font-size: 9px; }
+
+.lm-sidebar nav { flex: 1; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; padding: 4px 10px 16px; }
+
+.lm-nav-grupo { display: flex; flex-direction: column; gap: 2px; padding-bottom: 6px; }
 
 .lm-nav-titulo {
-  padding: 12px 18px 4px;
+  padding: 12px 10px 4px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: rgba(255, 255, 255, 0.45);
   white-space: nowrap;
 }
 
-.lm-nav-separador { border: none; border-top: 1px solid #e2e8f0; margin: 4px 14px 8px; }
+.lm-nav-separador { border: none; border-top: 1px solid rgba(255, 255, 255, 0.12); margin: 4px 6px 8px; }
 
 .lm-sidebar nav a {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 9px 18px;
-  color: #475569;
+  padding: 9px 12px;
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.72);
   text-decoration: none;
   font-size: 14px;
   font-weight: 500;
   white-space: nowrap;
   transition: background 120ms ease, color 120ms ease;
-  border-left: 3px solid transparent;
 }
 
-.lm-sidebar nav a i { font-size: 18px; color: #94a3b8; transition: color 120ms ease; }
-.lm-sidebar nav a:hover { background: #f8fafc; color: #2563eb; }
-.lm-sidebar nav a:hover i { color: #2563eb; }
+.lm-sidebar nav a i { font-size: 18px; color: inherit; }
+.lm-sidebar nav a:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.lm-sidebar nav a:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.7); outline-offset: -2px; }
 
 .lm-sidebar nav a.active {
-  background: #eff6ff;
-  color: #2563eb;
-  border-left-color: #2563eb;
+  background: #4c86e8;
+  color: #fff;
   font-weight: 600;
+  box-shadow: 0 4px 12px rgba(12, 30, 70, 0.25);
 }
 
-.lm-sidebar nav a.active i { color: #2563eb; }
-
-.lm-sidebar.colapsado { width: 64px; }
-.lm-sidebar.colapsado nav a { justify-content: center; padding: 7px 0; gap: 0; }
+.lm-sidebar.colapsado { width: 72px; }
+.lm-sidebar.colapsado nav { padding: 4px 12px 16px; }
+.lm-sidebar.colapsado nav a { justify-content: center; padding: 9px 0; gap: 0; }
 .lm-sidebar.colapsado .lm-nav-grupo { padding-bottom: 2px; }
-.lm-sidebar.colapsado .lm-nav-separador { margin: 2px 14px 4px; }
+.lm-sidebar.colapsado .lm-nav-separador { margin: 4px 4px 6px; }
 
-.lm-sidebar-footer {
-  padding: 12px 18px;
-  border: none;
-  border-top: 1px solid #e2e8f0;
-  background: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  font: inherit;
-  font-size: 13px;
-  color: #64748b;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.lm-sidebar.colapsado .lm-sidebar-footer { justify-content: center; padding: 12px 0; }
-.lm-sidebar-footer:hover { color: #2563eb; }
+// Menú móvil: mismo panel oscuro dentro del drawer.
+.lm-drawer-oscuro.p-drawer { background: linear-gradient(180deg, #3d64a8 0%, #2c4a7f 45%, #22385f 100%); border: none; color: #fff; }
+.lm-drawer-oscuro .p-drawer-header { color: #fff; }
+.lm-drawer-oscuro .p-drawer-header .lm-brand-text strong { background: none; -webkit-text-fill-color: #fff; color: #fff; }
+.lm-drawer-oscuro .p-drawer-header .lm-brand-text small { color: rgba(255, 255, 255, 0.6); }
+.lm-drawer-oscuro .p-drawer-close-button,
+.lm-drawer-oscuro .p-drawer-header button { color: #fff; }
+.lm-drawer-oscuro .p-drawer-content { padding: 0; }
+.lm-sidebar.lm-sidebar-drawer { width: 100%; height: 100%; border-radius: 0; box-shadow: none; background: transparent; }
 
 // PrimeNG card override — softer shadow, larger radius.
 .p-card {

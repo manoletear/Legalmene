@@ -52,6 +52,39 @@ const CLAVE_MENU_EXPANDIDO = "lm.menuExpandido";
     <p-toast></p-toast>
     <p-confirmDialog></p-confirmDialog>
 
+    <div class="lm-shell">
+      <aside class="lm-sidebar" [class.colapsado]="!menuExpandido()" *ngIf="!isMobile()">
+        <div class="lm-sidebar-top">
+          <ng-container *ngIf="menuExpandido(); else soloHamburguesa">
+            <div class="lm-brand lm-brand-claro">
+              <div class="lm-brand-mark">LC</div>
+              <div class="lm-brand-text">
+                <strong>LEGAL CHILE</strong>
+                <small>tu abogado siempre</small>
+              </div>
+            </div>
+            <button type="button" class="lm-sidebar-toggle" (click)="alternarMenu()" aria-label="Colapsar menú" aria-expanded="true">
+              <i class="pi pi-arrow-left"></i>
+            </button>
+          </ng-container>
+          <ng-template #soloHamburguesa>
+            <button
+              type="button"
+              class="lm-sidebar-toggle"
+              (click)="alternarMenu()"
+              aria-label="Expandir menú"
+              aria-expanded="false"
+              pTooltip="Expandir menú"
+              tooltipPosition="right"
+            >
+              <i class="pi pi-bars"></i>
+            </button>
+          </ng-template>
+        </div>
+        <ng-container *ngTemplateOutlet="navegacion; context: { compacto: !menuExpandido() }"></ng-container>
+      </aside>
+
+      <div class="lm-main-col">
     <!-- Header band con brand + search + user -->
     <header class="lm-top-header">
       <button
@@ -65,7 +98,7 @@ const CLAVE_MENU_EXPANDIDO = "lm.menuExpandido";
         aria-label="Abrir menú"
       ></button>
 
-      <div class="lm-brand">
+      <div class="lm-brand" *ngIf="isMobile() || !menuExpandido()">
         <div class="lm-brand-mark">LC</div>
         <div class="lm-brand-text">
           <strong>LEGAL CHILE</strong>
@@ -167,24 +200,6 @@ const CLAVE_MENU_EXPANDIDO = "lm.menuExpandido";
       <span>Sistema en mantenimiento: las acciones de escritura están temporalmente deshabilitadas.</span>
     </div>
 
-    <!-- Body: sidebar + content -->
-    <div style="display:flex; height:calc(100vh - 64px); overflow:hidden;">
-      <aside class="lm-sidebar" [class.colapsado]="!menuExpandido()" *ngIf="!isMobile()">
-        <ng-container *ngTemplateOutlet="navegacion; context: { compacto: !menuExpandido() }"></ng-container>
-        <button
-          type="button"
-          class="lm-sidebar-footer"
-          (click)="alternarMenu()"
-          [attr.aria-expanded]="menuExpandido()"
-          [attr.aria-label]="menuExpandido() ? 'Colapsar menú' : 'Expandir menú'"
-          [pTooltip]="menuExpandido() ? '' : 'Expandir menú'"
-          tooltipPosition="right"
-        >
-          <i class="pi" [class.pi-angle-double-left]="menuExpandido()" [class.pi-angle-double-right]="!menuExpandido()"></i>
-          <span *ngIf="menuExpandido()">Colapsar menú</span>
-        </button>
-      </aside>
-
       <ng-template #navegacion let-compacto="compacto">
         <nav>
           <div class="lm-nav-grupo" *ngFor="let grupo of gruposVisibles(); let primero = first">
@@ -210,14 +225,15 @@ const CLAVE_MENU_EXPANDIDO = "lm.menuExpandido";
         [(visible)]="mobileDrawerVisible"
         position="left"
         [style]="{ width: '260px' }"
+        styleClass="lm-drawer-oscuro"
         *ngIf="isMobile()"
       >
-        <div class="lm-sidebar" style="border:none; width:auto;" (click)="mobileDrawerVisible = false">
+        <div class="lm-sidebar lm-sidebar-drawer" (click)="mobileDrawerVisible = false">
           <ng-container *ngTemplateOutlet="navegacion; context: { compacto: false }"></ng-container>
         </div>
       </p-drawer>
 
-      <main style="flex:1; overflow:auto;">
+      <main class="lm-main">
         <div class="page">
           <div *ngIf="me.error() as err; else contenido" class="lm-error-sesion" role="alert">
             <i class="pi {{ err.tipo === 'sin_conexion' ? 'pi-wifi' : 'pi-lock' }}"></i>
@@ -228,6 +244,7 @@ const CLAVE_MENU_EXPANDIDO = "lm.menuExpandido";
           <ng-template #contenido><router-outlet /></ng-template>
         </div>
       </main>
+      </div>
     </div>
   `,
 })
