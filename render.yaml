@@ -24,6 +24,9 @@ services:
       # Demo sin Entra ID: cualquiera con la URL entra como usuario mock. No cargar datos reales.
       - key: AUTH_DISABLED
         value: "true"
+      # Casos ficticios re-anclados a hoy en cada arranque (seed-demo.ts). Solo para esta demo.
+      - key: SEED_DEMO
+        value: "true"
       - key: WEB_ORIGIN
         value: https://legalmene.pages.dev,https://deploy-preview-1--animated-croissant-28f5ca.netlify.app,https://animated-croissant-28f5ca.netlify.app
       - key: STORAGE_BACKEND
