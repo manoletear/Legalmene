@@ -5,22 +5,36 @@ import {
   BadRequestException,
   ConflictException,
 } from "@nestjs/common";
-import { and, eq, count, ilike, sql, desc } from "drizzle-orm";
+import { and, eq, count, ilike, sql, desc, getTableColumns } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { atenciones, Atencion, NuevaAtencion } from "../../db/schema/atenciones";
 import { afiliados } from "../../db/schema/afiliados";
 import { PLANES_SIN_COBERTURA } from "@legalmene/shared";
 import { planesDeAfiliados } from "../afiliados/vigencia";
-import { aranceles } from "../../db/schema/aranceles";
+import { competencias, materias } from "../../db/schema/maestros";
 import { siguienteCorrelativo } from "../../common/utils/correlativo";
 import { WebhooksService } from "../webhooks/webhooks.service";
 import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
+import type { AtencionConMaestros, TipoAtencion } from "@legalmene/shared";
 import type {
   CreateAtencionDto,
   UpdateAtencionDto,
   DerivarAtencionDto,
   FiltroAtencionesDto,
 } from "./dto";
+
+// Columnas de la atención + nombres de competencia y materia para mostrar.
+const columnasConMaestros = {
+  ...getTableColumns(atenciones),
+  competenciaNombre: competencias.nombre,
+  materiaNombre: materias.nombre,
+};
+
+const APLICA: Record<TipoAtencion, "aplicaConsulta" | "aplicaAsesoria" | "aplicaJuicio"> = {
+  Consulta: "aplicaConsulta",
+  Asesoria: "aplicaAsesoria",
+  Juicio: "aplicaJuicio",
+};
 
 @Injectable()
 export class AtencionesService {
@@ -41,6 +55,8 @@ export class AtencionesService {
       filtro.tipo ? eq(atenciones.tipo, filtro.tipo) : undefined,
       filtro.abogadoId ? eq(atenciones.abogadoAsignadoId, filtro.abogadoId) : undefined,
       filtro.afiliadoId ? eq(atenciones.afiliadoId, filtro.afiliadoId) : undefined,
+      filtro.competenciaId ? eq(atenciones.competenciaId, filtro.competenciaId) : undefined,
+      filtro.materiaId ? eq(atenciones.materiaId, filtro.materiaId) : undefined,
       filtro.correlativo ? ilike(atenciones.correlativo, `%${filtro.correlativo}%`) : undefined,
       ftQuery ? sql`search_vector @@ ${ftQuery}` : undefined,
     );
@@ -52,8 +68,10 @@ export class AtencionesService {
 
     const [rows, [{ value: total }]] = await Promise.all([
       this.db
-        .select()
+        .select(columnasConMaestros)
         .from(atenciones)
+        .innerJoin(competencias, eq(competencias.id, atenciones.competenciaId))
+        .innerJoin(materias, eq(materias.id, atenciones.materiaId))
         .where(where)
         .orderBy(orderBy)
         .limit(filtro.pageSize)
@@ -69,10 +87,28 @@ export class AtencionesService {
     };
   }
 
-  async obtener(id: string): Promise<Atencion> {
-    const [row] = await this.db.select().from(atenciones).where(eq(atenciones.id, id));
+  async obtener(id: string): Promise<AtencionConMaestros> {
+    const [row] = await this.db
+      .select(columnasConMaestros)
+      .from(atenciones)
+      .innerJoin(competencias, eq(competencias.id, atenciones.competenciaId))
+      .innerJoin(materias, eq(materias.id, atenciones.materiaId))
+      .where(eq(atenciones.id, id));
     if (!row) throw new NotFoundException(`Atención ${id} no existe`);
-    return row;
+    return row as unknown as AtencionConMaestros;
+  }
+
+  // La materia debe ser vigente, de la competencia indicada y aplicable al tipo de atención.
+  private async validarMateria(competenciaId: string, materiaId: string, tipo: TipoAtencion): Promise<void> {
+    const [m] = await this.db.select().from(materias).where(eq(materias.id, materiaId));
+    if (!m) throw new BadRequestException(`Materia ${materiaId} no existe`);
+    if (m.competenciaId !== competenciaId) {
+      throw new BadRequestException("La materia no corresponde a la competencia seleccionada");
+    }
+    if (!m.vigente) throw new BadRequestException(`La materia '${m.nombre}' no está vigente`);
+    if (!m[APLICA[tipo]]) {
+      throw new BadRequestException(`La materia '${m.nombre}' no aplica a atenciones de tipo ${tipo}`);
+    }
   }
 
   // Anexo §VI 3.1: la atención se registra bajo un plan vigente del RUT; si no tiene
@@ -106,7 +142,7 @@ export class AtencionesService {
   ): Promise<Atencion> {
     const codPlan = input.codPlan;
     await this.validarPlanDeAtencion(input.afiliadoId, codPlan);
-    if (input.arancelId) await this.assertArancelEnPlan(codPlan, input.arancelId);
+    await this.validarMateria(input.competenciaId, input.materiaId, input.tipo);
 
     const correlativo = await siguienteCorrelativo(this.db, input.tipo);
     const payload: NuevaAtencion = {
@@ -124,7 +160,7 @@ export class AtencionesService {
         usuarioId: row.abogadoAsignadoId,
         severidad: "info",
         titulo: `Nueva ${row.tipo}: ${row.correlativo}`,
-        detalle: row.materia,
+        detalle: row.asunto,
         accionUrl: `/atenciones/${row.id}`,
         metadata: { atencionId: row.id, tipo: row.tipo },
       });
@@ -134,21 +170,19 @@ export class AtencionesService {
 
   async actualizar(id: string, patch: UpdateAtencionDto): Promise<Atencion> {
     const actual = await this.obtener(id);
-    if (patch.arancelId) await this.assertArancelEnPlan(actual.codPlan, patch.arancelId);
+    if (patch.competenciaId || patch.materiaId) {
+      await this.validarMateria(
+        patch.competenciaId ?? actual.competenciaId,
+        patch.materiaId ?? actual.materiaId,
+        actual.tipo,
+      );
+    }
     const [row] = await this.db
       .update(atenciones)
       .set({ ...patch, updatedAt: new Date() })
       .where(eq(atenciones.id, id))
       .returning();
     return row;
-  }
-
-  private async assertArancelEnPlan(codPlan: string, arancelId: string): Promise<void> {
-    const [row] = await this.db
-      .select({ id: aranceles.id })
-      .from(aranceles)
-      .where(and(eq(aranceles.id, arancelId), eq(aranceles.codPlan, codPlan)));
-    if (!row) throw new NotFoundException(`Arancel ${arancelId} no existe en plan ${codPlan}`);
   }
 
   // Derivar: Consulta -> Asesoría -> Juicio. Crea nueva atención enlazada por metadata.
@@ -171,8 +205,9 @@ export class AtencionesService {
         afiliadoId: origen.afiliadoId,
         tipo: payload.nuevoTipo,
         estado: "Abierta",
-        competencia: origen.competencia,
-        materia: origen.materia,
+        competenciaId: origen.competenciaId,
+        materiaId: origen.materiaId,
+        asunto: origen.asunto,
         descripcion: origen.descripcion,
         abogadoAsignadoId: payload.abogadoDestinoId ?? origen.abogadoAsignadoId,
         prioridad: origen.prioridad,

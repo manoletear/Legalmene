@@ -15,7 +15,7 @@ function asUser(rol: string) {
 }
 
 test.describe("Aranceles y provisiones", () => {
-  test("la matriz de aranceles muestra el catálogo del plan", async ({ page }) => {
+  test("la matriz de aranceles muestra el catálogo por materia", async ({ page }) => {
     await page.goto("/aranceles");
     await expect(page.getByText("A-LAB-01")).toBeVisible();
     await expect(page.getByText("Juicio por despido injustificado")).toBeVisible();
@@ -32,10 +32,21 @@ test.describe("Aranceles y provisiones", () => {
     );
     expect(activo, "Debe existir un afiliado con plan vigente").toBeTruthy();
     const codPlan = activo!.planes.find((p) => p.vigente)!.codPlan;
+    const competencias = await request.get(`${API}/maestros/competencias`, { headers: abogado }).then((r) => r.json());
+    const laboral = competencias.find((c: { nombre: string }) => c.nombre === "Laboral");
+    const materiasLab = await request
+      .get(`${API}/maestros/materias?competenciaId=${laboral.id}&aplicaA=Juicio&vigente=true`, { headers: abogado })
+      .then((r) => r.json());
     const caso = await request
       .post(`${API}/atenciones/juicios`, {
         headers: abogado,
-        data: { afiliadoId: activo!.id, codPlan, competencia: "Laboral", materia: "E2E provisiones" },
+        data: {
+          afiliadoId: activo!.id,
+          codPlan,
+          competenciaId: laboral.id,
+          materiaId: materiasLab[0].id,
+          asunto: "E2E provisiones",
+        },
       })
       .then((r) => r.json());
 

@@ -229,6 +229,7 @@ export class AppComponent implements OnInit {
     { label: "Asesorías", icon: "pi-id-card", route: "/asesorias" },
     { label: "Juicios", icon: "pi-briefcase", route: "/juicios" },
     { label: "Aranceles", icon: "pi-dollar", route: "/aranceles" },
+    { label: "Coberturas", icon: "pi-percentage", route: "/admin/coberturas" },
     { label: "Provisiones", icon: "pi-wallet", route: "/provisiones" },
     { label: "Documentos", icon: "pi-folder", route: "/documentos" },
     { label: "Reportes", icon: "pi-chart-bar", route: "/reportes" },
@@ -237,6 +238,7 @@ export class AppComponent implements OnInit {
     { label: "Pagos", icon: "pi-credit-card", route: "/pagos" },
     { label: "Auditoría", icon: "pi-history", route: "/auditoria" },
     { label: "Usuarios", icon: "pi-shield", route: "/admin/usuarios", rol: "Administrador" },
+    { label: "Maestros", icon: "pi-list", route: "/admin/maestros", rol: "Administrador" },
     { label: "Webhooks", icon: "pi-link", route: "/admin/webhooks", rol: "Administrador" },
   ]);
 

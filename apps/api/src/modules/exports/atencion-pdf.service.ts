@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, getTableColumns } from "drizzle-orm";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import PDFDocument = require("pdfkit");
 import { Writable } from "stream";
@@ -8,6 +8,7 @@ import { atenciones } from "../../db/schema/atenciones";
 import { afiliados } from "../../db/schema/afiliados";
 import { gestiones } from "../../db/schema/gestiones";
 import { comites } from "../../db/schema/comites";
+import { competencias, materias } from "../../db/schema/maestros";
 
 @Injectable()
 export class AtencionPdfService {
@@ -17,8 +18,10 @@ export class AtencionPdfService {
   // timeline de gestiones y comités. Útil para legajo físico/escritos.
   async generar(atencionId: string, output: Writable): Promise<void> {
     const [a] = await this.db
-      .select()
+      .select({ ...getTableColumns(atenciones), competencia: competencias.nombre, materia: materias.nombre })
       .from(atenciones)
+      .innerJoin(competencias, eq(competencias.id, atenciones.competenciaId))
+      .innerJoin(materias, eq(materias.id, atenciones.materiaId))
       .where(eq(atenciones.id, atencionId));
     if (!a) throw new NotFoundException(`Atención ${atencionId} no existe`);
 
@@ -38,9 +41,9 @@ export class AtencionPdfService {
     doc.moveDown(1.5);
 
     doc.fontSize(16).text(a.correlativo, { continued: true }).fontSize(12).text(`  ·  ${a.tipo}`);
-    doc.fontSize(11).fillColor("#555").text(`Estado: ${a.estado} · Prioridad: ${a.prioridad} · Competencia: ${a.competencia}`);
+    doc.fontSize(11).fillColor("#555").text(`Estado: ${a.estado} · Prioridad: ${a.prioridad} · Competencia: ${a.competencia} · Materia: ${a.materia}`);
     doc.moveDown(0.5);
-    doc.fillColor("#000").fontSize(13).text(a.materia, { underline: false });
+    doc.fillColor("#000").fontSize(13).text(a.asunto, { underline: false });
     if (a.descripcion) {
       doc.moveDown(0.3).fontSize(10).fillColor("#444").text(a.descripcion, { align: "justify" });
     }

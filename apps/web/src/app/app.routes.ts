@@ -93,6 +93,16 @@ export const routes: Routes = [
       import("./features/admin/admin-usuarios.component").then((m) => m.AdminUsuariosComponent),
   },
   {
+    path: "admin/maestros",
+    loadComponent: () =>
+      import("./features/admin/admin-maestros.component").then((m) => m.AdminMaestrosComponent),
+  },
+  {
+    path: "admin/coberturas",
+    loadComponent: () =>
+      import("./features/admin/admin-coberturas.component").then((m) => m.AdminCoberturasComponent),
+  },
+  {
     path: "admin/webhooks",
     loadComponent: () =>
       import("./features/admin/admin-webhooks.component").then((m) => m.AdminWebhooksComponent),

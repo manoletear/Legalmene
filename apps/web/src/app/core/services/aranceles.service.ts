@@ -14,9 +14,10 @@ export class ArancelesApiService {
   private http = inject(HttpClient);
   private base = environment.apiBaseUrl;
 
-  listar(opts: { competencia?: string; soloVigentes?: boolean } = {}): Observable<ArancelesRespuesta> {
+  listar(opts: { competenciaId?: string; materiaId?: string; soloVigentes?: boolean } = {}): Observable<ArancelesRespuesta> {
     let params = new HttpParams();
-    if (opts.competencia) params = params.set("competencia", opts.competencia);
+    if (opts.competenciaId) params = params.set("competenciaId", opts.competenciaId);
+    if (opts.materiaId) params = params.set("materiaId", opts.materiaId);
     if (opts.soloVigentes) params = params.set("soloVigentes", "true");
     return this.http.get<ArancelesRespuesta>(`${this.base}/aranceles`, { params });
   }

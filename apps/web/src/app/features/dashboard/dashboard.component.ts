@@ -230,7 +230,7 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
               <tr *ngFor="let c of casosRecientes()" style="border-bottom:1px solid #f1f5f9; font-size:13px;">
                 <td style="padding:10px 4px;"><a [routerLink]="['/atenciones', c.id]" style="color:#2563eb; text-decoration:none; font-weight:500;">{{ c.correlativo }}</a></td>
                 <td style="padding:10px 4px; color:#475569;">{{ c.afiliadoId | slice: 0:8 }}…</td>
-                <td style="padding:10px 4px; color:#475569;">{{ c.materia || c.tipo }}</td>
+                <td style="padding:10px 4px; color:#475569;">{{ c.asunto || c.tipo }}</td>
                 <td style="padding:10px 4px;"><p-tag [value]="estadoLabel(c.estado)" [severity]="estadoSeverity(c.estado)"></p-tag></td>
                 <td style="padding:10px 4px; color:#475569;">—</td>
                 <td style="padding:10px 4px; color:#475569;">{{ c.fechaApertura | date: 'dd/MM/yyyy' }}</td>

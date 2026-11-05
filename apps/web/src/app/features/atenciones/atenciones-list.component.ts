@@ -11,7 +11,7 @@ import { InputTextModule } from "primeng/inputtext";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { authHeaders } from "../../core/interceptors/auth.interceptor";
 import { environment } from "../../../environments/environment";
-import type { Atencion } from "@legalmene/shared";
+import type { AtencionConMaestros } from "@legalmene/shared";
 import type { TableLazyLoadEvent } from "primeng/table";
 
 @Component({
@@ -74,7 +74,7 @@ import type { TableLazyLoadEvent } from "primeng/table";
           type="text"
           [(ngModel)]="filtroQ"
           (keyup.enter)="recargar()"
-          placeholder="Buscar (materia, descripción)"
+          placeholder="Buscar (asunto, materia, descripción)"
           style="flex:1; min-width:200px;"
         />
       </div>
@@ -105,7 +105,7 @@ import type { TableLazyLoadEvent } from "primeng/table";
           <tr>
             <td><a [routerLink]="['/atenciones', a.id]" style="text-decoration:none; color:#1976d2;">{{ a.correlativo }}</a></td>
             <td><p-tag [value]="a.tipo" [severity]="tipoSeverity(a.tipo)"></p-tag></td>
-            <td>{{ a.materia }} <small class="lm-muted">({{ a.competencia }})</small></td>
+            <td>{{ a.asunto }} <small class="lm-muted">({{ a.materiaNombre }} · {{ a.competenciaNombre }})</small></td>
             <td><p-tag [value]="a.estado" [severity]="estadoSeverity(a.estado)"></p-tag></td>
             <td>{{ a.prioridad }}</td>
             <td>{{ a.fechaApertura | date: 'dd/MM/yyyy' }}</td>
@@ -123,7 +123,7 @@ import type { TableLazyLoadEvent } from "primeng/table";
 export class AtencionesListComponent implements OnInit {
   private api = inject(AtencionesApiService);
   private route = inject(ActivatedRoute);
-  protected data = signal<Atencion[]>([]);
+  protected data = signal<AtencionConMaestros[]>([]);
   protected total = signal(0);
   protected page = signal(1);
   protected pageSize = signal(25);

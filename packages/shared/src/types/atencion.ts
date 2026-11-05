@@ -13,19 +13,6 @@ export const EstadoAtencionEnum = z.enum([
 ]);
 export type EstadoAtencion = z.infer<typeof EstadoAtencionEnum>;
 
-export const CompetenciaEnum = z.enum([
-  "Civil",
-  "Penal",
-  "Laboral",
-  "Familia",
-  "Tributario",
-  "Comercial",
-  "Administrativo",
-  "Constitucional",
-  "Otro",
-]);
-export type Competencia = z.infer<typeof CompetenciaEnum>;
-
 export const AtencionSchema = z.object({
   id: z.string().uuid(),
   correlativo: z.string(),
@@ -33,8 +20,10 @@ export const AtencionSchema = z.object({
   afiliadoId: z.string().uuid(),
   tipo: TipoAtencionEnum,
   estado: EstadoAtencionEnum,
-  competencia: CompetenciaEnum,
-  materia: z.string().max(250),
+  competenciaId: z.string().uuid(),
+  materiaId: z.string().uuid(),
+  // Línea de asunto del caso (texto libre); la materia es el maestro.
+  asunto: z.string().min(1).max(250),
   descripcion: z.string().max(5000).optional().nullable(),
   abogadoAsignadoId: z.string().uuid().optional().nullable(),
   fechaApertura: z.string().datetime(),
@@ -42,12 +31,14 @@ export const AtencionSchema = z.object({
   fechaUltimaGestion: z.string().datetime().optional().nullable(),
   prioridad: z.enum(["Baja", "Media", "Alta", "Urgente"]).default("Media"),
   origen: z.string().max(80).optional().nullable(),
-  arancelId: z.string().uuid().optional().nullable(),
   metadata: z.record(z.unknown()).optional().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
 export type Atencion = z.infer<typeof AtencionSchema>;
+
+// Respuesta de lectura: incluye los nombres de los maestros para mostrar.
+export type AtencionConMaestros = Atencion & { competenciaNombre: string; materiaNombre: string };
 
 // codPlan = plan del afiliado bajo el cual se presta la atención (vigente, o REZAGADO/METLIFE).
 // tipo se setea por el path (/consultas, /asesorias, /juicios).

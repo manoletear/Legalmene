@@ -66,7 +66,7 @@ export class GestionesService {
           fechaEjecucion: gestiones.fechaEjecucion,
           createdAt: gestiones.createdAt,
           correlativo: atenciones.correlativo,
-          atencionMateria: atenciones.materia,
+          atencionAsunto: atenciones.asunto,
         })
         .from(gestiones)
         .innerJoin(atenciones, eq(gestiones.atencionId, atenciones.id))

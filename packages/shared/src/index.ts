@@ -8,3 +8,5 @@ export * from "./types/plan";
 export * from "./types/common";
 export * from "./types/arancel";
 export * from "./types/provision";
+export * from "./types/maestros";
+export * from "./types/cobertura";

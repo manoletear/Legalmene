@@ -7,6 +7,7 @@ import { gestiones } from "../../db/schema/gestiones";
 import { comites } from "../../db/schema/comites";
 import { usuarios } from "../../db/schema/usuarios";
 import { provisiones } from "../../db/schema/provisiones";
+import { competencias } from "../../db/schema/maestros";
 
 const porPlan = (codPlan?: string) => (codPlan ? eq(atenciones.codPlan, codPlan) : undefined);
 
@@ -155,10 +156,11 @@ export class DashboardService {
   // Distribución por competencia (Civil/Penal/Laboral/...) — donut chart.
   async porCompetencia(codPlan?: string): Promise<{ competencia: string; total: number }[]> {
     const rows = await this.db
-      .select({ competencia: atenciones.competencia, total: count() })
+      .select({ competencia: competencias.nombre, total: count() })
       .from(atenciones)
+      .innerJoin(competencias, eq(competencias.id, atenciones.competenciaId))
       .where(porPlan(codPlan))
-      .groupBy(atenciones.competencia)
+      .groupBy(competencias.nombre)
       .orderBy(sql`count(*) desc`);
     return rows.map((r) => ({ competencia: r.competencia, total: Number(r.total) }));
   }

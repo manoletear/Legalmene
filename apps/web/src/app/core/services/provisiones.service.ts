@@ -15,7 +15,7 @@ export interface ProvisionRow {
   id: string;
   atencionId: string;
   correlativo: string;
-  materia: string;
+  asunto: string;
   monto: number;
   motivo: string;
   estado: EstadoProvision;

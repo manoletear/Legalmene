@@ -1,5 +1,5 @@
-import { BadRequestException, Body, Controller, Get, Inject, Param, Post, Put, Query, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiQuery, ApiTags } from "@nestjs/swagger";
+import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Post, Put, Query, UseGuards } from "@nestjs/common";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -20,15 +20,13 @@ export class ArancelesController {
 
   @Post("aranceles")
   @Roles("Administrador", "Supervisor")
-  @ApiQuery({ name: "codPlan", required: true })
-  crear(@Query("codPlan") codPlan: string, @Body() body: CreateArancelDto) {
-    if (!codPlan) throw new BadRequestException("Query param 'codPlan' es obligatorio");
-    return this.service.crear(codPlan, body);
+  crear(@Body() body: CreateArancelDto) {
+    return this.service.crear(body);
   }
 
   @Put("aranceles/:id")
   @Roles("Administrador", "Supervisor")
-  actualizar(@Param("id") id: string, @Body() body: UpdateArancelDto) {
+  actualizar(@Param("id", ParseUUIDPipe) id: string, @Body() body: UpdateArancelDto) {
     return this.service.actualizar(id, body);
   }
 

@@ -11,8 +11,10 @@ import { ToastModule } from "primeng/toast";
 import { MessageService } from "primeng/api";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { AfiliadosApiService } from "../../core/services/afiliados.service";
+import { MaestrosApiService } from "../../core/services/maestros.service";
+import { CoberturasApiService } from "../../core/services/coberturas.service";
 import { PLANES_SIN_COBERTURA } from "@legalmene/shared";
-import type { AfiliadoConPlanes } from "@legalmene/shared";
+import type { AfiliadoConPlanes, Competencia, CopagoResultado, Materia, TipoAtencion } from "@legalmene/shared";
 
 @Component({
   selector: "lm-atencion-form",
@@ -39,6 +41,7 @@ import type { AfiliadoConPlanes } from "@legalmene/shared";
             optionLabel="label"
             optionValue="value"
             appendTo="body"
+            (onChange)="cargarMaterias()"
           ></p-select>
         </div>
 
@@ -67,6 +70,7 @@ import type { AfiliadoConPlanes } from "@legalmene/shared";
             optionDisabled="disabled"
             appendTo="body"
             placeholder="Selecciona plan"
+            (onChange)="previsualizarCopago()"
           ></p-select>
           <small *ngIf="sinPlanVigente()" class="lm-muted">
             El RUT no tiene planes vigentes: la atención se registra como Rezagado o MetLife.
@@ -76,17 +80,44 @@ import type { AfiliadoConPlanes } from "@legalmene/shared";
         <div class="lm-col" style="gap:4px;">
           <label>Competencia</label>
           <p-select
-            formControlName="competencia"
-            [options]="competenciaOpts"
-            optionLabel="label"
-            optionValue="value"
+            formControlName="competenciaId"
+            [options]="competencias()"
+            optionLabel="nombre"
+            optionValue="id"
+            [filter]="true"
+            filterBy="nombre"
             appendTo="body"
+            placeholder="Selecciona competencia"
+            (onChange)="cargarMaterias()"
           ></p-select>
         </div>
 
         <div class="lm-col" style="gap:4px;">
           <label>Materia</label>
-          <input pInputText type="text" formControlName="materia" />
+          <p-select
+            formControlName="materiaId"
+            [options]="materias()"
+            optionLabel="nombre"
+            optionValue="id"
+            [filter]="true"
+            filterBy="nombre"
+            appendTo="body"
+            [placeholder]="form.value.competenciaId ? 'Selecciona materia' : 'Primero elige la competencia'"
+            emptyMessage="La competencia no tiene materias para este tipo de atención"
+            (onChange)="previsualizarCopago()"
+          ></p-select>
+          <small *ngIf="copago() as c" class="lm-muted">
+            <ng-container *ngIf="c.copagoUfCentesimas !== null; else sinArancel">
+              Copago del afiliado: {{ c.copagoUfCentesimas / 100 | number: '1.0-2' }} UF
+              <ng-container *ngIf="c.copagoClp !== null">($ {{ c.copagoClp | number }})</ng-container>
+            </ng-container>
+            <ng-template #sinArancel>Sin arancel definido para esta materia.</ng-template>
+          </small>
+        </div>
+
+        <div class="lm-col" style="gap:4px;">
+          <label>Asunto</label>
+          <input pInputText type="text" formControlName="asunto" placeholder="Resumen del caso (ej. Despido de Juan Pérez)" />
         </div>
 
         <div class="lm-col" style="gap:4px;">
@@ -117,8 +148,14 @@ export class AtencionFormComponent {
   private fb = inject(FormBuilder);
   private api = inject(AtencionesApiService);
   private afiliadosApi = inject(AfiliadosApiService);
+  private maestrosApi = inject(MaestrosApiService);
+  private coberturasApi = inject(CoberturasApiService);
   private router = inject(Router);
   private msg = inject(MessageService);
+
+  protected competencias = signal<Competencia[]>([]);
+  protected materias = signal<Materia[]>([]);
+  protected copago = signal<CopagoResultado | null>(null);
 
   protected afiliados = signal<AfiliadoConPlanes[]>([]);
   protected planOpts = signal<{ label: string; value: string; disabled: boolean }[]>([]);
@@ -130,10 +167,6 @@ export class AtencionFormComponent {
     { label: "Asesoría", value: "Asesoria" },
     { label: "Juicio", value: "Juicio" },
   ];
-  protected competenciaOpts = [
-    "Civil", "Penal", "Laboral", "Familia", "Tributario",
-    "Comercial", "Administrativo", "Constitucional", "Otro",
-  ].map((c) => ({ label: c, value: c }));
   protected prioridadOpts = [
     { label: "Baja", value: "Baja" },
     { label: "Media", value: "Media" },
@@ -151,14 +184,45 @@ export class AtencionFormComponent {
     tipo: ["Consulta", Validators.required],
     afiliadoId: ["", Validators.required],
     codPlan: ["", Validators.required],
-    competencia: ["Civil", Validators.required],
-    materia: ["", [Validators.required, Validators.maxLength(250)]],
+    competenciaId: ["", Validators.required],
+    materiaId: ["", Validators.required],
+    asunto: ["", [Validators.required, Validators.maxLength(250)]],
     descripcion: [""],
     prioridad: ["Media"],
   });
 
   constructor() {
     this.afiliadosApi.buscar({ pageSize: 200 }).subscribe((res) => this.afiliados.set(res.data));
+    this.maestrosApi.listar("competencias", { vigente: true }).subscribe((c) => this.competencias.set(c));
+  }
+
+  // Materias vigentes de la competencia que aplican al tipo de atención elegido.
+  cargarMaterias() {
+    const { competenciaId, tipo, materiaId } = this.form.value;
+    if (!competenciaId) {
+      this.materias.set([]);
+      this.form.patchValue({ materiaId: "" });
+      return;
+    }
+    this.maestrosApi
+      .listar("materias", { competenciaId, vigente: true, aplicaA: tipo as TipoAtencion })
+      .subscribe((m) => {
+        this.materias.set(m);
+        if (!m.some((x) => x.id === materiaId)) this.form.patchValue({ materiaId: "" });
+        this.previsualizarCopago();
+      });
+  }
+
+  previsualizarCopago() {
+    const { codPlan, materiaId, tipo } = this.form.value;
+    if (!codPlan || !materiaId || !tipo) {
+      this.copago.set(null);
+      return;
+    }
+    this.coberturasApi.copago(codPlan, materiaId, tipo as TipoAtencion).subscribe({
+      next: (c) => this.copago.set(c),
+      error: () => this.copago.set(null),
+    });
   }
 
   // Solo los planes vigentes del RUT son seleccionables; sin ninguno, Rezagado/MetLife.
@@ -181,6 +245,7 @@ export class AtencionFormComponent {
       this.sinPlanVigente.set(vigentes.length === 0);
       this.planOpts.set(opciones);
       this.form.patchValue({ codPlan: vigentes[0]?.codPlan ?? "REZAGADO" });
+      this.previsualizarCopago();
     });
   }
 
@@ -191,8 +256,9 @@ export class AtencionFormComponent {
     const payload = {
       afiliadoId: v.afiliadoId!,
       codPlan: v.codPlan!,
-      competencia: v.competencia as "Civil",
-      materia: v.materia!,
+      competenciaId: v.competenciaId!,
+      materiaId: v.materiaId!,
+      asunto: v.asunto!,
       descripcion: v.descripcion || undefined,
       prioridad: v.prioridad as "Media",
     };

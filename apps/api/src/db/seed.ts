@@ -6,7 +6,8 @@ import { inArray } from "drizzle-orm";
 import { canales, planes } from "./schema/planes";
 import { usuarios } from "./schema/usuarios";
 import { afiliados, planesAfiliado } from "./schema/afiliados";
-import { aranceles, valoresUf } from "./schema/aranceles";
+import { valoresUf } from "./schema/aranceles";
+import { sembrarCatalogo } from "./seed-catalogo";
 
 // UF real del día desde mindicador.cl; si falla se deja sin UF (la UI lo indica).
 async function ufDelDia(): Promise<{ fecha: string; valorCentavos: number } | null> {
@@ -130,16 +131,8 @@ async function main() {
     ])
     .onConflictDoNothing();
 
-  await db
-    .insert(aranceles)
-    .values([
-      { codPlan: "DEMO", codigo: "A-LAB-01", descripcion: "Juicio por despido injustificado", competencia: "Laboral", tipo: "Juicio", valorUfCentesimas: 1200 },
-      { codPlan: "DEMO", codigo: "A-LAB-02", descripcion: "Consulta laboral", competencia: "Laboral", tipo: "Consulta", valorUfCentesimas: 100 },
-      { codPlan: "DEMO", codigo: "A-CIV-01", descripcion: "Juicio ejecutivo de cobro", competencia: "Civil", tipo: "Juicio", valorUfCentesimas: 1500 },
-      { codPlan: "DEMO", codigo: "A-CIV-02", descripcion: "Asesoría contractual", competencia: "Civil", tipo: "Asesoria", valorUfCentesimas: 300 },
-      { codPlan: "DEMO", codigo: "A-FAM-01", descripcion: "Demanda de alimentos", competencia: "Familia", tipo: "Juicio", valorUfCentesimas: 800 },
-    ])
-    .onConflictDoNothing();
+  // Coberturas referencian planes: el catálogo va después de crearlos.
+  await sembrarCatalogo(db);
 
   const uf = await ufDelDia();
   if (uf) {

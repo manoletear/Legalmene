@@ -101,7 +101,7 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
             </td>
             <td>
               <a [routerLink]="['/atenciones', g.atencionId]" style="text-decoration:none; color:#1976d2;">{{ g.correlativo }}</a>
-              <div><small class="lm-muted">{{ g.atencionMateria }}</small></div>
+              <div><small class="lm-muted">{{ g.atencionAsunto }}</small></div>
             </td>
             <td>{{ g.responsableEmail }}</td>
             <td>

@@ -12,10 +12,10 @@ import {
 import { planes } from "./planes";
 import { afiliados } from "./afiliados";
 import { usuarios } from "./usuarios";
-import { aranceles } from "./aranceles";
-import { tipoAtencionEnum, competenciaEnum } from "./enums";
+import { competencias, materias } from "./maestros";
+import { tipoAtencionEnum } from "./enums";
 
-export { tipoAtencionEnum, competenciaEnum };
+export { tipoAtencionEnum };
 export const estadoAtencionEnum = pgEnum("estado_atencion", [
   "Abierta",
   "EnGestion",
@@ -41,8 +41,14 @@ export const atenciones = pgTable(
       .references(() => afiliados.id, { onDelete: "restrict" }),
     tipo: tipoAtencionEnum("tipo").notNull(),
     estado: estadoAtencionEnum("estado").notNull().default("Abierta"),
-    competencia: competenciaEnum("competencia").notNull(),
-    materia: varchar("materia", { length: 250 }).notNull(),
+    competenciaId: uuid("competencia_id")
+      .notNull()
+      .references(() => competencias.id, { onDelete: "restrict" }),
+    materiaId: uuid("materia_id")
+      .notNull()
+      .references(() => materias.id, { onDelete: "restrict" }),
+    // Línea de asunto del caso (texto libre). La materia es el maestro.
+    asunto: varchar("asunto", { length: 250 }).notNull(),
     descripcion: text("descripcion"),
     abogadoAsignadoId: uuid("abogado_asignado_id").references(() => usuarios.id, {
       onDelete: "set null",
@@ -51,7 +57,6 @@ export const atenciones = pgTable(
     fechaCierre: timestamp("fecha_cierre", { withTimezone: true }),
     fechaUltimaGestion: timestamp("fecha_ultima_gestion", { withTimezone: true }),
     prioridad: prioridadEnum("prioridad").notNull().default("Media"),
-    arancelId: uuid("arancel_id").references(() => aranceles.id, { onDelete: "set null" }),
     origen: varchar("origen", { length: 80 }),
     metadata: jsonb("metadata").$type<Record<string, unknown>>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -63,6 +68,7 @@ export const atenciones = pgTable(
     afiliadoIdx: index("atenciones_afiliado_idx").on(t.afiliadoId),
     abogadoIdx: index("atenciones_abogado_idx").on(t.abogadoAsignadoId),
     tipoFechaIdx: index("atenciones_tipo_fecha_idx").on(t.tipo, t.fechaApertura),
+    materiaIdx: index("atenciones_materia_idx").on(t.materiaId),
   }),
 );
 

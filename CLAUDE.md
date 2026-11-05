@@ -25,7 +25,7 @@ ejemplo y nunca deben quedar fijas en el código.
 | Módulos Afiliados / Atenciones / Gestiones / Comités / Pagos | ✅ CRUD base + flujos clave |
 | Cargas masivas FLUJO/STOCK | ✅ Implementado |
 | Frontend Angular 19 | ✅ Shell + Dashboard + Afiliados + Atenciones + Aranceles + Provisiones |
-| Alineación con Anexo PSL | 🟡 Paso 1 (modelo núcleo) listo; pasos 2–5 pendientes (ver `docs/requerimientos-anexo-psl.md` §5) |
+| Alineación con Anexo PSL | 🟡 Pasos 1 (modelo núcleo) y 2 (maestros, aranceles, coberturas) listos; pasos 3–5 pendientes (ver `docs/requerimientos-anexo-psl.md` §5) |
 | Infraestructura AWS (CDK) | ⏳ Pendiente |
 | Migración SQL Server → Postgres | ⏳ Pendiente |
 | WebPay producción | ⏳ Stub (esperar SDK Transbank) |
@@ -53,7 +53,8 @@ apps/
       db/             # Drizzle schema + migrate + seed
       common/         # Decorators (CodPlan, CurrentUser, Roles), guards, utils
       modules/        # auth, planes, afiliados, atenciones, gestiones,
-                      # comites, pagos, cargas-masivas, health
+                      # comites, pagos, cargas-masivas, maestros, aranceles,
+                      # coberturas, provisiones, health
   web/                # Frontend Angular 19
     src/app/
       core/           # Interceptors, services compartidos
@@ -94,8 +95,13 @@ pnpm web:build
 
 ## Modelo de datos (resumen)
 
-`planes` (catálogo de tenants) → `afiliados` (RUT chileno validado) → `atenciones`
-(Consulta/Asesoría/Juicio con correlativo `TIPO-AÑO-NNNNNN`) → `gestiones` (timeline
+`planes` (productos, con `canal`) ← `planes_afiliado` (vigencias RUT–Plan) → `afiliados`
+(persona, RUT único) → `atenciones` (Consulta/Asesoría/Juicio con correlativo
+`TIPO-AÑO-NNNNNN`, plan bajo el que se atendió, `competencia_id`/`materia_id` de los maestros y
+`asunto` libre). Maestros: `competencias` → `materias`/`procedimientos`, `tribunales`,
+`organismos`, `tipos_consulta`, `causas_termino`, `calidades_procesales`. Finanzas:
+`aranceles` (por materia y tipo opcional, en UF×100) + `coberturas` (por plan) + `valores_uf`
+→ copago; `provisiones` + `provision_movimientos`. → `gestiones` (timeline
 de acciones por atención) → `comites` + `participantes_comite` (toma de decisiones
 multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `auditoria`
 (append-only para cumplimiento Ley 19.628).
@@ -112,6 +118,14 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   vigente. Sin planes vigentes, la atención solo puede ir como `REZAGADO` o `METLIFE`.
   Correlativos son globales por tipo/año. `usuarios.cod_planes` ya no se aplica (lo reemplaza
   el paso 4).
+- **Maestros**: competencias, materias, etc. son tablas con `vigente` (nunca enums ni listas
+  fijas en el frontend). Leerlos con `GET /maestros/:tipo`; solo Administrador los modifica.
+  Desactivar oculta el valor en formularios nuevos sin tocar registros históricos.
+- **Aranceles y copago**: el arancel es por materia (+ tipo opcional; el específico gana) y es
+  igual para todos los planes. El copago sale de `calcularCopago()`
+  (`modules/coberturas/copago.ts`): regla del plan más específica (materia+tipo → materia →
+  tipo → general); Porcentaje = arancel × (100−%); ValorUF = precio fijo; sin regla o
+  SinCobertura = arancel completo. Nunca calcular copagos en el frontend.
 - **Reglas de negocio clave (Anexo)**: solo planes vigentes permiten nuevas atenciones;
   aranceles son por materia y la cobertura por plan define el copago; una atención con
   arancel impago queda detenida; no se cierra una asesoría/juicio con gestiones o comité

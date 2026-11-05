@@ -12,7 +12,7 @@ import { AtencionesService } from "../../src/modules/atenciones/atenciones.servi
 import { CargasMasivasService } from "../../src/modules/cargas-masivas/cargas-masivas.service";
 import { WebhooksService } from "../../src/modules/webhooks/webhooks.service";
 import { NotifInboxService } from "../../src/modules/notif-inbox/notif-inbox.service";
-import { fechaRelativa, planAleatorio, rutAleatorio } from "./helpers";
+import { borrarMateriaDePrueba, fechaRelativa, materiaDePrueba, planAleatorio, rutAleatorio, type MateriaPrueba } from "./helpers";
 
 const RUN = !!process.env.DATABASE_URL;
 
@@ -35,6 +35,7 @@ const RUN = !!process.env.DATABASE_URL;
   const rutCarga = rutAleatorio();
   let conPlanesId: string;
   let sinPlanesId: string;
+  let cm: MateriaPrueba;
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
@@ -64,6 +65,7 @@ const RUN = !!process.env.DATABASE_URL;
     for (const codPlan of ["REZAGADO", "METLIFE"]) {
       await db.insert(planes).values({ codPlan, nombre: codPlan }).onConflictDoNothing();
     }
+    cm = await materiaDePrueba(db);
 
     conPlanesId = (await afiliadosSrv.crear({ rut: rutConPlanes, nombres: "Con", apellidoPaterno: "Planes" })).id;
     sinPlanesId = (await afiliadosSrv.crear({ rut: rutSinPlanes, nombres: "Sin", apellidoPaterno: "Planes" })).id;
@@ -90,6 +92,7 @@ const RUN = !!process.env.DATABASE_URL;
     await db.execute(sql`DELETE FROM planes_afiliado WHERE cod_plan IN (${lista})`);
     await db.execute(sql`DELETE FROM afiliados WHERE rut IN (${rutConPlanes}, ${rutSinPlanes}, ${rutCarga})`);
     await db.execute(sql`DELETE FROM planes WHERE cod_plan IN (${lista})`);
+    await borrarMateriaDePrueba(db, cm);
     await moduleRef.close();
   });
 
@@ -122,8 +125,8 @@ const RUN = !!process.env.DATABASE_URL;
       afiliadoId: conPlanesId,
       codPlan: VIGENTE,
       tipo: "Consulta",
-      competencia: "Civil",
-      materia: "Con plan vigente",
+      ...cm,
+      asunto: "Con plan vigente",
     });
     expect(a.codPlan).toBe(VIGENTE);
   });
@@ -134,8 +137,8 @@ const RUN = !!process.env.DATABASE_URL;
         afiliadoId: conPlanesId,
         codPlan: VENCIDO,
         tipo: "Consulta",
-        competencia: "Civil",
-        materia: "Plan vencido",
+        ...cm,
+        asunto: "Plan vencido",
       }),
     ).rejects.toThrow(new RegExp(`no está vigente.*${VIGENTE}`));
   });
@@ -146,8 +149,8 @@ const RUN = !!process.env.DATABASE_URL;
         afiliadoId: conPlanesId,
         codPlan: "REZAGADO",
         tipo: "Consulta",
-        competencia: "Civil",
-        materia: "Rezagado indebido",
+        ...cm,
+        asunto: "Rezagado indebido",
       }),
     ).rejects.toThrow(/no está vigente/);
   });
@@ -157,16 +160,16 @@ const RUN = !!process.env.DATABASE_URL;
       afiliadoId: sinPlanesId,
       codPlan: "REZAGADO",
       tipo: "Consulta",
-      competencia: "Laboral",
-      materia: "Sin cobertura",
+      ...cm,
+      asunto: "Sin cobertura",
     });
     expect(r.codPlan).toBe("REZAGADO");
     const m = await atencionesSrv.crear({
       afiliadoId: sinPlanesId,
       codPlan: "METLIFE",
       tipo: "Consulta",
-      competencia: "Laboral",
-      materia: "Seguro MetLife",
+      ...cm,
+      asunto: "Seguro MetLife",
     });
     expect(m.codPlan).toBe("METLIFE");
     await expect(
@@ -174,8 +177,8 @@ const RUN = !!process.env.DATABASE_URL;
         afiliadoId: sinPlanesId,
         codPlan: VENCIDO,
         tipo: "Consulta",
-        competencia: "Laboral",
-        materia: "Plan vencido",
+        ...cm,
+        asunto: "Plan vencido",
       }),
     ).rejects.toThrow(/no tiene planes vigentes.*REZAGADO o METLIFE/);
   });
@@ -190,8 +193,8 @@ const RUN = !!process.env.DATABASE_URL;
       afiliadoId: persona.id,
       codPlan: NUEVO,
       tipo: "Consulta",
-      competencia: "Civil",
-      materia: "Antes del stock",
+      ...cm,
+      asunto: "Antes del stock",
     });
 
     const otro = rutAleatorio();
@@ -203,8 +206,8 @@ const RUN = !!process.env.DATABASE_URL;
         afiliadoId: persona.id,
         codPlan: NUEVO,
         tipo: "Consulta",
-        competencia: "Civil",
-        materia: "Después del stock",
+        ...cm,
+        asunto: "Después del stock",
       }),
     ).rejects.toThrow(/no tiene planes vigentes/);
 

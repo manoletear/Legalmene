@@ -1,8 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { eq } from "drizzle-orm";
+import { eq, getTableColumns } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { afiliados, planesAfiliado } from "../../db/schema/afiliados";
 import { atenciones } from "../../db/schema/atenciones";
+import { competencias, materias } from "../../db/schema/maestros";
 
 // Minimal CSV escaping per RFC 4180: quote when needed, double inner quotes.
 function csvEscape(value: unknown): string {
@@ -83,8 +84,10 @@ export class ExportsService {
 
   async atencionesCsv(codPlan?: string): Promise<string> {
     const rows = await this.db
-      .select()
+      .select({ ...getTableColumns(atenciones), competencia: competencias.nombre, materia: materias.nombre })
       .from(atenciones)
+      .innerJoin(competencias, eq(competencias.id, atenciones.competenciaId))
+      .innerJoin(materias, eq(materias.id, atenciones.materiaId))
       .where(codPlan ? eq(atenciones.codPlan, codPlan) : undefined)
       .orderBy(atenciones.fechaApertura);
 
@@ -96,6 +99,7 @@ export class ExportsService {
         "estado",
         "competencia",
         "materia",
+        "asunto",
         "prioridad",
         "afiliado_id",
         "abogado_asignado_id",
@@ -110,6 +114,7 @@ export class ExportsService {
         a.estado,
         a.competencia,
         a.materia,
+        a.asunto,
         a.prioridad,
         a.afiliadoId,
         a.abogadoAsignadoId,

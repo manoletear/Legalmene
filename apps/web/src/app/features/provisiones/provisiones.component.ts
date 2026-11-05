@@ -55,7 +55,7 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
         </ng-template>
         <ng-template pTemplate="body" let-p>
           <tr>
-            <td><a [routerLink]="['/atenciones', p.atencionId]" class="lm-mono">{{ p.correlativo }}</a><div class="lm-small lm-muted">{{ p.materia }}</div></td>
+            <td><a [routerLink]="['/atenciones', p.atencionId]" class="lm-mono">{{ p.correlativo }}</a><div class="lm-small lm-muted">{{ p.asunto }}</div></td>
             <td>{{ p.motivo }}<div *ngIf="p.observacionResolucion" class="lm-small lm-muted">{{ p.observacionResolucion }}</div></td>
             <td style="text-align:right;">$ {{ p.monto | number }}</td>
             <td><p-tag [value]="p.estado" [severity]="severidad(p.estado)"></p-tag></td>

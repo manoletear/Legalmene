@@ -4,6 +4,8 @@ import { Observable } from "rxjs";
 import { environment } from "../../../environments/environment";
 import type {
   Atencion,
+  AtencionConMaestros,
+  CopagoResultado,
   CreateAtencion,
   DerivarAtencion,
   PaginatedResult,
@@ -18,6 +20,8 @@ export interface BuscarAtencionesOpts {
   correlativo?: string;
   afiliadoId?: string;
   codPlan?: string;
+  competenciaId?: string;
+  materiaId?: string;
   q?: string;
 }
 
@@ -26,16 +30,20 @@ export class AtencionesApiService {
   private http = inject(HttpClient);
   private base = `${environment.apiBaseUrl}/atenciones`;
 
-  buscar(opts: BuscarAtencionesOpts): Observable<PaginatedResult<Atencion>> {
+  buscar(opts: BuscarAtencionesOpts): Observable<PaginatedResult<AtencionConMaestros>> {
     let params = new HttpParams();
     Object.entries(opts).forEach(([k, v]) => {
       if (v !== undefined && v !== null && v !== "") params = params.set(k, String(v));
     });
-    return this.http.get<PaginatedResult<Atencion>>(this.base, { params });
+    return this.http.get<PaginatedResult<AtencionConMaestros>>(this.base, { params });
   }
 
-  obtener(id: string): Observable<Atencion> {
-    return this.http.get<Atencion>(`${this.base}/${id}`);
+  obtener(id: string): Observable<AtencionConMaestros> {
+    return this.http.get<AtencionConMaestros>(`${this.base}/${id}`);
+  }
+
+  copago(id: string): Observable<CopagoResultado & { codPlan: string }> {
+    return this.http.get<CopagoResultado & { codPlan: string }>(`${this.base}/${id}/copago`);
   }
 
   actualizar(id: string, patch: UpdateAtencion): Observable<Atencion> {

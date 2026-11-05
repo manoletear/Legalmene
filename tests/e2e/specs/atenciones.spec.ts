@@ -25,10 +25,13 @@ test.describe("Atenciones flow", () => {
     // Al elegir el afiliado se carga su plan vigente como plan de la atención.
     await expect(page.locator("p-select[formcontrolname='codPlan']")).toContainText(planVigente);
 
-    await page.locator("p-select[formcontrolname='competencia']").click();
+    await page.locator("p-select[formcontrolname='competenciaId']").click();
     await page.locator(".p-select-overlay .p-select-option", { hasText: "Laboral" }).click();
+    // Las materias se filtran por competencia y por tipo de atención.
+    await page.locator("p-select[formcontrolname='materiaId']").click();
+    await page.locator(".p-select-overlay .p-select-option", { hasText: "Despido injustificado" }).click();
 
-    await page.locator("input[formcontrolname='materia']").fill("Test E2E - despido");
+    await page.locator("input[formcontrolname='asunto']").fill("Test E2E - despido");
     await page.locator("textarea[formcontrolname='descripcion']").fill("Caso de prueba E2E");
 
     await page.getByRole("button", { name: /^Crear$/ }).click();
@@ -38,6 +41,7 @@ test.describe("Atenciones flow", () => {
     await expect(page.locator("text=/CONS-\\d{4}-\\d{6}/").first()).toBeVisible();
     // breadcrumb con el tipo de caso visible (rutaPrincipal("Consulta") → "Consultas").
     await expect(page.locator("text=Consultas").first()).toBeVisible();
+    await expect(page.getByText("Despido injustificado").first()).toBeVisible();
   });
 
   test("búsqueda full-text encuentra atención por palabra parcial", async ({ page }) => {

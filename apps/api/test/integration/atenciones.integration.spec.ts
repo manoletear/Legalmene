@@ -11,7 +11,7 @@ import { AfiliadosService } from "../../src/modules/afiliados/afiliados.service"
 import { AtencionesService } from "../../src/modules/atenciones/atenciones.service";
 import { WebhooksService } from "../../src/modules/webhooks/webhooks.service";
 import { NotifInboxService } from "../../src/modules/notif-inbox/notif-inbox.service";
-import { planAleatorio, rutAleatorio } from "./helpers";
+import { borrarMateriaDePrueba, materiaDePrueba, planAleatorio, rutAleatorio, type MateriaPrueba } from "./helpers";
 
 const RUN = !!process.env.DATABASE_URL;
 
@@ -24,6 +24,7 @@ const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
   let pool: Pool;
   const TEST_PLAN = planAleatorio();
   let afiliadoId: string;
+  let cm: MateriaPrueba;
 
   const base = () => ({ afiliadoId, codPlan: TEST_PLAN });
 
@@ -54,6 +55,7 @@ const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
     const db = drizzle(pool);
     await migrate(db, { migrationsFolder: "./drizzle/migrations" });
     await db.insert(planes).values({ codPlan: TEST_PLAN, nombre: `Test ${TEST_PLAN}` }).onConflictDoNothing();
+    cm = await materiaDePrueba(db);
 
     const afi = await afiliadosSrv.crear({
       rut: rutAleatorio(),
@@ -70,6 +72,7 @@ const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
     await db.execute(sql`DELETE FROM planes_afiliado WHERE cod_plan = ${TEST_PLAN}`);
     await db.execute(sql`DELETE FROM afiliados WHERE id = ${afiliadoId}`);
     await db.execute(sql`DELETE FROM planes WHERE cod_plan = ${TEST_PLAN}`);
+    await borrarMateriaDePrueba(db, cm);
     await moduleRef.close();
   });
 
@@ -77,8 +80,8 @@ const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
     const a = await atenciones.crear({
       ...base(),
       tipo: "Consulta",
-      competencia: "Civil",
-      materia: "Test correlativo",
+      ...cm,
+      asunto: "Test correlativo",
     });
     expect(a.correlativo).toMatch(/^CONS-\d{4}-\d{6}$/);
     expect(a.estado).toBe("Abierta");
@@ -86,18 +89,18 @@ const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
   });
 
   it("incrementa el correlativo global por tipo", async () => {
-    const c1 = await atenciones.crear({ ...base(), tipo: "Consulta", competencia: "Penal", materia: "Test 1" });
-    const c2 = await atenciones.crear({ ...base(), tipo: "Consulta", competencia: "Penal", materia: "Test 2" });
+    const c1 = await atenciones.crear({ ...base(), tipo: "Consulta", ...cm, asunto: "Test 1" });
+    const c2 = await atenciones.crear({ ...base(), tipo: "Consulta", ...cm, asunto: "Test 2" });
     expect(numero(c2.correlativo)).toBeGreaterThan(numero(c1.correlativo));
 
-    const j1 = await atenciones.crear({ ...base(), tipo: "Juicio", competencia: "Penal", materia: "Test juicio" });
+    const j1 = await atenciones.crear({ ...base(), tipo: "Juicio", ...cm, asunto: "Test juicio" });
     expect(j1.correlativo).toMatch(/^JUIC-\d{4}-\d{6}$/);
   });
 
   it("correlativos son únicos bajo concurrencia (20 inserts paralelos)", async () => {
     const results = await Promise.all(
       Array.from({ length: 20 }, () =>
-        atenciones.crear({ ...base(), tipo: "Asesoria", competencia: "Laboral", materia: "Concurrencia" }),
+        atenciones.crear({ ...base(), tipo: "Asesoria", ...cm, asunto: "Concurrencia" }),
       ),
     );
     const correlativos = results.map((r) => r.correlativo);
@@ -111,8 +114,8 @@ const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
     const origen = await atenciones.crear({
       ...base(),
       tipo: "Consulta",
-      competencia: "Familia",
-      materia: "A derivar",
+      ...cm,
+      asunto: "A derivar",
       descripcion: "Original",
     });
 
@@ -125,7 +128,8 @@ const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
     expect(nueva.tipo).toBe("Asesoria");
     expect(nueva.correlativo).toMatch(/^ASES-/);
     expect(nueva.codPlan).toBe(TEST_PLAN);
-    expect(nueva.materia).toBe(origen.materia);
+    expect(nueva.asunto).toBe(origen.asunto);
+    expect(nueva.materiaId).toBe(origen.materiaId);
     expect((nueva.metadata as { derivadaDe?: string })?.derivadaDe).toBe(origen.id);
 
     const cerrada = await atenciones.obtener(origen.id);
@@ -134,7 +138,7 @@ const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
   });
 
   it("rechaza derivar un Juicio", async () => {
-    const j = await atenciones.crear({ ...base(), tipo: "Juicio", competencia: "Penal", materia: "No derivable" });
+    const j = await atenciones.crear({ ...base(), tipo: "Juicio", ...cm, asunto: "No derivable" });
     await expect(
       atenciones.derivar({ atencionId: j.id, nuevoTipo: "Asesoria", motivo: "Intento inválido" }),
     ).rejects.toThrow(/No se puede derivar un juicio/);

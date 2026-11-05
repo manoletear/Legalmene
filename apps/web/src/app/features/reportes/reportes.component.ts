@@ -11,7 +11,8 @@ import { TableModule } from "primeng/table";
 import { TagModule } from "primeng/tag";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { PlanesApiService } from "../../core/services/planes.service";
-import type { Atencion } from "@legalmene/shared";
+import { MaestrosApiService } from "../../core/services/maestros.service";
+import type { AtencionConMaestros } from "@legalmene/shared";
 
 type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast";
 
@@ -60,7 +61,7 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
             </div>
             <div class="lm-col" style="gap:6px;">
               <label class="lm-small">Materia</label>
-              <p-select [(ngModel)]="filtros.materia" [options]="materiaOpts" optionLabel="label" optionValue="value" placeholder="Seleccione materia..." [showClear]="true"></p-select>
+              <p-select [(ngModel)]="filtros.materia" [options]="materiaOpts()" [filter]="true" filterBy="label" optionLabel="label" optionValue="value" placeholder="Seleccione materia..." [showClear]="true"></p-select>
             </div>
             <div class="lm-col" style="gap:6px;">
               <label class="lm-small">Responsable</label>
@@ -160,7 +161,7 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
               <tr>
                 <td>{{ r.correlativo }}</td>
                 <td>{{ r.cliente || '—' }}</td>
-                <td>{{ r.materia || r.tipo }}</td>
+                <td>{{ r.asunto }} <small class="lm-muted">({{ r.materiaNombre }})</small></td>
                 <td><p-tag [value]="estadoLabel(r.estado)" [severity]="estadoSeverity(r.estado)"></p-tag></td>
                 <td>{{ r.responsable || '—' }}</td>
                 <td>{{ r.codPlan }}</td>
@@ -222,7 +223,7 @@ export class ReportesComponent implements OnInit {
   private api = inject(AtencionesApiService);
   private route = inject(ActivatedRoute);
 
-  protected data = signal<Atencion[]>([]);
+  protected data = signal<AtencionConMaestros[]>([]);
   protected resultados = signal({ total: 0, activos: 0, consultas: 0 });
 
   protected filtros: {
@@ -269,13 +270,8 @@ export class ReportesComponent implements OnInit {
     { label: "Teléfono", value: "Telefono" },
     { label: "Presencial", value: "Presencial" },
   ];
-  protected materiaOpts = [
-    { label: "Cobranza", value: "Cobranza" },
-    { label: "Laboral", value: "Laboral" },
-    { label: "Civil", value: "Civil" },
-    { label: "Penal", value: "Penal" },
-    { label: "Familia", value: "Familia" },
-  ];
+  private maestrosApi = inject(MaestrosApiService);
+  protected materiaOpts = signal<{ label: string; value: string }[]>([]);
 
   protected reportesDisponibles = [
     { titulo: "Reporte por plan", subtitulo: "Resumen por plan contratado", icono: "pi-file", color: "blue" },
@@ -286,6 +282,16 @@ export class ReportesComponent implements OnInit {
   ];
 
   ngOnInit() {
+    this.maestrosApi.listar("competencias").subscribe((cs) => {
+      const nombre = new Map(cs.map((c) => [c.id, c.nombre]));
+      this.maestrosApi.listar("materias", { vigente: true }).subscribe((ms) =>
+        this.materiaOpts.set(
+          ms
+            .map((m) => ({ label: `${nombre.get(m.competenciaId) ?? ""} · ${m.nombre}`, value: m.id }))
+            .sort((a, b) => a.label.localeCompare(b.label, "es")),
+        ),
+      );
+    });
     this.planesApi
       .listar()
       .subscribe((ps) => this.planOpts.set(ps.map((p) => ({ label: `${p.codPlan} — ${p.nombre}`, value: p.codPlan }))));
@@ -302,6 +308,7 @@ export class ReportesComponent implements OnInit {
         tipo: this.filtros.tipo as "Consulta" | undefined,
         estado: this.filtros.estado,
         codPlan: this.filtros.plan,
+        materiaId: this.filtros.materia,
         q: this.filtros.q || undefined,
       })
       .subscribe((res) => {

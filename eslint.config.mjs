@@ -6,6 +6,7 @@ export default tseslint.config(
   {
     ignores: [
       "**/node_modules/**",
+      ".claude/**", // copias de trabajo temporales de agentes
       "**/dist/**",
       "**/.angular/**",
       "**/cdk.out/**",

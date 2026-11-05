@@ -57,6 +57,13 @@
       "when": 1793838339227,
       "tag": "0007_busy_stingray",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793844248414,
+      "tag": "0008_broken_stark_industries",
+      "breakpoints": true
     }
   ]
 }

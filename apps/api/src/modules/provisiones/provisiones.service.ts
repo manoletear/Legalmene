@@ -52,7 +52,7 @@ export class ProvisionesService {
           id: provisiones.id,
           atencionId: provisiones.atencionId,
           correlativo: atenciones.correlativo,
-          materia: atenciones.materia,
+          asunto: atenciones.asunto,
           monto: provisiones.monto,
           motivo: provisiones.motivo,
           estado: provisiones.estado,

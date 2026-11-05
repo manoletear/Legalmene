@@ -80,9 +80,9 @@ Logs (accesos, acciones, errores con aviso al admin), alta disponibilidad, docum
 |---|---|---|
 | Plan / multi-tenancy | ✅ Paso 1: plan como producto, sin header `X-Cod-Plan`; filtro opcional `?codPlan=` | Acceso por perfil y propiedad de la atención (paso 4); `usuarios.cod_planes` quedó sin uso |
 | Afiliados | ✅ Paso 1: persona única por RUT + `planes_afiliado` con vigencias, consulta `GET /afiliados/rut/:rut` | Cargas familiares y bienes |
-| Coberturas | No existen | Por plan y materia (UF o %) |
-| Aranceles | Catálogo **por plan** | Por materia (global) + estado por atención |
-| Maestros | Competencia como enum fijo | Tablas administrables (materias, tribunales, canales, etc.) |
+| Coberturas | ✅ Paso 2: reglas por plan (materia/tipo opcionales; % del arancel, precio fijo UF o sin cobertura) y `GET /copago` | — |
+| Aranceles | ✅ Paso 2: por materia (y tipo opcional), comunes a todos los planes; la ficha muestra arancel y copago derivados | Estado del arancel por atención (rojo → verde, paso 3) |
+| Maestros | ✅ Paso 2: competencias, materias, procedimientos, tribunales, organismos, tipos de consulta, causas de término, calidades procesales (`/maestros/:tipo`, pantalla Admin › Maestros) | Regiones/ciudades/comunas, tipos de acción, gestiones por materia (paso 3), horarios por perfil |
 | Perfiles | 5 roles fijos | 11 perfiles + permisos por módulo/acción configurables |
 | Consultas | Formulario básico | Canal, grabación, horas automáticas, nuevo correlativo |
 | Derivación | Directa | Con aprobación de jefatura y estados |
@@ -99,7 +99,11 @@ Logs (accesos, acciones, errores con aviso al admin), alta disponibilidad, docum
    - La atención exige un plan vigente del RUT, o `REZAGADO`/`METLIFE` si no tiene ninguno.
    - Correlativos globales por tipo/año (la migración 0007 renumeró duplicados entre planes).
    - Pendiente para pasos siguientes: aranceles siguen por plan (paso 2); `usuarios.cod_planes` no se aplica (paso 4); el filtro "Canal" de Reportes aún no consulta `canales`.
-2. **Maestros y finanzas base** — competencias/materias/procedimientos/tribunales, aranceles por materia, coberturas por plan, cálculo de copago.
+2. ✅ **Maestros y finanzas base** — competencias/materias/procedimientos/tribunales, aranceles por materia, coberturas por plan, cálculo de copago.
+   - La atención guarda `competencia_id` + `materia_id` (maestros) y `asunto` (texto libre, ex columna `materia`).
+   - Migración 0008: una competencia por valor del enum legado; las atenciones sin arancel de su competencia quedan en la materia "General"; cada descripción de arancel pasó a ser una materia y los aranceles duplicados entre planes se colapsaron (gana el más antiguo).
+   - Copago: regla más específica del plan (materia+tipo → materia → tipo → general); sin regla, el afiliado paga el arancel completo.
+   - Pendiente: tribunal/procedimiento/calidad procesal aún no se registran en la atención (paso 3, juicios); tope anual de cobertura no está modelado.
 3. **Flujos** — consulta → derivación aprobada → asesoría/juicio; arancel por atención; provisiones completas; plantillas de gestiones y reglas de cierre.
 4. **Perfiles configurables** y control por propiedad de la atención.
 5. **Búsquedas sin precarga, reportes, controller**, cargas y bienes, posesión efectiva.

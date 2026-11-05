@@ -1,6 +1,6 @@
 import { Component, OnInit, inject, signal, computed } from "@angular/core";
 import { CommonModule } from "@angular/common";
-import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from "@angular/forms";
+import { FormBuilder, ReactiveFormsModule, Validators } from "@angular/forms";
 import { ActivatedRoute, RouterLink } from "@angular/router";
 import { authHeaders } from "../../core/interceptors/auth.interceptor";
 import { environment } from "../../../environments/environment";
@@ -19,9 +19,8 @@ import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { GestionesApiService } from "../../core/services/gestiones.service";
 import { ComitesApiService } from "../../core/services/comites.service";
 import { DocumentosApiService, DocumentoMeta } from "../../core/services/documentos.service";
-import { ArancelesApiService } from "../../core/services/aranceles.service";
 import { ProvisionesApiService } from "../../core/services/provisiones.service";
-import type { ArancelConValor, Atencion, Comite, Gestion, ResumenProvisionAtencion } from "@legalmene/shared";
+import type { AtencionConMaestros, Comite, CopagoResultado, Gestion, ResumenProvisionAtencion } from "@legalmene/shared";
 
 type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast";
 
@@ -38,7 +37,6 @@ interface PipelineStep {
   standalone: true,
   imports: [
     CommonModule,
-    FormsModule,
     ReactiveFormsModule,
     RouterLink,
     CardModule,
@@ -85,17 +83,16 @@ interface PipelineStep {
             <div class="lm-info-card">
               <div class="lm-info-card-header"><i class="pi pi-shield"></i> Plan y cobertura</div>
               <div class="lm-info-main">Plan {{ a.codPlan }}</div>
-              <div class="lm-info-row"><span>Cobertura</span><strong>80%</strong></div>
-              <div class="lm-info-row"><span>Tope anual</span><strong>UF 600</strong></div>
-              <div class="lm-info-card-footer">Ver detalle de cobertura →</div>
+              <div class="lm-info-row"><span>Cobertura</span><strong>{{ coberturaTexto() }}</strong></div>
+              <div class="lm-info-card-footer"><a routerLink="/admin/coberturas" [queryParams]="{ plan: a.codPlan }">Ver coberturas del plan →</a></div>
             </div>
 
             <div class="lm-info-card">
               <div class="lm-info-card-header"><i class="pi pi-briefcase"></i> Tipo de atención</div>
-              <div class="lm-info-main">{{ a.competencia }}</div>
-              <div class="lm-info-row"><span>Subtipo</span><strong>{{ a.materia }}</strong></div>
+              <div class="lm-info-main">{{ a.competenciaNombre }}</div>
+              <div class="lm-info-row"><span>Materia</span><strong>{{ a.materiaNombre }}</strong></div>
               <div class="lm-info-row"><span>Prioridad</span><strong>{{ a.prioridad }}</strong></div>
-              <div class="lm-info-card-footer">Ver matriz de aranceles →</div>
+              <div class="lm-info-card-footer"><a routerLink="/aranceles">Ver matriz de aranceles →</a></div>
             </div>
 
             <div class="lm-info-card">
@@ -130,26 +127,22 @@ interface PipelineStep {
 
             <div class="lm-info-card">
               <div class="lm-info-card-header"><i class="pi pi-dollar"></i> Arancel</div>
-              <ng-container *ngIf="arancelAsignado() as ar; else sinArancel">
-                <div class="lm-info-row"><span>Código arancel</span><strong>{{ ar.codigo }}</strong></div>
-                <div class="lm-info-row"><span>Descripción</span><strong class="lm-small">{{ ar.descripcion }}</strong></div>
-                <div class="lm-info-row"><span>Valor UF</span><strong>{{ ar.valorUfCentesimas / 100 | number: '1.0-2' }}</strong></div>
-                <div class="lm-info-row"><span>Valor CLP</span><strong>{{ ar.valorClp !== null ? ('$ ' + (ar.valorClp | number)) : 'Sin UF' }}</strong></div>
+              <ng-container *ngIf="copago() as c">
+                <ng-container *ngIf="c.arancel as ar; else sinArancel">
+                  <div class="lm-info-row"><span>Código arancel</span><strong>{{ ar.codigo }}</strong></div>
+                  <div class="lm-info-row"><span>Descripción</span><strong class="lm-small">{{ ar.descripcion }}</strong></div>
+                  <div class="lm-info-row"><span>Valor</span><strong>{{ ar.valorUfCentesimas / 100 | number: '1.0-2' }} UF</strong></div>
+                </ng-container>
+                <ng-template #sinArancel>
+                  <div class="lm-small lm-muted" style="margin:4px 0 8px;">Sin arancel definido para esta materia</div>
+                </ng-template>
+                <div class="lm-info-row" *ngIf="c.copagoUfCentesimas !== null">
+                  <span>Copago afiliado</span>
+                  <strong [style.color]="c.requiereCopago ? '#b45309' : '#16a34a'">
+                    {{ c.copagoUfCentesimas / 100 | number: '1.0-2' }} UF{{ c.copagoClp !== null ? ' · $ ' + (c.copagoClp | number) : '' }}
+                  </strong>
+                </div>
               </ng-container>
-              <ng-template #sinArancel>
-                <div class="lm-small lm-muted" style="margin:4px 0 8px;">Sin arancel asignado</div>
-              </ng-template>
-              <p-select
-                [options]="arancelOpts()"
-                optionLabel="label"
-                optionValue="value"
-                [ngModel]="a.arancelId"
-                (onChange)="asignarArancel(a.id, $event.value)"
-                [showClear]="true"
-                placeholder="Asignar arancel"
-                appendTo="body"
-                [style]="{ width: '100%', 'margin-top': '6px' }"
-              ></p-select>
             </div>
 
             <div class="lm-info-card">
@@ -373,21 +366,17 @@ export class AtencionDetailComponent implements OnInit {
   private documentosApi = inject(DocumentosApiService);
   private msg = inject(MessageService);
   private prompt = inject(PromptService);
-  private arancelesApi = inject(ArancelesApiService);
   private provisionesApi = inject(ProvisionesApiService);
 
-  protected atencion = signal<Atencion | null>(null);
-  protected aranceles = signal<ArancelConValor[]>([]);
+  protected atencion = signal<AtencionConMaestros | null>(null);
   protected resumenProvision = signal<ResumenProvisionAtencion | null>(null);
-  protected arancelAsignado = computed(() => {
-    const id = this.atencion()?.arancelId;
-    return id ? this.aranceles().find((x) => x.id === id) ?? null : null;
-  });
-  protected arancelOpts = computed(() => {
-    const a = this.atencion();
-    return this.aranceles()
-      .filter((x) => x.vigente && (!a || x.competencia === a.competencia))
-      .map((x) => ({ label: `${x.codigo} — ${x.descripcion}`, value: x.id }));
+  protected copago = signal<CopagoResultado | null>(null);
+  protected coberturaTexto = computed(() => {
+    const c = this.copago();
+    if (!c) return "—";
+    if (c.modalidad === "Porcentaje") return `${c.cobertura?.porcentaje ?? 0}% del arancel`;
+    if (c.modalidad === "ValorUF") return `Precio fijo ${(c.cobertura?.valorUfCentesimas ?? 0) / 100} UF`;
+    return "Sin cobertura";
   });
   protected gestiones = signal<Gestion[]>([]);
   protected comites = signal<Comite[]>([]);
@@ -440,22 +429,12 @@ export class AtencionDetailComponent implements OnInit {
     this.gestionesApi.listar(id).subscribe((g) => this.gestiones.set(g));
     this.comitesApi.listar(id).subscribe((c) => this.comites.set(c));
     this.documentosApi.listar(id).subscribe((d) => this.documentos.set(d));
-    this.arancelesApi.listar().subscribe((r) => this.aranceles.set(r.data));
+    this.api.copago(id).subscribe({ next: (c) => this.copago.set(c), error: () => this.copago.set(null) });
     this.cargarProvisiones(id);
   }
 
   private cargarProvisiones(id: string) {
     this.provisionesApi.porAtencion(id).subscribe((r) => this.resumenProvision.set(r.resumen));
-  }
-
-  asignarArancel(atencionId: string, arancelId: string | null) {
-    this.api.actualizar(atencionId, { arancelId }).subscribe({
-      next: (a) => {
-        this.atencion.set(a);
-        this.msg.add({ severity: "success", summary: arancelId ? "Arancel asignado" : "Arancel quitado", life: 2500 });
-      },
-      error: (err) => this.msg.add({ severity: "error", summary: "Error", detail: err.error?.message ?? err.message, life: 4000 }),
-    });
   }
 
   async solicitarProvision(atencionId: string) {

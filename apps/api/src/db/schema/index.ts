@@ -1,4 +1,5 @@
 export * from "./planes";
+export * from "./maestros";
 export * from "./usuarios";
 export * from "./afiliados";
 export * from "./atenciones";

@@ -17,7 +17,7 @@ export interface GestionGlobalRow {
   fechaEjecucion: string | null;
   createdAt: string;
   correlativo: string;
-  atencionMateria: string;
+  atencionAsunto: string;
 }
 
 export interface GestionesGlobalPage {

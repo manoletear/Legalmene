@@ -26,6 +26,8 @@ import { ExportsModule } from "./modules/exports/exports.module";
 import { WebhooksModule } from "./modules/webhooks/webhooks.module";
 import { HealthModule } from "./modules/health/health.module";
 import { ArancelesModule } from "./modules/aranceles/aranceles.module";
+import { CoberturasModule } from "./modules/coberturas/coberturas.module";
+import { MaestrosModule } from "./modules/maestros/maestros.module";
 import { ProvisionesModule } from "./modules/provisiones/provisiones.module";
 
 @Module({
@@ -58,6 +60,8 @@ import { ProvisionesModule } from "./modules/provisiones/provisiones.module";
     ExportsModule,
     WebhooksModule,
     ArancelesModule,
+    CoberturasModule,
+    MaestrosModule,
     ProvisionesModule,
   ],
   providers: [

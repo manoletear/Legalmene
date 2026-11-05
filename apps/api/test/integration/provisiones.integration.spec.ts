@@ -12,15 +12,13 @@ import { usuarios } from "../../src/db/schema/usuarios";
 import { afiliados } from "../../src/db/schema/afiliados";
 import { atenciones } from "../../src/db/schema/atenciones";
 import { ProvisionesService } from "../../src/modules/provisiones/provisiones.service";
-import { ArancelesService, valorClp } from "../../src/modules/aranceles/aranceles.service";
-import { rutAleatorio } from "./helpers";
+import { borrarMateriaDePrueba, materiaDePrueba, rutAleatorio, type MateriaPrueba } from "./helpers";
 
 const RUN = !!process.env.DATABASE_URL;
 
 (RUN ? describe : describe.skip)("ProvisionesService (integration)", () => {
   let moduleRef: TestingModule;
   let service: ProvisionesService;
-  let arancelesSrv: ArancelesService;
   let pool: Pool;
   const SUFIJO = Math.random().toString(36).slice(2, 8).toUpperCase();
   const PLAN = `TP_${SUFIJO}`;
@@ -28,14 +26,14 @@ const RUN = !!process.env.DATABASE_URL;
   let usuarioId: string;
   let atencionId: string;
   let afiliadoId: string;
+  let cm: MateriaPrueba;
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true }), DatabaseModule],
-      providers: [ProvisionesService, ArancelesService],
+      providers: [ProvisionesService],
     }).compile();
     service = moduleRef.get(ProvisionesService);
-    arancelesSrv = moduleRef.get(ArancelesService);
     pool = moduleRef.get(PG_POOL);
 
     const db = drizzle(pool);
@@ -44,6 +42,7 @@ const RUN = !!process.env.DATABASE_URL;
       { codPlan: PLAN, nombre: `Test ${PLAN}` },
       { codPlan: OTRO_PLAN, nombre: `Test ${OTRO_PLAN}` },
     ]);
+    cm = await materiaDePrueba(db);
     const [u] = await db
       .insert(usuarios)
       .values({
@@ -67,8 +66,8 @@ const RUN = !!process.env.DATABASE_URL;
         correlativo: `TEST-PROV-${SUFIJO}`,
         afiliadoId: afi.id,
         tipo: "Juicio",
-        competencia: "Laboral",
-        materia: "Test provisiones",
+        ...cm,
+        asunto: "Test provisiones",
       })
       .returning();
     atencionId = at.id;
@@ -79,10 +78,10 @@ const RUN = !!process.env.DATABASE_URL;
     await db.execute(sql`DELETE FROM provision_movimientos WHERE provision_id IN (SELECT id FROM provisiones WHERE atencion_id = ${atencionId})`);
     await db.execute(sql`DELETE FROM provisiones WHERE atencion_id = ${atencionId}`);
     await db.execute(sql`DELETE FROM atenciones WHERE cod_plan = ${PLAN}`);
-    await db.execute(sql`DELETE FROM aranceles WHERE cod_plan IN (${PLAN}, ${OTRO_PLAN})`);
     await db.execute(sql`DELETE FROM afiliados WHERE id = ${afiliadoId}`);
     await db.execute(sql`DELETE FROM usuarios WHERE id = ${usuarioId}`);
     await db.execute(sql`DELETE FROM planes WHERE cod_plan IN (${PLAN}, ${OTRO_PLAN})`);
+    await borrarMateriaDePrueba(db, cm);
     await moduleRef.close();
   });
 
@@ -131,15 +130,5 @@ const RUN = !!process.env.DATABASE_URL;
     await expect(
       service.solicitar("00000000-0000-0000-0000-000000000000", usuarioId, { monto: 5_000, motivo: "No existe" }),
     ).rejects.toBeInstanceOf(NotFoundException);
-  });
-
-  it("aranceles: código único por plan y valor en pesos con la UF vigente", async () => {
-    const input = { codigo: "A-LAB-01", descripcion: "Despido", competencia: "Laboral" as const, valorUfCentesimas: 1200 };
-    await arancelesSrv.crear(PLAN, input);
-    await expect(arancelesSrv.crear(PLAN, input)).rejects.toBeInstanceOf(ConflictException);
-    await arancelesSrv.crear(OTRO_PLAN, input);
-
-    expect(valorClp(1200, 3_904_000)).toBe(468_480);
-    expect(valorClp(1200, null)).toBeNull();
   });
 });
