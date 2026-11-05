@@ -1,10 +1,13 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { and, asc, desc, eq, isNull, or, SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, lte, or, sql, SQL } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { aranceles, Arancel, valoresUf, ValorUf } from "../../db/schema/aranceles";
 import { competencias, materias } from "../../db/schema/maestros";
 import { esViolacionUnica } from "../../common/utils/pg-errors";
 import { ufCentesimasAClp } from "../coberturas/copago";
+import { hoyChile } from "../afiliados/vigencia";
+
+export const DIAS_VALIDEZ_UF = 7;
 import type { CreateArancel, TipoAtencion, UpdateArancel, ValorUf as ValorUfInput } from "@legalmene/shared";
 
 export interface FiltroAranceles {
@@ -17,8 +20,20 @@ export interface FiltroAranceles {
 export class ArancelesService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
+  // UF más reciente hasta hoy, solo si tiene a lo más DIAS_VALIDEZ_UF días: con una UF
+  // antigua los montos en pesos quedarían mal sin aviso, así que se prefiere "sin UF".
   async ufVigente(): Promise<ValorUf | null> {
-    const [row] = await this.db.select().from(valoresUf).orderBy(desc(valoresUf.fecha)).limit(1);
+    const [row] = await this.db
+      .select()
+      .from(valoresUf)
+      .where(
+        and(
+          lte(valoresUf.fecha, sql`${hoyChile}`),
+          gte(valoresUf.fecha, sql`${hoyChile} - ${DIAS_VALIDEZ_UF}::int`),
+        ),
+      )
+      .orderBy(desc(valoresUf.fecha))
+      .limit(1);
     return row ?? null;
   }
 

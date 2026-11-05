@@ -150,7 +150,7 @@ export class ExportsService {
       eq(atenciones.tipo, tipo),
       condicionAtencion(f),
       f.estado ? sql`${atenciones.estado} = ${f.estado}` : undefined,
-      f.q ? sql`search_vector @@ plainto_tsquery('spanish', ${f.q})` : undefined,
+      f.q ? sql`"atenciones"."search_vector" @@ plainto_tsquery('spanish', ${f.q})` : undefined,
     );
     await this.contar(() => this.db.select({ value: count() }).from(atenciones).where(where));
     const filas = await filasAtencionDetalle(this.db, where);

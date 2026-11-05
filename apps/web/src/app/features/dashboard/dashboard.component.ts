@@ -7,7 +7,7 @@ import { ProgressSpinnerModule } from "primeng/progressspinner";
 import { TagModule } from "primeng/tag";
 import { MeService } from "../../core/services/me.service";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
-import type { Atencion } from "@legalmene/shared";
+import type { AtencionListada } from "@legalmene/shared";
 import {
   DashboardApiService,
   DashboardKpis,
@@ -220,7 +220,7 @@ import { estadoLabel as etiquetaEstado, estadoSeverity as severidadEstado } from
             <tbody>
               <tr *ngFor="let c of casosRecientes()" style="border-bottom:1px solid #f1f5f9; font-size:13px;">
                 <td style="padding:10px 4px;"><a [routerLink]="['/atenciones', c.id]" style="color:#2563eb; text-decoration:none; font-weight:500;">{{ c.correlativo }}</a></td>
-                <td style="padding:10px 4px; color:#475569;">{{ c.afiliadoId | slice: 0:8 }}…</td>
+                <td style="padding:10px 4px; color:#475569;">{{ c.afiliadoNombre }}</td>
                 <td style="padding:10px 4px; color:#475569;">{{ c.asunto || c.tipo }}</td>
                 <td style="padding:10px 4px;"><p-tag [value]="estadoLabel(c.estado)" [severity]="estadoSeverity(c.estado)"></p-tag></td>
                 <td style="padding:10px 4px; color:#475569;">—</td>
@@ -244,7 +244,7 @@ export class DashboardComponent implements OnInit {
   protected porCompetencia = signal<PorCompetencia[]>([]);
   protected cargaAbogados = signal<CargaAbogado[]>([]);
   protected porMes = signal<PorMes[]>([]);
-  protected casosRecientes = signal<Atencion[]>([]);
+  protected casosRecientes = signal<AtencionListada[]>([]);
   protected loading = signal(true);
 
   protected hoy = signal(new Date());

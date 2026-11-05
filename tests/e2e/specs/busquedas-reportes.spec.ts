@@ -23,6 +23,14 @@ test.describe("Búsquedas sin precarga", () => {
     await expect(page.getByText("Ingrese criterios y presione Buscar")).toBeVisible();
   });
 
+  test("exportar con texto libre (q) responde un xlsx para cada tipo de atención", async ({ request }) => {
+    for (const tipo of ["consultas", "asesorias", "juicios"]) {
+      const res = await request.get(`${API}/exports/busquedas/${tipo}.xlsx?q=despido`);
+      expect(res.status(), `${tipo}: ${await res.text().catch(() => "")}`.slice(0, 200)).toBe(200);
+      expect(res.headers()["content-type"]).toContain("spreadsheetml");
+    }
+  });
+
   test("consultas: exporta a Excel la búsqueda ejecutada", async ({ page }) => {
     await page.goto("/consultas");
     const exportar = page.getByRole("button", { name: "Exportar Excel" });

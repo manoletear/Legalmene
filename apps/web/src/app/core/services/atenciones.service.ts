@@ -15,6 +15,7 @@ import type {
   PagoArancel,
   Atencion,
   AtencionConMaestros,
+  AtencionListada,
   FichaAtencion,
   CambiarEstado,
   Contraparte,
@@ -46,12 +47,12 @@ export class AtencionesApiService {
   private api = environment.apiBaseUrl;
   private base = `${environment.apiBaseUrl}/atenciones`;
 
-  buscar(opts: BuscarAtencionesOpts): Observable<PaginatedResult<AtencionConMaestros>> {
+  buscar(opts: BuscarAtencionesOpts): Observable<PaginatedResult<AtencionListada>> {
     let params = new HttpParams();
     Object.entries(opts).forEach(([k, v]) => {
       if (v !== undefined && v !== null && v !== "") params = params.set(k, String(v));
     });
-    return this.http.get<PaginatedResult<AtencionConMaestros>>(this.base, { params });
+    return this.http.get<PaginatedResult<AtencionListada>>(this.base, { params });
   }
 
   obtener(id: string): Observable<FichaAtencion> {

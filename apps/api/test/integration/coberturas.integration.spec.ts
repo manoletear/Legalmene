@@ -91,6 +91,22 @@ const RUN = !!process.env.DATABASE_URL;
     expect(lista.data[0].materiaNombre).toMatch(/^Materia /);
   });
 
+  it("UF vigente: nunca usa una UF de más de 7 días ni una con fecha futura", async () => {
+    const dia = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+    const antigua = dia(-30);
+    const futura = dia(30);
+    const pool = moduleRef.get(PG_POOL);
+    await arancelesSrv.registrarUf({ fecha: antigua, valorCentavos: 1_111_111 });
+    await arancelesSrv.registrarUf({ fecha: futura, valorCentavos: 9_999_999 });
+    try {
+      const uf = await arancelesSrv.ufVigente();
+      expect(uf?.fecha).not.toBe(antigua);
+      expect(uf?.fecha).not.toBe(futura);
+    } finally {
+      await pool.query("DELETE FROM valores_uf WHERE fecha IN ($1, $2)", [antigua, futura]);
+    }
+  });
+
   it("coberturas: valida modalidad y rechaza reglas duplicadas del plan", async () => {
     await coberturasSrv.crear({ codPlan: PLAN, modalidad: "Porcentaje", porcentaje: 50 });
     await expect(coberturasSrv.crear({ codPlan: PLAN, modalidad: "SinCobertura" })).rejects.toBeInstanceOf(ConflictException);

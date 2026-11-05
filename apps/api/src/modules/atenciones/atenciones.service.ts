@@ -97,20 +97,25 @@ export class AtencionesService {
       filtro.estado ? eq(atenciones.estado, filtro.estado) : undefined,
       filtro.tipo ? eq(atenciones.tipo, filtro.tipo) : undefined,
       filtro.afiliadoId ? eq(atenciones.afiliadoId, filtro.afiliadoId) : undefined,
-      ftQuery ? sql`search_vector @@ ${ftQuery}` : undefined,
+      ftQuery ? sql`"atenciones"."search_vector" @@ ${ftQuery}` : undefined,
     );
     const offset = (filtro.page - 1) * filtro.pageSize;
 
     const orderBy = ftQuery
-      ? desc(sql`ts_rank(search_vector, ${ftQuery})`)
+      ? desc(sql`ts_rank("atenciones"."search_vector", ${ftQuery})`)
       : desc(atenciones.fechaApertura);
 
     const [rows, [{ value: total }]] = await Promise.all([
       this.db
-        .select(columnasConMaestros)
+        .select({
+          ...columnasConMaestros,
+          afiliadoNombre: sql<string>`${afiliados.nombres} || ' ' || ${afiliados.apellidoPaterno}`,
+          afiliadoRut: afiliados.rut,
+        })
         .from(atenciones)
         .innerJoin(competencias, eq(competencias.id, atenciones.competenciaId))
         .innerJoin(materias, eq(materias.id, atenciones.materiaId))
+        .innerJoin(afiliados, eq(afiliados.id, atenciones.afiliadoId))
         .where(where)
         .orderBy(orderBy)
         .limit(filtro.pageSize)

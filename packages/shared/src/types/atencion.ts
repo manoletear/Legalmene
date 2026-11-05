@@ -60,6 +60,7 @@ export const AtencionSchema = z.object({
 });
 export type Atencion = z.infer<typeof AtencionSchema>;
 
+
 // Respuesta de lectura: incluye los nombres de los maestros y el riesgo total.
 export type AtencionConMaestros = Atencion & {
   competenciaNombre: string;
@@ -68,6 +69,9 @@ export type AtencionConMaestros = Atencion & {
 };
 
 // Ficha de la atención: además trae afiliado, plan y responsable para mostrarlos.
+// Fila del listado/búsqueda de atenciones: agrega datos de despliegue del afiliado.
+export type AtencionListada = AtencionConMaestros & { afiliadoNombre: string; afiliadoRut: string };
+
 export type FichaAtencion = AtencionConMaestros & {
   afiliado: { rut: string; nombre: string; email: string | null; telefono: string | null };
   // fecha_inicio de la relación RUT–Plan bajo la que se atendió (null si es REZAGADO/METLIFE).
