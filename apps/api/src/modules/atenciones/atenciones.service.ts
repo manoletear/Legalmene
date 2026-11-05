@@ -8,6 +8,7 @@ import {
 } from "@nestjs/common";
 import { and, eq, count, ilike, inArray, sql, desc, getTableColumns } from "drizzle-orm";
 import {
+  ESTADOS_PROVISION_ABIERTOS,
   ESTADO_INICIAL,
   PLANES_SIN_COBERTURA,
   riesgoTotal,
@@ -23,6 +24,9 @@ import { atenciones, contrapartes, Atencion, ContraparteRow, NuevaAtencion } fro
 import { afiliados } from "../../db/schema/afiliados";
 import { gestiones } from "../../db/schema/gestiones";
 import { comites } from "../../db/schema/comites";
+import { provisiones } from "../../db/schema/provisiones";
+import { ArancelesAtencionService } from "../coberturas/aranceles-atencion.service";
+import { cerrarProvisionesDeAtencion } from "../provisiones/provisiones.service";
 import { causasTermino, competencias, materias } from "../../db/schema/maestros";
 import { planesDeAfiliados } from "../afiliados/vigencia";
 import { siguienteCorrelativo } from "../../common/utils/correlativo";
@@ -74,6 +78,7 @@ export class AtencionesService {
     @Inject(WebhooksService) private readonly webhooks: WebhooksService,
     @Inject(NotifInboxService) private readonly notif: NotifInboxService,
     @Inject(PlantillasService) private readonly plantillas: PlantillasService,
+    @Inject(ArancelesAtencionService) private readonly arancelesAtencion: ArancelesAtencionService,
   ) {}
 
   async buscar(filtro: FiltroAtencionesDto) {
@@ -206,6 +211,8 @@ export class AtencionesService {
     const [row] = await this.db.insert(atenciones).values(payload).returning();
 
     if (row.tipo !== "Consulta") {
+      // El copago del plan define si la atención queda detenida esperando el arancel.
+      await this.arancelesAtencion.crearParaAtencion(row.id, actor?.id ?? null);
       const responsableId = row.abogadoAsignadoId ?? actor?.id;
       if (responsableId) {
         await this.plantillas.instanciar({
@@ -251,6 +258,10 @@ export class AtencionesService {
       .where(eq(atenciones.id, id))
       .returning();
 
+    if (row.tipo !== "Consulta" && row.materiaId !== actual.materiaId) {
+      await this.arancelesAtencion.recalcular(row.id, actor?.id ?? null);
+    }
+
     // Al definir el procedimiento de un juicio se agregan sus gestiones predefinidas.
     if (row.tipo === "Juicio" && patch.procedimientoId && patch.procedimientoId !== actual.procedimientoId) {
       const responsableId = row.abogadoAsignadoId ?? actor?.id;
@@ -266,7 +277,7 @@ export class AtencionesService {
     return row;
   }
 
-  async cambiarEstado(id: string, input: CambiarEstado, bloqueoArancel: string | null = null): Promise<Atencion> {
+  async cambiarEstado(id: string, input: CambiarEstado, actor?: Actor): Promise<Atencion> {
     const actual = await this.fila(id);
     const causaTerminoId = input.causaTerminoId ?? actual.causaTerminoId;
     if (input.causaTerminoId) {
@@ -274,7 +285,7 @@ export class AtencionesService {
       if (!c) throw new BadRequestException(`Causa de término ${input.causaTerminoId} no existe`);
     }
 
-    const [[g], [c]] = await Promise.all([
+    const [[g], [c], [p], bloqueoArancel] = await Promise.all([
       this.db
         .select({ n: count() })
         .from(gestiones)
@@ -283,11 +294,17 @@ export class AtencionesService {
         .select({ n: count() })
         .from(comites)
         .where(and(eq(comites.atencionId, id), inArray(comites.estado, ["Convocado", "EnSesion"]))),
+      this.db
+        .select({ n: count() })
+        .from(provisiones)
+        .where(and(eq(provisiones.atencionId, id), inArray(provisiones.estado, [...ESTADOS_PROVISION_ABIERTOS]))),
+      actual.tipo === "Consulta" ? Promise.resolve(null) : this.arancelesAtencion.bloqueo(id),
     ]);
 
     const faltan = validarTransicion({ ...actual, causaTerminoId }, input.estado, {
       gestionesPendientes: Number(g?.n ?? 0),
       comitesAbiertos: Number(c?.n ?? 0),
+      provisionesAbiertas: Number(p?.n ?? 0),
       bloqueoArancel,
     });
     if (faltan.length > 0) throw new BadRequestException(mensajeFaltantes(input.estado, faltan));
@@ -308,6 +325,7 @@ export class AtencionesService {
       set.metadata = { ...(actual.metadata ?? {}), ultimaObservacionEstado: input.observacion };
     }
     const [row] = await this.db.update(atenciones).set(set).where(eq(atenciones.id, id)).returning();
+    if (row.estado === "Terminada") await cerrarProvisionesDeAtencion(this.db, id, actor?.id ?? null);
     await this.webhooks.emitir(row.codPlan, "atencion.estado", { atencionId: id, desde: actual.estado, hasta: row.estado });
     return row;
   }

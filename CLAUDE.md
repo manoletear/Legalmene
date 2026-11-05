@@ -24,8 +24,8 @@ ejemplo y nunca deben quedar fijas en el código.
 | Backend NestJS — auth + módulos core | ✅ Esqueleto funcional |
 | Módulos Afiliados / Atenciones / Gestiones / Comités / Pagos | ✅ CRUD base + flujos clave |
 | Cargas masivas FLUJO/STOCK | ✅ Implementado |
-| Frontend Angular 19 | ✅ Shell + Dashboard + Afiliados + Atenciones + Aranceles + Provisiones |
-| Alineación con Anexo PSL | 🟡 Pasos 1 (modelo núcleo), 2 (maestros, aranceles, coberturas) y 3a (estados, derivaciones, juicios, gestiones predefinidas) listos; 3b–5 pendientes (ver `docs/requerimientos-anexo-psl.md` §5) |
+| Frontend Angular 19 | ✅ Shell + Dashboard + Afiliados + Atenciones + Aranceles + Provisiones + Derivaciones + Finanzas |
+| Alineación con Anexo PSL | 🟡 Pasos 1 (modelo núcleo), 2 (maestros, aranceles, coberturas) y 3 (estados, derivaciones, juicios, gestiones predefinidas, arancel por atención, provisiones) listos; 4–5 pendientes (ver `docs/requerimientos-anexo-psl.md` §5) |
 | Infraestructura AWS (CDK) | ⏳ Pendiente |
 | Migración SQL Server → Postgres | ⏳ Pendiente |
 | WebPay producción | ⏳ Stub (esperar SDK Transbank) |
@@ -131,6 +131,10 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   por etapa de `modules/atenciones/estados.ts`). "Derivada" solo la asigna la aprobación de una
   derivación. Las actualizaciones automáticas (gestión creada, comité) solo avanzan desde el
   estado esperado (p. ej. Pendiente → EnGestion).
+- **Arancel por atención y provisiones**: transiciones solo vía `ArancelesAtencionService` y
+  `ProvisionesService` (mapas `TRANSICIONES_ARANCEL` / `TRANSICIONES_PROVISION` en shared); cada
+  cambio escribe su fila de eventos. Roles: Supervisor/Admin aprueban; Contador registra pagos;
+  Finanzas pone fondos a disposición y entrega. El CLP de un arancel usa la UF de la fecha de pago.
 - **Reglas de negocio clave (Anexo)**: solo planes vigentes permiten nuevas atenciones;
   aranceles son por materia y la cobertura por plan define el copago; una atención con
   arancel impago queda detenida; no se cierra una asesoría/juicio con gestiones o comité

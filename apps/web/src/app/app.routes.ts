@@ -68,6 +68,10 @@ export const routes: Routes = [
       import("./features/aranceles/aranceles.component").then((m) => m.ArancelesComponent),
   },
   {
+    path: "finanzas",
+    loadComponent: () => import("./features/finanzas/finanzas.component").then((m) => m.FinanzasComponent),
+  },
+  {
     path: "derivaciones",
     loadComponent: () =>
       import("./features/derivaciones/derivaciones.component").then((m) => m.DerivacionesComponent),

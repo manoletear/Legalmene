@@ -232,6 +232,7 @@ export class AppComponent implements OnInit {
     { label: "Aranceles", icon: "pi-dollar", route: "/aranceles" },
     { label: "Coberturas", icon: "pi-percentage", route: "/admin/coberturas" },
     { label: "Provisiones", icon: "pi-wallet", route: "/provisiones" },
+    { label: "Finanzas", icon: "pi-money-bill", route: "/finanzas" },
     { label: "Documentos", icon: "pi-folder", route: "/documentos" },
     { label: "Reportes", icon: "pi-chart-bar", route: "/reportes" },
     { label: "Gestiones", icon: "pi-check-square", route: "/gestiones" },

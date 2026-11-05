@@ -21,9 +21,11 @@ test.describe("Aranceles y provisiones", () => {
     await expect(page.getByText("Juicio por despido injustificado")).toBeVisible();
   });
 
-  test("Abogado solicita pero NO aprueba; Supervisor aprueba y el saldo se actualiza", async ({ request }) => {
+  test("ciclo de provisión con los perfiles del Anexo: Abogado, Contador, Supervisor y Finanzas", async ({ request }) => {
     const abogado = { "X-Dev-User": asUser("Abogado") };
     const supervisor = { "X-Dev-User": asUser("Supervisor") };
+    const contador = { "X-Dev-User": asUser("Contador") };
+    const finanzas = { "X-Dev-User": asUser("Finanzas") };
 
     const afi = await request.get(`${API}/afiliados`, { headers: abogado }).then((r) => r.json());
     type AfiliadoE2E = { id: string; vigencia: string; planes: { codPlan: string; vigente: boolean }[] };
@@ -57,28 +59,41 @@ test.describe("Aranceles y provisiones", () => {
     expect(solicitud.ok()).toBeTruthy();
     const provision = await solicitud.json();
     expect(provision.estado).toBe("Solicitada");
+    const paso = (accion: string, headers: Record<string, string>, data: object = {}) =>
+      request.post(`${API}/provisiones/${provision.id}/${accion}`, { headers, data });
 
-    const aprobarAbogado = await request.put(`${API}/provisiones/${provision.id}/aprobar`, {
-      headers: abogado,
-      data: {},
-    });
-    expect(aprobarAbogado.status()).toBe(403);
-
-    const aprobar = await request.put(`${API}/provisiones/${provision.id}/aprobar`, {
-      headers: supervisor,
-      data: { observacion: "OK" },
-    });
-    expect(aprobar.ok()).toBeTruthy();
+    expect((await paso("pago-cliente", abogado, { medio: "Transferencia" })).status()).toBe(403);
+    expect((await paso("pago-cliente", contador, { medio: "Transferencia" })).ok()).toBeTruthy();
+    expect((await paso("solicitar-entrega", abogado)).ok()).toBeTruthy();
+    expect((await paso("autorizar", abogado)).status()).toBe(403);
+    expect((await paso("autorizar", supervisor, { observacion: "OK" })).ok()).toBeTruthy();
+    expect((await paso("disponible", finanzas)).ok()).toBeTruthy();
+    expect((await paso("entregar", finanzas)).ok()).toBeTruthy();
 
     const gasto = await request.post(`${API}/provisiones/${provision.id}/movimientos`, {
       headers: abogado,
       data: { tipo: "Gasto", monto: 50_000, glosa: "Honorario perito" },
     });
     expect(gasto.ok()).toBeTruthy();
+    const rendirAntes = await paso("rendir", abogado);
+    expect(rendirAntes.status()).toBe(400);
+    expect((await rendirAntes.json()).message).toMatch(/saldo por rendir/);
+    await request.post(`${API}/provisiones/${provision.id}/movimientos`, {
+      headers: abogado,
+      data: { tipo: "Reintegro", monto: 150_000, glosa: "Saldo devuelto" },
+    });
+    expect((await paso("rendir", abogado)).ok()).toBeTruthy();
 
     const resumen = await request
       .get(`${API}/atenciones/${caso.id}/provisiones`, { headers: abogado })
       .then((r) => r.json());
-    expect(resumen.resumen).toEqual({ aprobado: 200_000, utilizado: 50_000, disponible: 150_000, pendiente: 0 });
+    expect(resumen.resumen).toEqual({
+      provisionado: 200_000,
+      entregado: 200_000,
+      utilizado: 50_000,
+      reintegrado: 150_000,
+      saldoPorRendir: 0,
+      pendientePago: 0,
+    });
   });
 });

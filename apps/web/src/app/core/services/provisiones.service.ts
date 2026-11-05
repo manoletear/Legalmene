@@ -4,6 +4,8 @@ import { Observable } from "rxjs";
 import { environment } from "../../../environments/environment";
 import type {
   EstadoProvision,
+  EventoFinanciero,
+  MedioPago,
   MovimientoProvision,
   Provision,
   RegistrarMovimiento,
@@ -23,6 +25,9 @@ export interface ProvisionRow {
   fechaSolicitud: string;
   fechaResolucion: string | null;
   observacionResolucion: string | null;
+  montoEntregado: number | null;
+  fechaDisponible: string | null;
+  numeroCheque: string | null;
 }
 
 export interface ProvisionesPage {
@@ -59,12 +64,37 @@ export class ProvisionesApiService {
     return this.http.post<Provision>(`${this.base}/atenciones/${atencionId}/provisiones`, payload);
   }
 
-  aprobar(id: string, observacion?: string): Observable<Provision> {
-    return this.http.put<Provision>(`${this.base}/provisiones/${id}/aprobar`, { observacion });
+  private accion(id: string, accion: string, body: object = {}): Observable<Provision> {
+    return this.http.post<Provision>(`${this.base}/provisiones/${id}/${accion}`, body);
   }
 
-  rechazar(id: string, observacion?: string): Observable<Provision> {
-    return this.http.put<Provision>(`${this.base}/provisiones/${id}/rechazar`, { observacion });
+  pagoCliente(id: string, medio: MedioPago) {
+    return this.accion(id, "pago-cliente", { medio });
+  }
+  solicitarEntrega(id: string) {
+    return this.accion(id, "solicitar-entrega");
+  }
+  autorizar(id: string, observacion?: string) {
+    return this.accion(id, "autorizar", { observacion });
+  }
+  rechazarEntrega(id: string, observacion: string) {
+    return this.accion(id, "rechazar-entrega", { observacion });
+  }
+  disponible(id: string) {
+    return this.accion(id, "disponible");
+  }
+  entregar(id: string, montoEntregado?: number) {
+    return this.accion(id, "entregar", { montoEntregado });
+  }
+  rendir(id: string) {
+    return this.accion(id, "rendir");
+  }
+  devolucion(id: string, numeroCheque: string) {
+    return this.accion(id, "devolucion", { numeroCheque });
+  }
+
+  eventos(id: string): Observable<EventoFinanciero[]> {
+    return this.http.get<EventoFinanciero[]>(`${this.base}/provisiones/${id}/eventos`);
   }
 
   movimientos(id: string): Observable<MovimientoProvision[]> {

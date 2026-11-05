@@ -12,6 +12,9 @@ import { AtencionesService } from "../../src/modules/atenciones/atenciones.servi
 import { WebhooksService } from "../../src/modules/webhooks/webhooks.service";
 import { NotifInboxService } from "../../src/modules/notif-inbox/notif-inbox.service";
 import { PlantillasService } from "../../src/modules/gestiones/plantillas.service";
+import { ArancelesAtencionService } from "../../src/modules/coberturas/aranceles-atencion.service";
+import { CoberturasService } from "../../src/modules/coberturas/coberturas.service";
+import { ArancelesService } from "../../src/modules/aranceles/aranceles.service";
 import { DerivacionesService } from "../../src/modules/atenciones/derivaciones.service";
 import { gestiones, gestionesPlantilla } from "../../src/db/schema/gestiones";
 import { causasTermino, tribunales } from "../../src/db/schema/maestros";
@@ -54,6 +57,9 @@ const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
         AtencionesService,
         AfiliadosService,
         PlantillasService,
+        ArancelesAtencionService,
+        CoberturasService,
+        ArancelesService,
         DerivacionesService,
         // Stub: el test no verifica entrega real de webhooks; basta con la
         // promesa resolviendo para no romper la pipeline.

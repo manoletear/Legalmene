@@ -75,8 +75,12 @@ export class AtencionesController {
 
   @Post("atenciones/:id/estado")
   @Roles("Administrador", "Supervisor", "Abogado", "Operador")
-  cambiarEstado(@Param("id", ParseUUIDPipe) id: string, @Body() body: CambiarEstadoDto) {
-    return this.service.cambiarEstado(id, body);
+  cambiarEstado(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() body: CambiarEstadoDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.cambiarEstado(id, body, user);
   }
 
   @Post("atenciones/:id/nuevo-correlativo")

@@ -6,6 +6,8 @@ export const rolUsuarioEnum = pgEnum("rol_usuario", [
   "Abogado",
   "Operador",
   "Auditor",
+  "Contador",
+  "Finanzas",
 ]);
 
 export const usuarios = pgTable("usuarios", {

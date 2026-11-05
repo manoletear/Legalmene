@@ -7,7 +7,7 @@ export interface ClaimsSpec {
   entraOid: string;
   email: string;
   nombre: string;
-  rol: "Administrador" | "Supervisor" | "Abogado" | "Operador" | "Auditor";
+  rol: "Administrador" | "Supervisor" | "Abogado" | "Operador" | "Auditor" | "Contador" | "Finanzas";
   codPlanes?: string[];
 }
 

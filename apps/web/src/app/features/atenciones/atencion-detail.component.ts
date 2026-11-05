@@ -31,6 +31,10 @@ import {
   type EstadoAtencion,
   type Gestion,
   type ResumenProvisionAtencion,
+  type ArancelAtencion,
+  type EstadoArancelAtencion,
+  ESTADO_ARANCEL_COLOR,
+  ESTADO_ARANCEL_LABEL,
 } from "@legalmene/shared";
 
 type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast";
@@ -151,15 +155,34 @@ interface PipelineStep {
                   </strong>
                 </div>
               </ng-container>
+              <ng-container *ngIf="arancel() as ar">
+                <div class="lm-row" style="gap:6px; margin-top:6px;" data-testid="arancel-estado">
+                  <span style="width:10px; height:10px; border-radius:50%;" [style.background]="colorArancel(ar.estado)"></span>
+                  <strong class="lm-small">{{ etiquetaArancel(ar.estado) }}</strong>
+                </div>
+                <div *ngIf="ar.motivoRechazo && ar.estado === 'Requerido'" class="lm-small" style="color:#dc2626;">Rechazado: {{ ar.motivoRechazo }}</div>
+                <div *ngIf="ar.estado === 'Pagado'" class="lm-small lm-muted">
+                  Pagado {{ ar.fechaPago | date: 'dd/MM/yyyy' }} · {{ ar.medioPago }} · $ {{ ar.montoClp | number }}
+                </div>
+                <div class="lm-row" style="gap:4px; flex-wrap:wrap; margin-top:6px;">
+                  <button *ngIf="ar.estado === 'Requerido' && puede(['Administrador','Supervisor','Abogado'])" pButton size="small" [outlined]="true" label="Enviar a aprobación" (click)="accionArancel(a.id, 'enviar')"></button>
+                  <ng-container *ngIf="ar.estado === 'EnAprobacion' && puede(['Administrador','Supervisor'])">
+                    <button pButton size="small" severity="success" [outlined]="true" label="Aprobar" (click)="accionArancel(a.id, 'aprobar')"></button>
+                    <button pButton size="small" severity="danger" [outlined]="true" label="Rechazar" (click)="accionArancel(a.id, 'rechazar')"></button>
+                  </ng-container>
+                  <button *ngIf="ar.estado === 'Aprobado' && puede(['Administrador','Contador'])" pButton size="small" [outlined]="true" label="Registrar pago" (click)="accionArancel(a.id, 'pago')"></button>
+                </div>
+              </ng-container>
             </div>
 
             <div class="lm-info-card">
               <div class="lm-info-card-header"><i class="pi pi-wallet"></i> Provisión</div>
               <ng-container *ngIf="resumenProvision() as r">
-                <div class="lm-info-row"><span>Monto provisionado</span><strong>$ {{ r.aprobado | number }}</strong></div>
-                <div class="lm-info-row"><span>Utilizado</span><strong>$ {{ r.utilizado | number }}</strong></div>
-                <div class="lm-info-row"><span>Disponible</span><strong style="color:#16a34a;">$ {{ r.disponible | number }}</strong></div>
-                <div *ngIf="r.pendiente > 0" class="lm-info-row"><span>Por aprobar</span><strong style="color:#b45309;">$ {{ r.pendiente | number }}</strong></div>
+                <div class="lm-info-row"><span>Provisionado (pagado)</span><strong>$ {{ r.provisionado | number }}</strong></div>
+                <div class="lm-info-row"><span>Entregado al abogado</span><strong>$ {{ r.entregado | number }}</strong></div>
+                <div class="lm-info-row"><span>Gastado</span><strong>$ {{ r.utilizado | number }}</strong></div>
+                <div class="lm-info-row"><span>Saldo por rendir</span><strong [style.color]="r.saldoPorRendir > 0 ? '#b45309' : '#16a34a'">$ {{ r.saldoPorRendir | number }}</strong></div>
+                <div *ngIf="r.pendientePago > 0" class="lm-info-row"><span>Pendiente de pago</span><strong style="color:#b45309;">$ {{ r.pendientePago | number }}</strong></div>
               </ng-container>
               <div class="lm-info-card-footer">
                 <a style="cursor:pointer;" (click)="solicitarProvision(a.id)">Solicitar provisión</a> ·
@@ -381,6 +404,7 @@ export class AtencionDetailComponent implements OnInit {
   protected atencion = signal<AtencionConMaestros | null>(null);
   protected resumenProvision = signal<ResumenProvisionAtencion | null>(null);
   protected copago = signal<CopagoResultado | null>(null);
+  protected arancel = signal<ArancelAtencion | null>(null);
   protected coberturaTexto = computed(() => {
     const c = this.copago();
     if (!c) return "—";
@@ -442,6 +466,7 @@ export class AtencionDetailComponent implements OnInit {
     this.comitesApi.listar(id).subscribe((c) => this.comites.set(c));
     this.documentosApi.listar(id).subscribe((d) => this.documentos.set(d));
     this.api.copago(id).subscribe({ next: (c) => this.copago.set(c), error: () => this.copago.set(null) });
+    this.api.arancel(id).subscribe({ next: (r) => this.arancel.set(r), error: () => this.arancel.set(null) });
     this.cargarProvisiones(id);
   }
 
@@ -461,10 +486,51 @@ export class AtencionDetailComponent implements OnInit {
     if (!motivo) return;
     this.provisionesApi.solicitar(atencionId, { monto, motivo }).subscribe({
       next: () => {
-        this.msg.add({ severity: "success", summary: "Provisión solicitada", detail: "Queda pendiente de aprobación", life: 3000 });
+        this.msg.add({ severity: "success", summary: "Provisión solicitada", detail: "Queda pendiente del pago del cliente", life: 3000 });
         this.cargarProvisiones(atencionId);
       },
       error: (err) => this.msg.add({ severity: "error", summary: "Error", detail: err.error?.message ?? err.message, life: 4000 }),
+    });
+  }
+
+  protected colorArancel(e: EstadoArancelAtencion): string {
+    return ESTADO_ARANCEL_COLOR[e];
+  }
+
+  protected etiquetaArancel(e: EstadoArancelAtencion): string {
+    return ESTADO_ARANCEL_LABEL[e];
+  }
+
+  protected puede(roles: string[]): boolean {
+    return roles.includes(this.me.user()?.rol ?? "");
+  }
+
+  async accionArancel(atencionId: string, accion: "enviar" | "aprobar" | "rechazar" | "pago") {
+    let req;
+    if (accion === "enviar") req = this.api.enviarArancel(atencionId);
+    else if (accion === "aprobar") req = this.api.aprobarArancel(atencionId);
+    else if (accion === "rechazar") {
+      const motivo = await this.prompt.open({ header: "Rechazar arancel", label: "Motivo", multiline: true, required: true });
+      if (!motivo) return;
+      req = this.api.rechazarArancel(atencionId, motivo);
+    } else {
+      const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(new Date());
+      const fecha = await this.prompt.open({ header: "Registrar pago del arancel", label: "Fecha de pago (AAAA-MM-DD)", initialValue: hoy, required: true });
+      if (!fecha) return;
+      const medio = await this.prompt.open({ header: "Medio de pago", label: "WebPay, CasaCentral o Transferencia", initialValue: "CasaCentral", required: true });
+      if (!medio) return;
+      if (!["WebPay", "CasaCentral", "Transferencia"].includes(medio.trim())) {
+        this.msg.add({ severity: "warn", summary: "Medio inválido", detail: "Use WebPay, CasaCentral o Transferencia", life: 4000 });
+        return;
+      }
+      req = this.api.pagarArancel(atencionId, { fechaPago: fecha.trim(), medio: medio.trim() as "CasaCentral" });
+    }
+    req.subscribe({
+      next: (r) => {
+        this.arancel.set(r);
+        this.msg.add({ severity: "success", summary: `Arancel: ${ESTADO_ARANCEL_LABEL[r.estado]}`, life: 2500 });
+      },
+      error: (err) => this.msg.add({ severity: "error", summary: "No se pudo completar", detail: err.error?.message ?? err.message, life: 6000 }),
     });
   }
 

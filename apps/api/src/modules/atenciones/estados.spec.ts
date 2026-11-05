@@ -63,6 +63,13 @@ describe("requisitos por etapa", () => {
     expect(validarTransicion({ ...enGestion, causaTerminoId: "c" }, "Terminada", sinPendientes)).toEqual([]);
   });
 
+  it("Terminada exige rendir las provisiones de fondos", () => {
+    const enGestion = { ...base, estado: "EnGestion" as const, causaTerminoId: "c" };
+    expect(validarTransicion(enGestion, "Terminada", { ...sinPendientes, provisionesAbiertas: 1 })).toEqual([
+      "1 provisión(es) de fondos sin rendir",
+    ]);
+  });
+
   it("Abandonada con riesgo ≥ 20 exige revisión de comité", () => {
     const riesgoso = { ...base, causaTerminoId: "c", riesgoMateria: 8, riesgoCuantia: 7, riesgoCliente: 5 };
     expect(validarTransicion(riesgoso, "Abandonada", sinPendientes)).toEqual([

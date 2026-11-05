@@ -6,6 +6,9 @@ export const RolUsuarioEnum = z.enum([
   "Abogado",
   "Operador",
   "Auditor",
+  // Anexo §IV: Ejecutivo contable (aranceles, pago de provisiones) y Finanzas (entrega y rendición).
+  "Contador",
+  "Finanzas",
 ]);
 export type RolUsuario = z.infer<typeof RolUsuarioEnum>;
 

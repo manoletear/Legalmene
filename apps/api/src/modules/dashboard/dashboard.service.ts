@@ -114,7 +114,8 @@ export class DashboardService {
       })
       .from(provisiones)
       .innerJoin(atenciones, eq(provisiones.atencionId, atenciones.id))
-      .where(and(porPlan(codPlan), eq(provisiones.estado, "Solicitada")));
+      // Pendientes = esperando pago del cliente o autorización de entrega.
+      .where(and(porPlan(codPlan), inArray(provisiones.estado, ["Solicitada", "EnAprobacion"])));
 
     return {
       codPlan: codPlan ?? null,

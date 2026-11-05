@@ -4,6 +4,10 @@ import { Observable } from "rxjs";
 import { environment } from "../../../environments/environment";
 import type {
   AprobarDerivacion,
+  ArancelAtencion,
+  ArancelAtencionRow,
+  EventoFinanciero,
+  PagoArancel,
   Atencion,
   AtencionConMaestros,
   CambiarEstado,
@@ -114,5 +118,36 @@ export class AtencionesApiService {
 
   eliminarContraparte(id: string): Observable<Contraparte> {
     return this.http.delete<Contraparte>(`${this.api}/contrapartes/${id}`);
+  }
+
+  // --- Arancel (copago) de la atención ---
+  arancel(id: string): Observable<ArancelAtencion | null> {
+    return this.http.get<ArancelAtencion | null>(`${this.base}/${id}/arancel`);
+  }
+
+  arancelEventos(id: string): Observable<EventoFinanciero[]> {
+    return this.http.get<EventoFinanciero[]>(`${this.base}/${id}/arancel/eventos`);
+  }
+
+  enviarArancel(id: string): Observable<ArancelAtencion> {
+    return this.http.post<ArancelAtencion>(`${this.base}/${id}/arancel/enviar`, {});
+  }
+
+  aprobarArancel(id: string, observacion?: string): Observable<ArancelAtencion> {
+    return this.http.post<ArancelAtencion>(`${this.base}/${id}/arancel/aprobar`, { observacion });
+  }
+
+  rechazarArancel(id: string, observacion: string): Observable<ArancelAtencion> {
+    return this.http.post<ArancelAtencion>(`${this.base}/${id}/arancel/rechazar`, { observacion });
+  }
+
+  pagarArancel(id: string, payload: PagoArancel): Observable<ArancelAtencion> {
+    return this.http.post<ArancelAtencion>(`${this.base}/${id}/arancel/pago`, payload);
+  }
+
+  arancelesPorEstado(estado?: string): Observable<ArancelAtencionRow[]> {
+    let params = new HttpParams();
+    if (estado) params = params.set("estado", estado);
+    return this.http.get<ArancelAtencionRow[]>(`${this.api}/aranceles-atencion`, { params });
   }
 }

@@ -4,8 +4,8 @@ import {
   Get,
   Inject,
   Param,
+  ParseUUIDPipe,
   Post,
-  Put,
   Query,
   UnauthorizedException,
   UseGuards,
@@ -17,9 +17,13 @@ import { Roles } from "../../common/decorators/roles.decorator";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { ProvisionesService } from "./provisiones.service";
 import {
+  DevolucionDto,
+  EntregaDto,
   FiltroProvisionesDto,
+  ObservacionDto,
+  PagoClienteDto,
+  RechazoDto,
   RegistrarMovimientoDto,
-  ResolverProvisionDto,
   SolicitarProvisionDto,
 } from "./dto";
 
@@ -28,6 +32,7 @@ function usuarioId(user: AuthenticatedUser): string {
   return user.id;
 }
 
+// Ciclo de provisión de fondos (Anexo §X). Cada etapa la ejecuta un perfil distinto.
 @ApiTags("provisiones")
 @ApiBearerAuth("EntraID")
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -41,7 +46,7 @@ export class ProvisionesController {
   }
 
   @Get("atenciones/:atencionId/provisiones")
-  listarPorAtencion(@Param("atencionId") atencionId: string) {
+  listarPorAtencion(@Param("atencionId", ParseUUIDPipe) atencionId: string) {
     return this.service.listarPorAtencion(atencionId);
   }
 
@@ -49,42 +54,75 @@ export class ProvisionesController {
   @Roles("Administrador", "Supervisor", "Abogado")
   solicitar(
     @CurrentUser() user: AuthenticatedUser,
-    @Param("atencionId") atencionId: string,
+    @Param("atencionId", ParseUUIDPipe) atencionId: string,
     @Body() body: SolicitarProvisionDto,
   ) {
     return this.service.solicitar(atencionId, usuarioId(user), body);
   }
 
-  @Put("provisiones/:id/aprobar")
-  @Roles("Administrador", "Supervisor")
-  aprobar(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param("id") id: string,
-    @Body() body: ResolverProvisionDto,
-  ) {
-    return this.service.resolver(id, usuarioId(user), "Aprobada", body.observacion);
+  @Post("provisiones/:id/pago-cliente")
+  @Roles("Administrador", "Contador")
+  pagoCliente(@CurrentUser() user: AuthenticatedUser, @Param("id", ParseUUIDPipe) id: string, @Body() body: PagoClienteDto) {
+    return this.service.registrarPagoCliente(id, usuarioId(user), body.medio, body.fecha);
   }
 
-  @Put("provisiones/:id/rechazar")
+  @Post("provisiones/:id/solicitar-entrega")
+  @Roles("Administrador", "Supervisor", "Abogado")
+  solicitarEntrega(@CurrentUser() user: AuthenticatedUser, @Param("id", ParseUUIDPipe) id: string) {
+    return this.service.solicitarEntrega(id, usuarioId(user));
+  }
+
+  @Post("provisiones/:id/autorizar")
   @Roles("Administrador", "Supervisor")
-  rechazar(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param("id") id: string,
-    @Body() body: ResolverProvisionDto,
-  ) {
-    return this.service.resolver(id, usuarioId(user), "Rechazada", body.observacion);
+  autorizar(@CurrentUser() user: AuthenticatedUser, @Param("id", ParseUUIDPipe) id: string, @Body() body: ObservacionDto) {
+    return this.service.autorizar(id, usuarioId(user), body.observacion);
+  }
+
+  @Post("provisiones/:id/rechazar-entrega")
+  @Roles("Administrador", "Supervisor")
+  rechazarEntrega(@CurrentUser() user: AuthenticatedUser, @Param("id", ParseUUIDPipe) id: string, @Body() body: RechazoDto) {
+    return this.service.rechazarEntrega(id, usuarioId(user), body.observacion);
+  }
+
+  @Post("provisiones/:id/disponible")
+  @Roles("Administrador", "Finanzas")
+  disponible(@CurrentUser() user: AuthenticatedUser, @Param("id", ParseUUIDPipe) id: string) {
+    return this.service.marcarDisponible(id, usuarioId(user));
+  }
+
+  @Post("provisiones/:id/entregar")
+  @Roles("Administrador", "Finanzas")
+  entregar(@CurrentUser() user: AuthenticatedUser, @Param("id", ParseUUIDPipe) id: string, @Body() body: EntregaDto) {
+    return this.service.entregar(id, usuarioId(user), body.montoEntregado);
+  }
+
+  @Post("provisiones/:id/rendir")
+  @Roles("Administrador", "Supervisor", "Abogado")
+  rendir(@CurrentUser() user: AuthenticatedUser, @Param("id", ParseUUIDPipe) id: string) {
+    return this.service.rendir(id, usuarioId(user));
+  }
+
+  @Post("provisiones/:id/devolucion")
+  @Roles("Administrador", "Finanzas")
+  devolucion(@CurrentUser() user: AuthenticatedUser, @Param("id", ParseUUIDPipe) id: string, @Body() body: DevolucionDto) {
+    return this.service.registrarDevolucion(id, usuarioId(user), body.numeroCheque, body.observacion);
+  }
+
+  @Get("provisiones/:id/eventos")
+  eventos(@Param("id", ParseUUIDPipe) id: string) {
+    return this.service.eventos(id);
   }
 
   @Get("provisiones/:id/movimientos")
-  movimientos(@Param("id") id: string) {
+  movimientos(@Param("id", ParseUUIDPipe) id: string) {
     return this.service.listarMovimientos(id);
   }
 
   @Post("provisiones/:id/movimientos")
-  @Roles("Administrador", "Supervisor", "Abogado")
+  @Roles("Administrador", "Supervisor", "Abogado", "Contador")
   registrarMovimiento(
     @CurrentUser() user: AuthenticatedUser,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() body: RegistrarMovimientoDto,
   ) {
     return this.service.registrarMovimiento(id, usuarioId(user), body);

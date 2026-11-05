@@ -50,7 +50,9 @@ export class EntraStrategy extends PassportStrategy(Strategy, "jwt-entra") {
       | "Supervisor"
       | "Abogado"
       | "Operador"
-      | "Auditor";
+      | "Auditor"
+      | "Contador"
+      | "Finanzas";
     const codPlanes = (payload.extension_CodPlanes ?? "")
       .split(",")
       .map((s) => s.trim())

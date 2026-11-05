@@ -1,7 +1,7 @@
-import { Component, OnInit, computed, inject, signal } from "@angular/core";
+import { Component, OnInit, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
-import { RouterLink } from "@angular/router";
+import { ActivatedRoute, RouterLink } from "@angular/router";
 import { CardModule } from "primeng/card";
 import { SelectModule } from "primeng/select";
 import { ButtonModule } from "primeng/button";
@@ -9,11 +9,12 @@ import { TableModule } from "primeng/table";
 import { TagModule } from "primeng/tag";
 import { MessageService } from "primeng/api";
 import type { TableLazyLoadEvent } from "primeng/table";
+import { ESTADO_PROVISION_LABEL, EstadoProvisionEnum, type EstadoProvision } from "@legalmene/shared";
 import { ProvisionesApiService, ProvisionRow } from "../../core/services/provisiones.service";
 import { MeService } from "../../core/services/me.service";
 import { PromptService } from "../../shared/prompt.service";
-
-type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast";
+import { AccionProvision, accionesProvision, severidadProvision } from "../../shared/provision-acciones";
+import { Observable } from "rxjs";
 
 @Component({
   selector: "lm-provisiones",
@@ -22,16 +23,21 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
   template: `
     <div class="lm-row" style="margin-bottom:16px; align-items:flex-end;">
       <div style="flex:1;">
-        <h1 style="margin:0 0 4px 0;">Provisiones</h1>
-        <small class="lm-muted">Fondos solicitados por caso. Aprueba un Supervisor o Administrador.</small>
+        <h1 style="margin:0 0 4px 0;">Provisiones de fondos</h1>
+        <small class="lm-muted">
+          Ciclo del Anexo: el abogado solicita, Contador registra el pago del cliente, la jefatura autoriza la entrega,
+          Finanzas pone los fondos a disposición y los entrega, y el abogado rinde los gastos.
+        </small>
       </div>
       <p-select
         [(ngModel)]="filtroEstado"
         (onChange)="setEstado($event.value)"
         [options]="estadoOpts"
+        optionLabel="label"
+        optionValue="value"
         placeholder="Todos los estados"
         [showClear]="true"
-        [style]="{ width: '200px' }"
+        [style]="{ width: '240px' }"
       ></p-select>
     </div>
 
@@ -57,16 +63,24 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
           <tr>
             <td><a [routerLink]="['/atenciones', p.atencionId]" class="lm-mono">{{ p.correlativo }}</a><div class="lm-small lm-muted">{{ p.asunto }}</div></td>
             <td>{{ p.motivo }}<div *ngIf="p.observacionResolucion" class="lm-small lm-muted">{{ p.observacionResolucion }}</div></td>
-            <td style="text-align:right;">$ {{ p.monto | number }}</td>
-            <td><p-tag [value]="p.estado" [severity]="severidad(p.estado)"></p-tag></td>
+            <td style="text-align:right;">
+              $ {{ p.monto | number }}
+              <div *ngIf="p.montoEntregado !== null" class="lm-small lm-muted">entregado $ {{ p.montoEntregado | number }}</div>
+            </td>
+            <td><p-tag [value]="etiqueta(p.estado)" [severity]="severidad(p.estado)"></p-tag>
+              <div *ngIf="p.numeroCheque" class="lm-small lm-muted">Cheque {{ p.numeroCheque }}</div></td>
             <td class="lm-small">{{ p.solicitadaPorEmail }}</td>
             <td class="lm-small">{{ p.fechaSolicitud | date: 'dd/MM/yyyy' }}</td>
             <td style="text-align:right; white-space:nowrap;">
-              <ng-container *ngIf="p.estado === 'Solicitada' && puedeAprobar()">
-                <button pButton type="button" class="p-button-sm p-button-success p-button-text" label="Aprobar" (click)="resolver(p, true)"></button>
-                <button pButton type="button" class="p-button-sm p-button-danger p-button-text" label="Rechazar" (click)="resolver(p, false)"></button>
-              </ng-container>
-              <button *ngIf="p.estado === 'Aprobada'" pButton type="button" class="p-button-sm p-button-text" label="Registrar gasto" (click)="registrarGasto(p)"></button>
+              <button
+                *ngFor="let ac of acciones(p)"
+                pButton
+                type="button"
+                class="p-button-sm p-button-text"
+                [severity]="ac.severidad ?? 'primary'"
+                [label]="ac.label"
+                (click)="ejecutar(p, ac)"
+              ></button>
             </td>
           </tr>
         </ng-template>
@@ -82,17 +96,19 @@ export class ProvisionesComponent implements OnInit {
   private me = inject(MeService);
   private msg = inject(MessageService);
   private prompt = inject(PromptService);
+  private route = inject(ActivatedRoute);
 
   protected data = signal<ProvisionRow[]>([]);
   protected total = signal(0);
   protected page = signal(1);
   protected pageSize = signal(25);
   protected loading = signal(false);
-  protected filtroEstado: string | undefined = "Solicitada";
-  protected estadoOpts = ["Solicitada", "Aprobada", "Rechazada"];
-  protected puedeAprobar = computed(() => ["Administrador", "Supervisor"].includes(this.me.user()?.rol ?? ""));
+  protected filtroEstado: string | undefined = undefined;
+  protected estadoOpts = EstadoProvisionEnum.options.map((value) => ({ label: ESTADO_PROVISION_LABEL[value], value }));
 
   ngOnInit() {
+    // La bandeja de Finanzas enlaza aquí con ?estado=...
+    this.filtroEstado = this.route.snapshot.queryParamMap.get("estado") ?? undefined;
     this.recargar();
   }
 
@@ -121,44 +137,86 @@ export class ProvisionesComponent implements OnInit {
     this.recargar();
   }
 
-  async resolver(p: ProvisionRow, aprobar: boolean) {
-    const observacion = await this.prompt.open({
-      header: `${aprobar ? "Aprobar" : "Rechazar"} provisión de $ ${p.monto.toLocaleString("es-CL")}`,
-      label: aprobar ? "Observación (opcional)" : "Motivo del rechazo",
-      multiline: true,
-      required: !aprobar,
-    });
-    if (observacion === null) return;
-    const obs = observacion.trim() || undefined;
-    const req = aprobar ? this.api.aprobar(p.id, obs) : this.api.rechazar(p.id, obs);
-    req.subscribe({
+  protected etiqueta(e: EstadoProvision): string {
+    return ESTADO_PROVISION_LABEL[e];
+  }
+
+  protected severidad = severidadProvision;
+
+  protected acciones(p: ProvisionRow): AccionProvision[] {
+    return accionesProvision(p.estado, this.me.user()?.rol);
+  }
+
+  private async monto(header: string): Promise<number | null> {
+    const txt = await this.prompt.open({ header, label: "Monto en pesos", required: true });
+    if (!txt) return null;
+    const n = Number(txt.replace(/[.\s$]/g, ""));
+    if (!Number.isInteger(n) || n <= 0) {
+      this.msg.add({ severity: "warn", summary: "Monto inválido", life: 3000 });
+      return null;
+    }
+    return n;
+  }
+
+  async ejecutar(p: ProvisionRow, ac: AccionProvision) {
+    let req: Observable<unknown> | null = null;
+    switch (ac.id) {
+      case "pago": {
+        const medio = await this.prompt.open({ header: "Pago del cliente", label: "Medio (WebPay, CasaCentral o Transferencia)", initialValue: "Transferencia", required: true });
+        if (!medio) return;
+        if (!["WebPay", "CasaCentral", "Transferencia"].includes(medio.trim())) {
+          this.msg.add({ severity: "warn", summary: "Medio inválido", detail: "Use WebPay, CasaCentral o Transferencia", life: 4000 });
+          return;
+        }
+        req = this.api.pagoCliente(p.id, medio.trim() as "WebPay");
+        break;
+      }
+      case "solicitarEntrega":
+        req = this.api.solicitarEntrega(p.id);
+        break;
+      case "autorizar": {
+        const obs = await this.prompt.open({ header: `Autorizar entrega de $ ${p.monto.toLocaleString("es-CL")}`, label: "Observación (opcional)", multiline: true });
+        if (obs === null) return;
+        req = this.api.autorizar(p.id, obs.trim() || undefined);
+        break;
+      }
+      case "rechazarEntrega": {
+        const obs = await this.prompt.open({ header: "Rechazar entrega", label: "Motivo", multiline: true, required: true });
+        if (!obs) return;
+        req = this.api.rechazarEntrega(p.id, obs);
+        break;
+      }
+      case "disponible":
+        req = this.api.disponible(p.id);
+        break;
+      case "entregar":
+        req = this.api.entregar(p.id);
+        break;
+      case "gasto":
+      case "reintegro": {
+        const monto = await this.monto(ac.id === "gasto" ? `Gasto contra ${p.correlativo}` : `Reintegro de saldo de ${p.correlativo}`);
+        if (monto === null) return;
+        const glosa = await this.prompt.open({ header: ac.id === "gasto" ? "Detalle del gasto" : "Detalle del reintegro", label: "Glosa", required: true });
+        if (!glosa) return;
+        req = this.api.registrarMovimiento(p.id, { tipo: ac.id === "gasto" ? "Gasto" : "Reintegro", monto, glosa });
+        break;
+      }
+      case "rendir":
+        req = this.api.rendir(p.id);
+        break;
+      case "devolucion": {
+        const cheque = await this.prompt.open({ header: "Devolución al cliente", label: "Número de cheque", required: true });
+        if (!cheque) return;
+        req = this.api.devolucion(p.id, cheque.trim());
+        break;
+      }
+    }
+    req?.subscribe({
       next: () => {
-        this.msg.add({ severity: "success", summary: aprobar ? "Provisión aprobada" : "Provisión rechazada", life: 2500 });
+        this.msg.add({ severity: "success", summary: ac.label, detail: p.correlativo, life: 2500 });
         this.recargar();
       },
-      error: (err) => this.msg.add({ severity: "error", summary: "Error", detail: err.error?.message ?? err.message, life: 4000 }),
+      error: (err) => this.msg.add({ severity: "error", summary: "No se pudo completar", detail: err.error?.message ?? err.message, life: 6000 }),
     });
-  }
-
-  async registrarGasto(p: ProvisionRow) {
-    const montoTxt = await this.prompt.open({ header: `Gasto contra ${p.correlativo}`, label: "Monto en pesos", required: true });
-    if (!montoTxt) return;
-    const monto = Number(montoTxt.replace(/[.\s$]/g, ""));
-    if (!Number.isInteger(monto) || monto <= 0) {
-      this.msg.add({ severity: "warn", summary: "Monto inválido", life: 3000 });
-      return;
-    }
-    const glosa = await this.prompt.open({ header: "Detalle del gasto", label: "Glosa", required: true });
-    if (!glosa) return;
-    this.api.registrarMovimiento(p.id, { tipo: "Gasto", monto, glosa }).subscribe({
-      next: () => this.msg.add({ severity: "success", summary: "Gasto registrado", life: 2500 }),
-      error: (err) => this.msg.add({ severity: "error", summary: "Error", detail: err.error?.message ?? err.message, life: 4000 }),
-    });
-  }
-
-  severidad(e: string): Severity {
-    if (e === "Aprobada") return "success";
-    if (e === "Rechazada") return "danger";
-    return "warn";
   }
 }

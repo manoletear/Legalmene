@@ -24,7 +24,9 @@ export interface AtencionParaTransicion {
 export interface ContextoTransicion {
   gestionesPendientes: number;
   comitesAbiertos: number;
-  // Motivo de retención por arancel impago (paso 3b); null si no aplica.
+  // Provisiones de fondos sin rendir ni cerrar (Anexo §VIII 10: cuentas cerradas al terminar).
+  provisionesAbiertas?: number;
+  // Motivo de retención por arancel impago; null si no aplica.
   bloqueoArancel?: string | null;
 }
 
@@ -64,6 +66,7 @@ export function validarTransicion(
     if (!a.causaTerminoId) faltan.push("causa de término");
     if (ctx.gestionesPendientes > 0) faltan.push(`${ctx.gestionesPendientes} gestión(es) pendiente(s)`);
     if (ctx.comitesAbiertos > 0) faltan.push("comité abierto");
+    if ((ctx.provisionesAbiertas ?? 0) > 0) faltan.push(`${ctx.provisionesAbiertas} provisión(es) de fondos sin rendir`);
   }
   if (destino === "Abandonada") {
     if (!a.causaTerminoId) faltan.push("causa de término");

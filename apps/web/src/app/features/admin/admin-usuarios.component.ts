@@ -13,7 +13,7 @@ import { MessageService } from "primeng/api";
 import { UsuariosAdminService, UsuarioAdmin } from "../../core/services/usuarios-admin.service";
 import type { TableLazyLoadEvent } from "primeng/table";
 
-const ROLES = ["Administrador", "Supervisor", "Abogado", "Operador", "Auditor"] as const;
+const ROLES = ["Administrador", "Supervisor", "Abogado", "Operador", "Auditor", "Contador", "Finanzas"] as const;
 
 @Component({
   selector: "lm-admin-usuarios",

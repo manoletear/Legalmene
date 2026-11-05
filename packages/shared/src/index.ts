@@ -12,3 +12,4 @@ export * from "./types/maestros";
 export * from "./types/cobertura";
 export * from "./types/estados-atencion";
 export * from "./types/flujos";
+export * from "./types/arancel-atencion";
