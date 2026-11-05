@@ -11,19 +11,19 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { CargasMasivasService } from "./cargas-masivas.service";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { RolesGuard } from "../../common/guards/roles.guard";
+import { Permiso } from "../../common/decorators/permiso.decorator";
+import { PermisosGuard } from "../../common/guards/permisos.guard";
 import type { TipoCargaMasiva } from "@legalmene/shared";
 
 @ApiTags("cargas-masivas")
 @ApiBearerAuth("EntraID")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermisosGuard)
 @Controller("cargas-masivas")
 export class CargasMasivasController {
   constructor(private readonly service: CargasMasivasService) {}
 
   @Post("afiliados")
-  @Roles("Administrador", "Supervisor")
+  @Permiso("cargas.ejecutar")
   @UseInterceptors(FileInterceptor("archivo", { limits: { fileSize: 50 * 1024 * 1024 } }))
   @ApiConsumes("multipart/form-data")
   @ApiQuery({ name: "codPlan", required: true, description: "Plan al que corresponde la nómina" })

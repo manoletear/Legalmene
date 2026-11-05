@@ -13,6 +13,7 @@ import { authHeaders } from "../../core/interceptors/auth.interceptor";
 import { environment } from "../../../environments/environment";
 import type { AtencionConMaestros } from "@legalmene/shared";
 import type { TableLazyLoadEvent } from "primeng/table";
+import { PermisoDirective } from "../../core/permisos";
 import { ESTADO_OPCIONES, estadoLabel as etiquetaEstado, estadoSeverity as severidadEstado } from "../../shared/estado-atencion";
 
 @Component({
@@ -22,6 +23,7 @@ import { ESTADO_OPCIONES, estadoLabel as etiquetaEstado, estadoSeverity as sever
     CommonModule,
     FormsModule,
     RouterLink,
+    PermisoDirective,
     CardModule,
     TableModule,
     TagModule,
@@ -35,7 +37,7 @@ import { ESTADO_OPCIONES, estadoLabel as etiquetaEstado, estadoSeverity as sever
         <div style="display:flex; align-items:center; gap:8px; padding:16px 16px 0;">
           <h2 style="margin:0; flex:1;">{{ titulo }}</h2>
           <button pButton icon="pi pi-download" label="Exportar CSV" [outlined]="true" (click)="exportarCsv()"></button>
-          <button pButton icon="pi pi-plus" label="Nueva atención" routerLink="/atenciones/nueva"></button>
+          <button *lmPermiso="['atenciones.crear_consulta', 'atenciones.crear_caso']" pButton icon="pi pi-plus" label="Nueva atención" routerLink="/atenciones/nueva"></button>
         </div>
       </ng-template>
 

@@ -165,12 +165,12 @@ interface PipelineStep {
                   Pagado {{ ar.fechaPago | date: 'dd/MM/yyyy' }} · {{ ar.medioPago }} · $ {{ ar.montoClp | number }}
                 </div>
                 <div class="lm-row" style="gap:4px; flex-wrap:wrap; margin-top:6px;">
-                  <button *ngIf="ar.estado === 'Requerido' && puede(['Administrador','Supervisor','Abogado'])" pButton size="small" [outlined]="true" label="Enviar a aprobación" (click)="accionArancel(a.id, 'enviar')"></button>
-                  <ng-container *ngIf="ar.estado === 'EnAprobacion' && puede(['Administrador','Supervisor'])">
+                  <button *ngIf="ar.estado === 'Requerido' && me.tiene('aranceles_atencion.enviar')" pButton size="small" [outlined]="true" label="Enviar a aprobación" (click)="accionArancel(a.id, 'enviar')"></button>
+                  <ng-container *ngIf="ar.estado === 'EnAprobacion' && me.tiene('aranceles_atencion.aprobar')">
                     <button pButton size="small" severity="success" [outlined]="true" label="Aprobar" (click)="accionArancel(a.id, 'aprobar')"></button>
                     <button pButton size="small" severity="danger" [outlined]="true" label="Rechazar" (click)="accionArancel(a.id, 'rechazar')"></button>
                   </ng-container>
-                  <button *ngIf="ar.estado === 'Aprobado' && puede(['Administrador','Contador'])" pButton size="small" [outlined]="true" label="Registrar pago" (click)="accionArancel(a.id, 'pago')"></button>
+                  <button *ngIf="ar.estado === 'Aprobado' && me.tiene('aranceles_atencion.registrar_pago')" pButton size="small" [outlined]="true" label="Registrar pago" (click)="accionArancel(a.id, 'pago')"></button>
                 </div>
               </ng-container>
             </div>
@@ -400,7 +400,7 @@ export class AtencionDetailComponent implements OnInit {
   private msg = inject(MessageService);
   private prompt = inject(PromptService);
   private provisionesApi = inject(ProvisionesApiService);
-  private me = inject(MeService);
+  protected me = inject(MeService);
 
   protected atencion = signal<AtencionConMaestros | null>(null);
   protected resumenProvision = signal<ResumenProvisionAtencion | null>(null);
@@ -500,10 +500,6 @@ export class AtencionDetailComponent implements OnInit {
 
   protected etiquetaArancel(e: EstadoArancelAtencion): string {
     return ESTADO_ARANCEL_LABEL[e];
-  }
-
-  protected puede(roles: string[]): boolean {
-    return roles.includes(this.me.user()?.rol ?? "");
   }
 
   async accionArancel(atencionId: string, accion: "enviar" | "aprobar" | "rechazar" | "pago") {

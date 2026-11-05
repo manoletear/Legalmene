@@ -4,13 +4,13 @@ import { ApiBearerAuth, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ExportsService } from "./exports.service";
 import { AtencionPdfService } from "./atencion-pdf.service";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { RolesGuard } from "../../common/guards/roles.guard";
+import { Permiso } from "../../common/decorators/permiso.decorator";
+import { PermisosGuard } from "../../common/guards/permisos.guard";
 
 @ApiTags("exports")
 @ApiBearerAuth("EntraID")
 @ApiQuery({ name: "codPlan", required: false })
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermisosGuard)
 @Controller("exports")
 export class ExportsController {
   constructor(
@@ -19,7 +19,7 @@ export class ExportsController {
   ) {}
 
   @Get("afiliados.csv")
-  @Roles("Administrador", "Supervisor", "Auditor")
+  @Permiso("exportar.datos")
   @Header("Content-Type", "text/csv; charset=utf-8")
   async afiliados(@Query("codPlan") codPlan: string | undefined, @Res() res: Response) {
     const csv = await this.service.afiliadosCsv(codPlan);
@@ -32,7 +32,7 @@ export class ExportsController {
   }
 
   @Get("atenciones.csv")
-  @Roles("Administrador", "Supervisor", "Auditor")
+  @Permiso("exportar.datos")
   @Header("Content-Type", "text/csv; charset=utf-8")
   async atenciones(@Query("codPlan") codPlan: string | undefined, @Res() res: Response) {
     const csv = await this.service.atencionesCsv(codPlan);

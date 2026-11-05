@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { eq, getTableColumns } from "drizzle-orm";
+import { and, eq, getTableColumns } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
+import { filtroAtenciones } from "../../common/acceso/alcance";
 import { afiliados, planesAfiliado } from "../../db/schema/afiliados";
 import { atenciones } from "../../db/schema/atenciones";
 import { competencias, materias } from "../../db/schema/maestros";
@@ -88,7 +89,7 @@ export class ExportsService {
       .from(atenciones)
       .innerJoin(competencias, eq(competencias.id, atenciones.competenciaId))
       .innerJoin(materias, eq(materias.id, atenciones.materiaId))
-      .where(codPlan ? eq(atenciones.codPlan, codPlan) : undefined)
+      .where(and(filtroAtenciones(), codPlan ? eq(atenciones.codPlan, codPlan) : undefined))
       .orderBy(atenciones.fechaApertura);
 
     return toCsv(

@@ -24,7 +24,7 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
     <div class="lm-row" style="margin-bottom:16px; align-items:flex-end;">
       <div style="flex:1;">
         <h1 style="margin:0 0 4px 0;">Derivaciones</h1>
-        <small class="lm-muted">Consultas que el abogado propone derivar a asesoría o juicio. Aprueba un Supervisor o Administrador.</small>
+        <small class="lm-muted">Consultas que el abogado propone derivar a asesoría o juicio. Aprueba la jefatura del abogado.</small>
       </div>
       <p-select
         [(ngModel)]="filtroEstado"
@@ -77,7 +77,7 @@ export class DerivacionesComponent implements OnInit {
   protected loading = signal(false);
   protected filtroEstado: string | undefined = "Solicitada";
   protected estadoOpts = ["Solicitada", "Aprobada", "Rechazada"];
-  protected esJefatura = computed(() => ["Administrador", "Supervisor"].includes(this.me.user()?.rol ?? ""));
+  protected esJefatura = computed(() => this.me.tiene("derivaciones.aprobar"));
 
   ngOnInit() {
     this.recargar();

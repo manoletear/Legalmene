@@ -1,91 +1,94 @@
-import { ExecutionContext, Injectable } from "@nestjs/common";
+import { ExecutionContext, ForbiddenException, Inject, Injectable } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
 import type { Request } from "express";
-import { Observable, from } from "rxjs";
-import { UsuariosService } from "../usuarios/usuarios.service";
+import { UsuariosService, UsuarioNoHabilitadoError, type ClaimsDev } from "../usuarios/usuarios.service";
+import { AuditService } from "../audit/audit.service";
+import { fijarAcceso } from "../../common/acceso/contexto";
+import type { AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 
-// Guard que normalmente valida JWT Entra ID, pero en modo DEV permite
-// pasar un header X-Dev-User=<base64-json> para evitar tener un tenant Entra
-// configurado durante desarrollo local.
-//
-// Producción: AUTH_DISABLED debe estar ausente o "false".
+// Anexo §IV: solo usuarios del dominio LegalChile ingresan.
+export function dominioPermitido(email: string, config = process.env.ALLOWED_EMAIL_DOMAIN): boolean {
+  const dominios = (config ?? "legalchile.cl")
+    .split(",")
+    .map((d) => d.trim().toLowerCase())
+    .filter(Boolean);
+  const dominio = email.split("@")[1]?.toLowerCase() ?? "";
+  return dominios.includes(dominio);
+}
+
+type RequestConUsuario = Request & { user?: AuthenticatedUser | { id: string } };
+
+// Valida el JWT de Entra ID y resuelve el usuario con su perfil y permisos. En modo DEV
+// (AUTH_DISABLED=true) acepta X-Dev-User=<base64-json> con {entraOid,email,nombre,perfil}.
+// El bloqueo por intentos fallidos de login lo aplica Entra ID (Smart Lockout); aquí se
+// rechazan usuarios desactivados o bloqueados por el administrador.
 @Injectable()
 export class JwtAuthGuard extends AuthGuard("jwt-entra") {
-  constructor(private readonly usuariosService: UsuariosService) {
+  constructor(
+    @Inject(UsuariosService) private readonly usuariosService: UsuariosService,
+    @Inject(AuditService) private readonly audit: AuditService,
+  ) {
     super();
   }
 
-  canActivate(
-    context: ExecutionContext,
-  ): boolean | Promise<boolean> | Observable<boolean> {
-    if (process.env.AUTH_DISABLED !== "true") {
-      return super.canActivate(context) as boolean | Promise<boolean> | Observable<boolean>;
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const req = context.switchToHttp().getRequest<RequestConUsuario>();
+    let usuarioId: string;
+    if (process.env.AUTH_DISABLED === "true") {
+      usuarioId = (await this.usuariosService.resolveDev(this.claimsDev(req))).id;
+    } else {
+      await (super.canActivate(context) as Promise<boolean>);
+      usuarioId = (req.user as { id: string }).id;
     }
 
-    const req = context.switchToHttp().getRequest<
-      Request & {
-        user?: {
-          id?: string;
-          entraOid: string;
-          email: string;
-          nombre: string;
-          rol: string;
-          codPlanes: string[];
-        };
+    let user: AuthenticatedUser;
+    try {
+      user = await this.usuariosService.contextoAcceso(usuarioId);
+    } catch (err) {
+      if (err instanceof UsuarioNoHabilitadoError) {
+        await this.denegar(req, err.usuario, err.message);
+        throw new ForbiddenException(err.message);
       }
-    >();
+      throw err;
+    }
+    if (process.env.AUTH_DISABLED !== "true" && !dominioPermitido(user.email)) {
+      const msg = "Su cuenta no pertenece a un dominio autorizado de LegalChile";
+      await this.denegar(req, user, msg);
+      throw new ForbiddenException(msg);
+    }
+    req.user = user;
+    fijarAcceso({ usuarioId: user.id, permisos: new Set(user.permisos) });
+    return true;
+  }
 
-    let claims: {
-      entraOid: string;
-      email: string;
-      nombre: string;
-      rol: "Administrador" | "Supervisor" | "Abogado" | "Operador" | "Auditor" | "Contador" | "Finanzas";
-      codPlanes: string[];
-    };
+  private async denegar(req: Request, u: { id: string; email: string }, motivo: string): Promise<void> {
+    await this.audit.log({
+      actorId: u.id,
+      actorEmail: u.email,
+      accion: "ACCESO_DENEGADO",
+      entidad: "usuarios",
+      entidadId: u.id,
+      cambios: { after: { motivo, ruta: req.originalUrl ?? req.url } },
+      ip: req.ip ?? null,
+      userAgent: req.get?.("user-agent") ?? null,
+    });
+  }
 
+  private claimsDev(req: Request): ClaimsDev {
     const header = req.header("x-dev-user");
     if (header) {
       try {
-        claims = JSON.parse(Buffer.from(header, "base64").toString("utf8"));
+        return JSON.parse(Buffer.from(header, "base64").toString("utf8")) as ClaimsDev;
       } catch {
-        claims = this.defaultClaims();
+        // Header mal formado: se usa el administrador de desarrollo.
       }
-    } else {
-      claims = this.defaultClaims();
     }
-
-    // Resuelve usuarios.id desde DB para que actorId del audit interceptor
-    // y los FKs (convocadoPor, responsableId) apunten a un id real.
-    return from(
-      (async () => {
-        const usuario = await this.usuariosService.resolveByEntraOid(claims);
-        req.user = {
-          id: usuario.id,
-          entraOid: usuario.entraOid,
-          email: usuario.email,
-          nombre: usuario.nombre,
-          rol: usuario.rol,
-          codPlanes: usuario.codPlanes,
-        };
-        return true;
-      })(),
-    );
-  }
-
-  // Alineado con seed.ts para evitar colisión con la unique de email.
-  private defaultClaims(): {
-    entraOid: string;
-    email: string;
-    nombre: string;
-    rol: "Administrador";
-    codPlanes: string[];
-  } {
+    // Alineado con seed.ts para evitar colisión con la unique de email.
     return {
       entraOid: "00000000-0000-0000-0000-000000000001",
       email: "admin@legalchile.cl",
       nombre: "Admin Demo",
-      rol: "Administrador",
-      codPlanes: ["DEMO", "EMP01"],
+      perfil: "ADMIN",
     };
   }
 }

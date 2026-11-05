@@ -2,13 +2,13 @@ import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from "@nest
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { GestionesService, FiltroGestiones } from "./gestiones.service";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { RolesGuard } from "../../common/guards/roles.guard";
+import { Permiso } from "../../common/decorators/permiso.decorator";
+import { PermisosGuard } from "../../common/guards/permisos.guard";
 import type { CreateGestion, CompletarGestion } from "@legalmene/shared";
 
 @ApiTags("gestiones")
 @ApiBearerAuth("EntraID")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermisosGuard)
 @Controller()
 export class GestionesController {
   constructor(private readonly service: GestionesService) {}
@@ -41,7 +41,7 @@ export class GestionesController {
   }
 
   @Post("atenciones/:atencionId/gestiones")
-  @Roles("Administrador", "Supervisor", "Abogado")
+  @Permiso("gestiones.registrar")
   crear(
     @Param("atencionId") atencionId: string,
     @Body() body: Omit<CreateGestion, "atencionId">,
@@ -50,7 +50,7 @@ export class GestionesController {
   }
 
   @Put("gestiones/:id/completar")
-  @Roles("Administrador", "Supervisor", "Abogado")
+  @Permiso("gestiones.registrar")
   completar(
     @Param("id") id: string,
     @Body() body: CompletarGestion,

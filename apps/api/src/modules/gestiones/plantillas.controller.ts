@@ -4,8 +4,8 @@ import { createZodDto } from "nestjs-zod";
 import { z } from "zod";
 import { CreateGestionPlantillaSchema, UpdateGestionPlantillaSchema } from "@legalmene/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { RolesGuard } from "../../common/guards/roles.guard";
+import { Permiso } from "../../common/decorators/permiso.decorator";
+import { PermisosGuard } from "../../common/guards/permisos.guard";
 import { PlantillasService } from "./plantillas.service";
 
 class CreatePlantillaDto extends createZodDto(CreateGestionPlantillaSchema) {}
@@ -23,7 +23,7 @@ class FiltroPlantillasDto extends createZodDto(
 
 @ApiTags("gestiones")
 @ApiBearerAuth("EntraID")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermisosGuard)
 @Controller("gestiones-plantilla")
 export class PlantillasController {
   constructor(@Inject(PlantillasService) private readonly service: PlantillasService) {}
@@ -34,13 +34,13 @@ export class PlantillasController {
   }
 
   @Post()
-  @Roles("Administrador")
+  @Permiso("maestros.administrar")
   crear(@Body() body: CreatePlantillaDto) {
     return this.service.crear(body);
   }
 
   @Put(":id")
-  @Roles("Administrador")
+  @Permiso("maestros.administrar")
   actualizar(@Param("id", ParseUUIDPipe) id: string, @Body() body: UpdatePlantillaDto) {
     return this.service.actualizar(id, body);
   }

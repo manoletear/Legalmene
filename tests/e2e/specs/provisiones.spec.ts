@@ -1,15 +1,13 @@
 import { expect, test } from "@playwright/test";
 
 const API = process.env.API_BASE ?? "http://localhost:3001/api/v1";
-const COD_PLAN = "DEMO";
 
-function asUser(rol: string) {
+function asUser(perfil: string) {
   const claims = {
-    entraOid: `dev-${rol.toLowerCase()}`,
-    email: `${rol.toLowerCase()}@test.cl`,
-    nombre: rol,
-    rol,
-    codPlanes: [COD_PLAN],
+    entraOid: `dev-${perfil.toLowerCase()}`,
+    email: `${perfil.toLowerCase()}@test.cl`,
+    nombre: perfil,
+    perfil,
   };
   return Buffer.from(JSON.stringify(claims), "utf-8").toString("base64");
 }
@@ -22,10 +20,10 @@ test.describe("Aranceles y provisiones", () => {
   });
 
   test("ciclo de provisión con los perfiles del Anexo: Abogado, Contador, Supervisor y Finanzas", async ({ request }) => {
-    const abogado = { "X-Dev-User": asUser("Abogado") };
-    const supervisor = { "X-Dev-User": asUser("Supervisor") };
-    const contador = { "X-Dev-User": asUser("Contador") };
-    const finanzas = { "X-Dev-User": asUser("Finanzas") };
+    const abogado = { "X-Dev-User": asUser("ABOGADO") };
+    const supervisor = { "X-Dev-User": asUser("GERENCIA_SERVICIOS") };
+    const contador = { "X-Dev-User": asUser("CONTADOR") };
+    const finanzas = { "X-Dev-User": asUser("GERENCIA_FINANZAS") };
 
     const afi = await request.get(`${API}/afiliados`, { headers: abogado }).then((r) => r.json());
     type AfiliadoE2E = { id: string; vigencia: string; planes: { codPlan: string; vigente: boolean }[] };

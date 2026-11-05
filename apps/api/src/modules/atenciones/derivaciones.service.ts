@@ -14,6 +14,7 @@ import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
 import { WebhooksService } from "../webhooks/webhooks.service";
 import { AtencionesService, Actor } from "./atenciones.service";
 import type { CreateAtencionDto } from "./dto";
+import { filtroAtenciones } from "../../common/acceso/alcance";
 
 export interface FiltroDerivaciones {
   estado?: EstadoDerivacion;
@@ -34,7 +35,9 @@ export class DerivacionesService {
   async listar(f: FiltroDerivaciones = {}) {
     const page = f.page ?? 1;
     const pageSize = Math.min(f.pageSize ?? 50, 200);
+    // Solo derivaciones de consultas que el usuario puede ver (la jefatura, las de su equipo).
     const where = and(
+      filtroAtenciones(),
       f.estado ? eq(derivaciones.estado, f.estado) : undefined,
       f.consultaId ? eq(derivaciones.consultaId, f.consultaId) : undefined,
     );
@@ -61,7 +64,11 @@ export class DerivacionesService {
         .orderBy(desc(derivaciones.createdAt))
         .limit(pageSize)
         .offset((page - 1) * pageSize),
-      this.db.select({ value: count() }).from(derivaciones).where(where),
+      this.db
+        .select({ value: count() })
+        .from(derivaciones)
+        .innerJoin(atenciones, eq(atenciones.id, derivaciones.consultaId))
+        .where(where),
     ]);
     return {
       data: rows as unknown as DerivacionRow[],
@@ -129,7 +136,8 @@ export class DerivacionesService {
         tipo: d.nuevoTipo,
       } as CreateAtencionDto & { tipo: "Asesoria" | "Juicio" },
       actor,
-      { metadata: { derivadaDe: consulta.id, motivoDerivacion: d.motivo } },
+      // Quien pidió la derivación sigue viendo el caso aunque no quede como abogado asignado.
+      { metadata: { derivadaDe: consulta.id, motivoDerivacion: d.motivo }, creadoPorId: d.solicitadaPorId },
     );
 
     const ahora = new Date();
@@ -171,12 +179,12 @@ export class DerivacionesService {
 
   async rechazar(id: string, actor: Actor, input: RechazarDerivacion): Promise<Derivacion> {
     const d = await this.pendiente(id);
+    const consulta = await this.atencionesSrv.obtener(d.consultaId);
     const [row] = await this.db
       .update(derivaciones)
       .set({ estado: "Rechazada", resueltaPorId: actor.id, observacion: input.observacion, resueltaAt: new Date() })
       .where(eq(derivaciones.id, id))
       .returning();
-    const consulta = await this.atencionesSrv.obtener(d.consultaId);
     await this.notif.crear({
       codPlan: consulta.codPlan,
       usuarioId: d.solicitadaPorId,

@@ -1,20 +1,20 @@
 import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Post, Query, UnauthorizedException, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { RolesGuard } from "../../common/guards/roles.guard";
+import { Permiso } from "../../common/decorators/permiso.decorator";
+import { PermisosGuard } from "../../common/guards/permisos.guard";
 import { CurrentUser, AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 import { DerivacionesService } from "./derivaciones.service";
 import { AprobarDerivacionDto, FiltroDerivacionesDto, RechazarDerivacionDto, SolicitarDerivacionDto } from "./dto";
 
-function conId(user: AuthenticatedUser): { id: string; rol: string } {
+function conId(user: AuthenticatedUser): { id: string; permisos: readonly string[] } {
   if (!user?.id) throw new UnauthorizedException("Usuario sin id resuelto");
-  return { id: user.id, rol: user.rol };
+  return { id: user.id, permisos: user.permisos };
 }
 
 @ApiTags("derivaciones")
 @ApiBearerAuth("EntraID")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermisosGuard)
 @Controller()
 export class DerivacionesController {
   constructor(@Inject(DerivacionesService) private readonly service: DerivacionesService) {}
@@ -25,7 +25,7 @@ export class DerivacionesController {
   }
 
   @Post("atenciones/:id/derivaciones")
-  @Roles("Administrador", "Supervisor", "Abogado", "Operador")
+  @Permiso("derivaciones.solicitar")
   solicitar(
     @Param("id", ParseUUIDPipe) id: string,
     @Body() body: SolicitarDerivacionDto,
@@ -35,7 +35,7 @@ export class DerivacionesController {
   }
 
   @Post("derivaciones/:id/aprobar")
-  @Roles("Administrador", "Supervisor")
+  @Permiso("derivaciones.aprobar")
   aprobar(
     @Param("id", ParseUUIDPipe) id: string,
     @Body() body: AprobarDerivacionDto,
@@ -45,7 +45,7 @@ export class DerivacionesController {
   }
 
   @Post("derivaciones/:id/rechazar")
-  @Roles("Administrador", "Supervisor")
+  @Permiso("derivaciones.aprobar")
   rechazar(
     @Param("id", ParseUUIDPipe) id: string,
     @Body() body: RechazarDerivacionDto,

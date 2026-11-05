@@ -14,8 +14,8 @@ import { ApiBearerAuth, ApiExcludeEndpoint, ApiTags } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { DocumentosService } from "./documentos.service";
 import { CurrentUser, AuthenticatedUser } from "../../common/decorators/current-user.decorator";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { RolesGuard } from "../../common/guards/roles.guard";
+import { Permiso } from "../../common/decorators/permiso.decorator";
+import { PermisosGuard } from "../../common/guards/permisos.guard";
 import { LocalStorage } from "./local.storage";
 
 @ApiTags("documentos")
@@ -28,8 +28,8 @@ export class DocumentosController {
   ) {}
 
   @Post("documentos/upload-url")
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("Administrador", "Supervisor", "Abogado", "Operador")
+  @UseGuards(JwtAuthGuard, PermisosGuard)
+  @Permiso("documentos.subir")
   obtenerUploadUrl(
     @Body() body: { atencionId?: string; nombre: string; mimeType: string; tamanoBytes: number },
   ) {
@@ -37,8 +37,8 @@ export class DocumentosController {
   }
 
   @Post("documentos")
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("Administrador", "Supervisor", "Abogado", "Operador")
+  @UseGuards(JwtAuthGuard, PermisosGuard)
+  @Permiso("documentos.subir")
   registrar(
     @CurrentUser() user: AuthenticatedUser,
     @Body() body: {
@@ -54,13 +54,13 @@ export class DocumentosController {
   }
 
   @Get("documentos/:id/download-url")
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, PermisosGuard)
   obtenerDownloadUrl(@Param("id") id: string) {
     return this.service.generateDownloadUrl(id);
   }
 
   @Get("atenciones/:atencionId/documentos")
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, PermisosGuard)
   listarPorAtencion(@Param("atencionId") atencionId: string) {
     return this.service.listarPorAtencion(atencionId);
   }

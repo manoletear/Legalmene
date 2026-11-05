@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 
 const API = process.env.API_BASE ?? "http://localhost:3001/api/v1";
 
-function asUser(rol: string) {
-  const claims = { entraOid: `dev-${rol.toLowerCase()}`, email: `${rol.toLowerCase()}@test.cl`, nombre: rol, rol, codPlanes: [] };
+function asUser(perfil: string) {
+  const claims = { entraOid: `dev-${perfil.toLowerCase()}`, email: `${perfil.toLowerCase()}@test.cl`, nombre: perfil, perfil };
   return Buffer.from(JSON.stringify(claims), "utf-8").toString("base64");
 }
 
@@ -12,9 +12,9 @@ const FECHA_PAGO = "2001-03-15";
 
 test.describe("Arancel por atención", () => {
   test("rojo → naranjo → amarillo → verde con roles; la atención espera el pago", async ({ page, request }) => {
-    const abogado = { "X-Dev-User": asUser("Abogado") };
-    const supervisor = { "X-Dev-User": asUser("Supervisor") };
-    const contador = { "X-Dev-User": asUser("Contador") };
+    const abogado = { "X-Dev-User": asUser("ABOGADO") };
+    const supervisor = { "X-Dev-User": asUser("GERENCIA_SERVICIOS") };
+    const contador = { "X-Dev-User": asUser("CONTADOR") };
 
     // El administrador (usuario por defecto en demo) carga la UF de la fecha de pago.
     const uf = await request.put(`${API}/valores-uf`, { data: { fecha: FECHA_PAGO, valorCentavos: 1_600_000 } });

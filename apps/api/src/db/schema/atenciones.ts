@@ -80,6 +80,8 @@ export const atenciones = pgTable(
     abogadoAsignadoId: uuid("abogado_asignado_id").references(() => usuarios.id, {
       onDelete: "set null",
     }),
+    // Quién registró la atención: también la ve aunque no sea el abogado asignado.
+    creadoPorId: uuid("creado_por_id").references(() => usuarios.id, { onDelete: "set null" }),
     fechaApertura: timestamp("fecha_apertura", { withTimezone: true }).notNull().defaultNow(),
     fechaCierre: timestamp("fecha_cierre", { withTimezone: true }),
     fechaUltimaGestion: timestamp("fecha_ultima_gestion", { withTimezone: true }),

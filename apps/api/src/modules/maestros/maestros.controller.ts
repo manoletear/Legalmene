@@ -4,8 +4,8 @@ import { createZodDto } from "nestjs-zod";
 import { z } from "zod";
 import { TipoAtencionEnum } from "@legalmene/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { RolesGuard } from "../../common/guards/roles.guard";
+import { Permiso } from "../../common/decorators/permiso.decorator";
+import { PermisosGuard } from "../../common/guards/permisos.guard";
 import { MAESTROS, MaestrosService } from "./maestros.service";
 
 const FiltroMaestroSchema = z.object({
@@ -24,7 +24,7 @@ const tipos = Object.keys(MAESTROS);
 // El body se valida contra el esquema Zod de cada maestro en el servicio.
 @ApiTags("maestros")
 @ApiBearerAuth("EntraID")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermisosGuard)
 @Controller("maestros")
 export class MaestrosController {
   constructor(@Inject(MaestrosService) private readonly service: MaestrosService) {}
@@ -36,14 +36,14 @@ export class MaestrosController {
   }
 
   @Post(":tipo")
-  @Roles("Administrador")
+  @Permiso("maestros.administrar")
   @ApiParam({ name: "tipo", enum: tipos })
   crear(@Param("tipo") tipo: string, @Body() body: unknown) {
     return this.service.crear(tipo, body);
   }
 
   @Put(":tipo/:id")
-  @Roles("Administrador")
+  @Permiso("maestros.administrar")
   @ApiParam({ name: "tipo", enum: tipos })
   actualizar(@Param("tipo") tipo: string, @Param("id", ParseUUIDPipe) id: string, @Body() body: unknown) {
     return this.service.actualizar(tipo, id, body);

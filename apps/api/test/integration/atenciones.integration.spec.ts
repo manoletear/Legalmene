@@ -43,8 +43,8 @@ const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
   let afiliadoId: string;
   let cm: MateriaPrueba;
   let derivacionesSrv: DerivacionesService;
-  let abogado: { id: string; rol: string };
-  let jefe: { id: string; rol: string };
+  let abogado: { id: string; permisos: readonly string[] };
+  let jefe: { id: string; permisos: readonly string[] };
   let causaId: string;
   let tribunalId: string;
 
@@ -92,10 +92,10 @@ const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
     });
     afiliadoId = afi.id;
     await afiliadosSrv.asignarPlan(afiliadoId, { codPlan: TEST_PLAN, fechaInicio: "2024-01-01" });
-    const ua = await usuarioDePrueba(db, "Abogado");
-    const uj = await usuarioDePrueba(db, "Supervisor");
-    abogado = { id: ua.id, rol: ua.rol };
-    jefe = { id: uj.id, rol: uj.rol };
+    const ua = await usuarioDePrueba(db, "ABOGADO");
+    const uj = await usuarioDePrueba(db, "GERENCIA_SERVICIOS");
+    abogado = { id: ua.id, permisos: ua.permisos };
+    jefe = { id: uj.id, permisos: uj.permisos };
     const [c] = await db.insert(causasTermino).values({ nombre: `Causa ${TEST_PLAN}` }).returning();
     const [t] = await db.insert(tribunales).values({ nombre: `Tribunal ${TEST_PLAN}` }).returning();
     causaId = c.id;
@@ -221,7 +221,7 @@ const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
     await expect(atenciones.cambiarEstado(j.id, { estado: "Abandonada", causaTerminoId: causaId })).rejects.toThrow(
       /revisión de comité/,
     );
-    await expect(atenciones.actualizar(j.id, { revisadoPorComite: true }, abogado)).rejects.toThrow(/Supervisor/);
+    await expect(atenciones.actualizar(j.id, { revisadoPorComite: true }, abogado)).rejects.toThrow(/Revisado por comité/);
     await atenciones.actualizar(j.id, { revisadoPorComite: true }, jefe);
     const ab = await atenciones.cambiarEstado(j.id, { estado: "Abandonada", causaTerminoId: causaId });
     expect(ab.estado).toBe("Abandonada");

@@ -144,7 +144,7 @@ export class ProvisionesComponent implements OnInit {
   protected severidad = severidadProvision;
 
   protected acciones(p: ProvisionRow): AccionProvision[] {
-    return accionesProvision(p.estado, this.me.user()?.rol);
+    return accionesProvision(p.estado, this.me.permisos());
   }
 
   private async monto(header: string): Promise<number | null> {

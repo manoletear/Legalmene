@@ -86,8 +86,8 @@ const RUN = !!process.env.DATABASE_URL;
       { codPlan: OTRO_PLAN, nombre: `Test ${OTRO_PLAN}` },
     ]);
     cm = await materiaDePrueba(db);
-    abogado = (await usuarioDePrueba(db, "Abogado")).id;
-    jefe = (await usuarioDePrueba(db, "Supervisor")).id;
+    abogado = (await usuarioDePrueba(db, "ABOGADO")).id;
+    jefe = (await usuarioDePrueba(db, "GERENCIA_SERVICIOS")).id;
     const [afi] = await db
       .insert(afiliados)
       .values({ rut: rutAleatorio(), nombres: "Test", apellidoPaterno: "Provision" })

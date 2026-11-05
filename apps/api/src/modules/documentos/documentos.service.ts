@@ -1,7 +1,8 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { ulid } from "ulid";
 import { DRIZZLE, Database } from "../../db/database.module";
+import { filtroAtenciones } from "../../common/acceso/alcance";
 import { documentos, Documento, NuevoDocumento } from "../../db/schema/documentos";
 import { atenciones } from "../../db/schema/atenciones";
 import { DOC_STORAGE } from "./storage.token";
@@ -84,6 +85,7 @@ export class DocumentosService {
   ): Promise<{ url: string; expiresInSec: number }> {
     const [doc] = await this.db.select().from(documentos).where(eq(documentos.id, id));
     if (!doc) throw new NotFoundException(`Documento ${id} no existe`);
+    if (doc.atencionId) await this.assertAtencion(doc.atencionId);
     const url = await this.storage.generateDownloadUrl({
       key: doc.s3Key,
       filename: doc.nombre,
@@ -97,11 +99,12 @@ export class DocumentosService {
     return this.db.select().from(documentos).where(eq(documentos.atencionId, atencionId));
   }
 
+  // 404 también si el usuario no puede ver la atención.
   private async assertAtencion(atencionId: string) {
     const [a] = await this.db
       .select({ id: atenciones.id })
       .from(atenciones)
-      .where(eq(atenciones.id, atencionId));
+      .where(and(eq(atenciones.id, atencionId), filtroAtenciones()));
     if (!a) throw new NotFoundException(`Atención ${atencionId} no existe`);
   }
 }

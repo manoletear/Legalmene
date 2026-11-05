@@ -2,8 +2,8 @@ import { Body, Controller, Get, Post, Query, UseGuards } from "@nestjs/common";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { PagosService } from "./pagos.service";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { RolesGuard } from "../../common/guards/roles.guard";
+import { Permiso } from "../../common/decorators/permiso.decorator";
+import { PermisosGuard } from "../../common/guards/permisos.guard";
 import { IniciarPagoSchema } from "@legalmene/shared";
 import { createZodDto } from "nestjs-zod";
 
@@ -11,7 +11,7 @@ class IniciarPagoDto extends createZodDto(IniciarPagoSchema) {}
 
 @ApiTags("pagos")
 @ApiBearerAuth("EntraID")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermisosGuard)
 @Controller("pagos")
 export class PagosController {
   constructor(private readonly service: PagosService) {}
@@ -32,7 +32,7 @@ export class PagosController {
   }
 
   @Post("iniciar")
-  @Roles("Administrador", "Supervisor", "Operador")
+  @Permiso("pagos.iniciar")
   iniciar(@Body() body: IniciarPagoDto) {
     return this.service.iniciar(body);
   }

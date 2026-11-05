@@ -6,12 +6,16 @@ import { ZodValidationPipe } from "nestjs-zod";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
 import { I18nExceptionFilter } from "./common/filters/i18n-exception.filter";
+import { contextoMiddleware } from "./common/acceso/contexto";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   const logger = new Logger("Bootstrap");
 
   app.setGlobalPrefix("api/v1");
+
+  // Contexto por request: guarda el usuario y sus permisos para acotar las consultas.
+  app.use(contextoMiddleware);
 
   // Headers de seguridad (HSTS, CSP, X-Frame-Options, etc).
   // crossOriginResourcePolicy en "cross-origin" porque el frontend Angular

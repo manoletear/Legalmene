@@ -13,32 +13,32 @@ import {
 import { ApiBearerAuth, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { PlanRequerido } from "../../common/decorators/plan-requerido.decorator";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { RolesGuard } from "../../common/guards/roles.guard";
+import { Permiso } from "../../common/decorators/permiso.decorator";
+import { PermisosGuard } from "../../common/guards/permisos.guard";
 import { WebhooksService, CrearWebhook } from "./webhooks.service";
 
 @ApiTags("webhooks")
 @ApiBearerAuth("EntraID")
 @ApiQuery({ name: "codPlan", required: true, description: "Plan de la suscripción" })
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermisosGuard)
 @Controller("webhooks")
 export class WebhooksController {
   constructor(@Inject(WebhooksService) private readonly service: WebhooksService) {}
 
   @Get()
-  @Roles("Administrador", "Supervisor")
+  @Permiso("webhooks.ver")
   listar(@PlanRequerido() codPlan: string) {
     return this.service.listar(codPlan);
   }
 
   @Post()
-  @Roles("Administrador")
+  @Permiso("webhooks.administrar")
   crear(@PlanRequerido() codPlan: string, @Body() body: CrearWebhook) {
     return this.service.crear(codPlan, body);
   }
 
   @Patch(":id")
-  @Roles("Administrador")
+  @Permiso("webhooks.administrar")
   actualizar(
     @PlanRequerido() codPlan: string,
     @Param("id") id: string,
@@ -48,14 +48,14 @@ export class WebhooksController {
   }
 
   @Delete(":id")
-  @Roles("Administrador")
+  @Permiso("webhooks.administrar")
   async eliminar(@PlanRequerido() codPlan: string, @Param("id") id: string) {
     await this.service.eliminar(codPlan, id);
     return { ok: true };
   }
 
   @Get("entregas")
-  @Roles("Administrador", "Supervisor", "Auditor")
+  @Permiso("webhooks.ver")
   entregas(
     @PlanRequerido() codPlan: string,
     @Query("page") page?: string,
@@ -70,7 +70,7 @@ export class WebhooksController {
   }
 
   @Post("entregas/:id/reintentar")
-  @Roles("Administrador", "Supervisor")
+  @Permiso("webhooks.administrar")
   reintentar(@PlanRequerido() codPlan: string, @Param("id") id: string) {
     return this.service.reintentar(codPlan, id);
   }

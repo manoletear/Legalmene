@@ -1,6 +1,7 @@
 import { Inject, Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
 import { and, eq, inArray } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
+import { filtroAtenciones } from "../../common/acceso/alcance";
 import { comites, participantesComite, NuevoComite } from "../../db/schema/comites";
 import { atenciones } from "../../db/schema/atenciones";
 import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
@@ -99,6 +100,7 @@ export class ComitesService {
   ) {
     const [comite] = await this.db.select().from(comites).where(eq(comites.id, comiteId));
     if (!comite) throw new NotFoundException(`Comité ${comiteId} no existe`);
+    await this.planDeAtencion(comite.atencionId);
     const [updated] = await this.db
       .update(comites)
       .set({
@@ -122,7 +124,7 @@ export class ComitesService {
     const [a] = await this.db
       .select({ codPlan: atenciones.codPlan })
       .from(atenciones)
-      .where(eq(atenciones.id, atencionId));
+      .where(and(eq(atenciones.id, atencionId), filtroAtenciones()));
     if (!a) throw new NotFoundException(`Atención ${atencionId} no existe`);
     return a.codPlan;
   }

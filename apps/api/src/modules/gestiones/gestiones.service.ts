@@ -1,6 +1,7 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { and, count, desc, eq, isNotNull, lt } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
+import { filtroAtenciones } from "../../common/acceso/alcance";
 import { gestiones, NuevaGestion, Gestion } from "../../db/schema/gestiones";
 import { atenciones } from "../../db/schema/atenciones";
 import { usuarios } from "../../db/schema/usuarios";
@@ -39,6 +40,7 @@ export class GestionesService {
     const page = filtro.page ?? 1;
     const pageSize = Math.min(filtro.pageSize ?? 50, 200);
     const where = and(
+      filtroAtenciones(),
       filtro.codPlan ? eq(atenciones.codPlan, filtro.codPlan) : undefined,
       filtro.estado ? eq(gestiones.estado, filtro.estado) : undefined,
       filtro.tipo ? eq(gestiones.tipo, filtro.tipo as "Reunion") : undefined,
@@ -150,12 +152,13 @@ export class GestionesService {
     return updated;
   }
 
-  // Devuelve el plan bajo el cual se registró la atención (usado en notificaciones).
+  // Plan bajo el cual se registró la atención (usado en notificaciones). 404 si el usuario
+  // no puede ver la atención.
   private async planDeAtencion(atencionId: string): Promise<string> {
     const [a] = await this.db
       .select({ codPlan: atenciones.codPlan })
       .from(atenciones)
-      .where(eq(atenciones.id, atencionId));
+      .where(and(eq(atenciones.id, atencionId), filtroAtenciones()));
     if (!a) throw new NotFoundException(`Atención ${atencionId} no existe`);
     return a.codPlan;
   }

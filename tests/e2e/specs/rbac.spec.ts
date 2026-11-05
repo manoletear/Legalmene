@@ -1,24 +1,22 @@
 import { expect, test } from "@playwright/test";
 
 const API = process.env.API_BASE ?? "http://localhost:3001/api/v1";
-const COD_PLAN = "DEMO";
 
 // Inyecta un user via X-Dev-User (base64 JSON). El JwtAuthGuard en modo dev
-// lo respeta y lo materializa en req.user, lo que ejercita RolesGuard real.
-function asUser(rol: string, email = `${rol.toLowerCase()}@test.cl`) {
+// lo respeta (perfil por código) y ejercita PermisosGuard y el alcance reales.
+function asUser(perfil: string, email = `${perfil.toLowerCase()}@test.cl`) {
   const claims = {
-    entraOid: `dev-${rol.toLowerCase()}`,
+    entraOid: `dev-${perfil.toLowerCase()}`,
     email,
-    nombre: rol,
-    rol,
-    codPlanes: [COD_PLAN],
+    nombre: perfil,
+    perfil,
   };
   return Buffer.from(JSON.stringify(claims), "utf-8").toString("base64");
 }
 
 test.describe("RBAC", () => {
   test("Auditor puede leer pero NO puede crear afiliado (403)", async ({ request }) => {
-    const auditor = asUser("Auditor");
+    const auditor = asUser("AUDITOR");
     const headers = { "X-Dev-User": auditor };
 
     // Lectura OK
@@ -38,7 +36,7 @@ test.describe("RBAC", () => {
   });
 
   test("Operador puede crear afiliados pero NO puede borrarlos (403)", async ({ request }) => {
-    const operador = asUser("Operador");
+    const operador = asUser("TRAMITADOR");
     const headers = { "X-Dev-User": operador };
 
     // Crear válido (Operador autorizado)
@@ -65,8 +63,8 @@ test.describe("RBAC", () => {
   });
 
   test("Abogado puede crear gestiones pero NO puede convocar comité (403)", async ({ request }) => {
-    const abogado = asUser("Abogado");
-    const adminHdr = { "X-Dev-User": asUser("Administrador") };
+    const abogado = asUser("ABOGADO");
+    const adminHdr = { "X-Dev-User": asUser("ADMIN") };
     const abogadoHdr = { "X-Dev-User": abogado };
 
     // Necesitamos una atención existente (creada por admin)

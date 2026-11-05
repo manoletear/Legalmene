@@ -1,13 +1,16 @@
 import { createParamDecorator, ExecutionContext } from "@nestjs/common";
 import { Request } from "express";
+import type { Permiso } from "@legalmene/shared";
 
 export interface AuthenticatedUser {
-  id?: string;
+  id: string;
   entraOid: string;
   email: string;
   nombre: string;
-  rol: string;
-  codPlanes: string[];
+  perfilId: string;
+  perfilCodigo: string;
+  perfilNombre: string;
+  permisos: Permiso[];
 }
 
 export const CurrentUser = createParamDecorator((_: unknown, ctx: ExecutionContext) => {

@@ -245,7 +245,7 @@ export class AtencionFlujoComponent implements OnInit {
   protected cuantiaVisible: number | null = null;
   protected nuevaContraparte: { nombre: string; rut?: string; representanteLegal?: string; abogadoNombre?: string; abogadoEmail?: string; abogadoTelefono?: string } = { nombre: "" };
 
-  protected esJefatura = computed(() => ["Administrador", "Supervisor"].includes(this.me.user()?.rol ?? ""));
+  protected esJefatura = computed(() => this.me.tiene("atenciones.revisar_comite"));
   protected destinos = computed(() => {
     const a = this.atencion();
     return transicionesPermitidas(a.tipo, a.estado).map((e) => ({ label: ESTADO_LABEL[e], value: e }));

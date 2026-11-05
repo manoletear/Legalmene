@@ -1,14 +1,14 @@
 import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Post, Put, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { RolesGuard } from "../../common/guards/roles.guard";
+import { Permiso } from "../../common/decorators/permiso.decorator";
+import { PermisosGuard } from "../../common/guards/permisos.guard";
 import { ArancelesService } from "./aranceles.service";
 import { CreateArancelDto, FiltroArancelesDto, UpdateArancelDto, ValorUfDto } from "./dto";
 
 @ApiTags("aranceles")
 @ApiBearerAuth("EntraID")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermisosGuard)
 @Controller()
 export class ArancelesController {
   constructor(@Inject(ArancelesService) private readonly service: ArancelesService) {}
@@ -19,13 +19,13 @@ export class ArancelesController {
   }
 
   @Post("aranceles")
-  @Roles("Administrador", "Supervisor")
+  @Permiso("aranceles.administrar")
   crear(@Body() body: CreateArancelDto) {
     return this.service.crear(body);
   }
 
   @Put("aranceles/:id")
-  @Roles("Administrador", "Supervisor")
+  @Permiso("aranceles.administrar")
   actualizar(@Param("id", ParseUUIDPipe) id: string, @Body() body: UpdateArancelDto) {
     return this.service.actualizar(id, body);
   }
@@ -37,7 +37,7 @@ export class ArancelesController {
 
   // La UF es nacional (no por plan): solo Administrador la actualiza.
   @Put("valores-uf")
-  @Roles("Administrador")
+  @Permiso("valores_uf.registrar")
   registrarUf(@Body() body: ValorUfDto) {
     return this.service.registrarUf(body);
   }

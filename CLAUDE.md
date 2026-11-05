@@ -25,7 +25,7 @@ ejemplo y nunca deben quedar fijas en el código.
 | Módulos Afiliados / Atenciones / Gestiones / Comités / Pagos | ✅ CRUD base + flujos clave |
 | Cargas masivas FLUJO/STOCK | ✅ Implementado |
 | Frontend Angular 19 | ✅ Shell + Dashboard + Afiliados + Atenciones + Aranceles + Provisiones + Derivaciones + Finanzas |
-| Alineación con Anexo PSL | 🟡 Pasos 1 (modelo núcleo), 2 (maestros, aranceles, coberturas) y 3 (estados, derivaciones, juicios, gestiones predefinidas, arancel por atención, provisiones) listos; 4–5 pendientes (ver `docs/requerimientos-anexo-psl.md` §5) |
+| Alineación con Anexo PSL | 🟡 Pasos 1 (modelo núcleo), 2 (maestros, aranceles, coberturas), 3 (estados, derivaciones, juicios, gestiones predefinidas, arancel por atención, provisiones) y 4 (perfiles y permisos configurables, alcance por propiedad) listos; 5 pendiente (ver `docs/requerimientos-anexo-psl.md` §5) |
 | Infraestructura AWS (CDK) | ⏳ Pendiente |
 | Migración SQL Server → Postgres | ⏳ Pendiente |
 | WebPay producción | ⏳ Stub (esperar SDK Transbank) |
@@ -39,7 +39,7 @@ ejemplo y nunca deben quedar fijas en el código.
 - **Planes (no hay tenant)**: `afiliados` es la persona (RUT único) y `planes_afiliado` guarda
   cada relación RUT–Plan con su vigencia. `atenciones.cod_plan` es el plan bajo el cual se
   atendió. No existe header `X-Cod-Plan`; los listados aceptan `?codPlan=` como filtro opcional.
-  El control de acceso por perfil y por propiedad de la atención llega en el paso 4.
+  El acceso se define por perfil (permisos) y por propiedad de la atención (ver Reglas).
 - **Compute** (objetivo): ECS Fargate (monolito modular) + Lambda para tareas event-driven
 - **Storage** (objetivo): Aurora PostgreSQL Multi-AZ + S3 + OpenSearch
 - **Local**: Docker Compose (Postgres + Adminer)
@@ -51,7 +51,7 @@ apps/
   api/                # Backend NestJS
     src/
       db/             # Drizzle schema + migrate + seed
-      common/         # Decorators (CodPlan, CurrentUser, Roles), guards, utils
+      common/         # acceso/ (contexto y alcance), decorators (CurrentUser, Permiso), guards, utils
       modules/        # auth, planes, afiliados, atenciones, gestiones,
                       # comites, pagos, cargas-masivas, maestros, aranceles,
                       # coberturas, provisiones, health
@@ -116,10 +116,9 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   a atención usar `planesDeAfiliados()` / `planVigenteSql` (`modules/afiliados/vigencia.ts`):
   vigente = vigencia Activo, fecha_inicio ≤ hoy (Chile), sin término o término ≥ hoy, y plan
   vigente. Sin planes vigentes, la atención solo puede ir como `REZAGADO` o `METLIFE`.
-  Correlativos son globales por tipo/año. `usuarios.cod_planes` ya no se aplica (lo reemplaza
-  el paso 4).
+  Correlativos son globales por tipo/año.
 - **Maestros**: competencias, materias, etc. son tablas con `vigente` (nunca enums ni listas
-  fijas en el frontend). Leerlos con `GET /maestros/:tipo`; solo Administrador los modifica.
+  fijas en el frontend). Leerlos con `GET /maestros/:tipo`; modificarlos exige `maestros.administrar`.
   Desactivar oculta el valor en formularios nuevos sin tocar registros históricos.
 - **Aranceles y copago**: el arancel es por materia (+ tipo opcional; el específico gana) y es
   igual para todos los planes. El copago sale de `calcularCopago()`
@@ -133,8 +132,21 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   estado esperado (p. ej. Pendiente → EnGestion).
 - **Arancel por atención y provisiones**: transiciones solo vía `ArancelesAtencionService` y
   `ProvisionesService` (mapas `TRANSICIONES_ARANCEL` / `TRANSICIONES_PROVISION` en shared); cada
-  cambio escribe su fila de eventos. Roles: Supervisor/Admin aprueban; Contador registra pagos;
-  Finanzas pone fondos a disposición y entrega. El CLP de un arancel usa la UF de la fecha de pago.
+  cambio escribe su fila de eventos. Aprobar exige `aranceles_atencion.aprobar` / `provisiones.autorizar`
+  (jefaturas); registrar pagos `*.registrar_pago` (Contador); disponer y entregar fondos
+  `provisiones.disponer_entregar` (Finanzas). El CLP de un arancel usa la UF de la fecha de pago.
+- **Permisos**: no existen roles fijos. Todo endpoint que modifique datos (o exponga un módulo
+  restringido) lleva `@UseGuards(JwtAuthGuard, PermisosGuard)` + `@Permiso("clave")` con una
+  clave del catálogo `PERMISOS` (`packages/shared/src/types/permisos.ts`); si falta una clave,
+  agregarla al catálogo (y a los perfiles que corresponda vía migración). En el frontend usar
+  `MeService.tiene()`/`algunoDe()`, la directiva `*lmPermiso` y `permisoGuard()` en rutas;
+  nunca comparar nombres de perfil. El perfil `ADMIN` tiene siempre todos los permisos.
+- **Alcance de atenciones**: toda lectura de atenciones o de algo que cuelga de una atención
+  (gestiones, comités, documentos, provisiones, arancel, derivaciones, exportaciones, dashboard)
+  debe pasar por `filtroAtenciones()` o `asegurarAtencionVisible()` (`common/acceso/alcance.ts`).
+  Lo que el usuario no ve responde 404, nunca 403. El usuario actual viaja en el contexto del
+  request (`common/acceso/contexto.ts`); sin contexto (scheduler, seed) no hay restricción.
+  Las cachés de resultados acotados deben incluir `claveAlcance()` en la clave.
 - **Reglas de negocio clave (Anexo)**: solo planes vigentes permiten nuevas atenciones;
   aranceles son por materia y la cobertura por plan define el copago; una atención con
   arancel impago queda detenida; no se cierra una asesoría/juicio con gestiones o comité

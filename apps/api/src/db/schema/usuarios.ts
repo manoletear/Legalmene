@@ -1,27 +1,70 @@
-import { pgTable, uuid, varchar, boolean, timestamp, jsonb, pgEnum } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  uuid,
+  varchar,
+  text,
+  boolean,
+  timestamp,
+  primaryKey,
+  index,
+  type AnyPgColumn,
+} from "drizzle-orm/pg-core";
 
-export const rolUsuarioEnum = pgEnum("rol_usuario", [
-  "Administrador",
-  "Supervisor",
-  "Abogado",
-  "Operador",
-  "Auditor",
-  "Contador",
-  "Finanzas",
-]);
-
-export const usuarios = pgTable("usuarios", {
+// Perfiles del Anexo §IV como datos: el administrador define qué permisos tiene cada uno.
+export const perfiles = pgTable("perfiles", {
   id: uuid("id").primaryKey().defaultRandom(),
-  entraOid: varchar("entra_oid", { length: 128 }).notNull().unique(),
-  email: varchar("email", { length: 200 }).notNull().unique(),
-  nombre: varchar("nombre", { length: 200 }).notNull(),
-  rol: rolUsuarioEnum("rol").notNull(),
-  codPlanes: jsonb("cod_planes").$type<string[]>().notNull().default([]),
-  activo: boolean("activo").notNull().default(true),
-  ultimoLogin: timestamp("ultimo_login", { withTimezone: true }),
+  codigo: varchar("codigo", { length: 40 }).notNull().unique(),
+  nombre: varchar("nombre", { length: 120 }).notNull(),
+  descripcion: text("descripcion"),
+  vigente: boolean("vigente").notNull().default(true),
+  // Perfiles del organigrama: editables pero no eliminables.
+  esSistema: boolean("es_sistema").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export type PerfilRow = typeof perfiles.$inferSelect;
+
+export const perfilPermisos = pgTable(
+  "perfil_permisos",
+  {
+    perfilId: uuid("perfil_id")
+      .notNull()
+      .references(() => perfiles.id, { onDelete: "cascade" }),
+    // Clave del catálogo PERMISOS (packages/shared/src/types/permisos.ts).
+    permiso: varchar("permiso", { length: 80 }).notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.perfilId, t.permiso] }),
+  }),
+);
+
+export const usuarios = pgTable(
+  "usuarios",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    entraOid: varchar("entra_oid", { length: 128 }).notNull().unique(),
+    email: varchar("email", { length: 200 }).notNull().unique(),
+    nombre: varchar("nombre", { length: 200 }).notNull(),
+    perfilId: uuid("perfil_id")
+      .notNull()
+      .references(() => perfiles.id, { onDelete: "restrict" }),
+    // Jefatura directa (Anexo §IV: "el perfilamiento considera la relación con su jefatura").
+    jefeId: uuid("jefe_id").references((): AnyPgColumn => usuarios.id, { onDelete: "set null" }),
+    // Anexo telefónico: llave para buscar las grabaciones del día.
+    anexo: varchar("anexo", { length: 10 }),
+    activo: boolean("activo").notNull().default(true),
+    bloqueado: boolean("bloqueado").notNull().default(false),
+    motivoBloqueo: text("motivo_bloqueo"),
+    ultimoLogin: timestamp("ultimo_login", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    perfilIdx: index("usuarios_perfil_idx").on(t.perfilId),
+    jefeIdx: index("usuarios_jefe_idx").on(t.jefeId),
+  }),
+);
 
 export type Usuario = typeof usuarios.$inferSelect;
 export type NuevoUsuario = typeof usuarios.$inferInsert;

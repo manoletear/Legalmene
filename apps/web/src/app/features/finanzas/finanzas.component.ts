@@ -78,7 +78,7 @@ export class FinanzasComponent implements OnInit {
   protected conteos = signal<Partial<Record<EstadoProvision, number>>>({});
   protected montos = signal<Partial<Record<EstadoProvision, number>>>({});
   protected loading = signal(false);
-  protected puedeCobrar = computed(() => ["Administrador", "Contador"].includes(this.me.user()?.rol ?? ""));
+  protected puedeCobrar = computed(() => this.me.tiene("aranceles_atencion.registrar_pago"));
 
   ngOnInit() {
     this.recargar();

@@ -21,58 +21,61 @@ import {
   TerminarPlanDto,
   UpdateAfiliadoDto,
 } from "./dto";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { RolesGuard } from "../../common/guards/roles.guard";
+import { Permiso } from "../../common/decorators/permiso.decorator";
+import { PermisosGuard } from "../../common/guards/permisos.guard";
 
 @ApiTags("afiliados")
 @ApiBearerAuth("EntraID")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermisosGuard)
 @Controller("afiliados")
 export class AfiliadosController {
   constructor(@Inject(AfiliadosService) private readonly service: AfiliadosService) {}
 
   @Get()
+  @Permiso("afiliados.ver")
   buscar(@Query() filtro: FiltroAfiliadosDto) {
     return this.service.buscar(filtro);
   }
 
   // Consulta por RUT del Anexo: persona + todos sus planes, vigentes primero.
   @Get("rut/:rut")
+  @Permiso("afiliados.ver")
   consultarPorRut(@Param("rut") rut: string) {
     return this.service.consultarPorRut(rut);
   }
 
   @Get(":id")
+  @Permiso("afiliados.ver")
   obtener(@Param("id") id: string) {
     return this.service.obtenerConPlanes(id);
   }
 
   @Post()
-  @Roles("Administrador", "Supervisor", "Operador")
+  @Permiso("afiliados.crear")
   crear(@Body() body: CreateAfiliadoDto) {
     return this.service.crear(body);
   }
 
   @Patch(":id")
-  @Roles("Administrador", "Supervisor")
+  @Permiso("afiliados.editar")
   actualizar(@Param("id") id: string, @Body() body: UpdateAfiliadoDto) {
     return this.service.actualizar(id, body);
   }
 
   @Delete(":id")
-  @Roles("Administrador")
+  @Permiso("afiliados.eliminar")
   eliminar(@Param("id") id: string) {
     return this.service.eliminar(id);
   }
 
   @Post(":id/planes")
-  @Roles("Administrador")
+  @Permiso("afiliados.asignar_planes")
   asignarPlan(@Param("id") id: string, @Body() body: AsignarPlanDto) {
     return this.service.asignarPlan(id, body);
   }
 
   @Put(":id/planes/:codPlan/termino")
-  @Roles("Administrador")
+  @Permiso("afiliados.asignar_planes")
   terminarPlan(
     @Param("id") id: string,
     @Param("codPlan") codPlan: string,

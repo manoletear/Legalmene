@@ -158,7 +158,7 @@ export class AdminCoberturasComponent implements OnInit {
     materiaId: null,
     tipo: "Juicio",
   };
-  protected puedeEditar = computed(() => this.me.user()?.rol === "Administrador");
+  protected puedeEditar = computed(() => this.me.tiene("coberturas.administrar"));
 
   ngOnInit() {
     this.planesApi.listar().subscribe((p) => this.planes.set(p));

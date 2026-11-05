@@ -4,8 +4,8 @@ import { createZodDto } from "nestjs-zod";
 import { z } from "zod";
 import { CreateCoberturaSchema, TipoAtencionEnum, UpdateCoberturaSchema } from "@legalmene/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { RolesGuard } from "../../common/guards/roles.guard";
+import { Permiso } from "../../common/decorators/permiso.decorator";
+import { PermisosGuard } from "../../common/guards/permisos.guard";
 import { CoberturasService } from "./coberturas.service";
 
 class CreateCoberturaDto extends createZodDto(CreateCoberturaSchema) {}
@@ -29,7 +29,7 @@ class CopagoQueryDto extends createZodDto(CopagoQuerySchema) {}
 
 @ApiTags("coberturas")
 @ApiBearerAuth("EntraID")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermisosGuard)
 @Controller()
 export class CoberturasController {
   constructor(@Inject(CoberturasService) private readonly service: CoberturasService) {}
@@ -40,13 +40,13 @@ export class CoberturasController {
   }
 
   @Post("coberturas")
-  @Roles("Administrador")
+  @Permiso("coberturas.administrar")
   crear(@Body() body: CreateCoberturaDto) {
     return this.service.crear(body);
   }
 
   @Put("coberturas/:id")
-  @Roles("Administrador")
+  @Permiso("coberturas.administrar")
   actualizar(@Param("id", ParseUUIDPipe) id: string, @Body() body: UpdateCoberturaDto) {
     return this.service.actualizar(id, body);
   }

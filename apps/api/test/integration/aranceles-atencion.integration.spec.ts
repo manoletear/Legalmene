@@ -42,8 +42,8 @@ const FECHA_PAGO = "2001-03-15";
   const PLAN = planAleatorio("TA");
   let cm: MateriaPrueba;
   let afiliadoId: string;
-  let abogado: { id: string; rol: string };
-  let jefe: { id: string; rol: string };
+  let abogado: { id: string; permisos: readonly string[] };
+  let jefe: { id: string; permisos: readonly string[] };
   let causaId: string;
 
   beforeAll(async () => {
@@ -78,10 +78,10 @@ const FECHA_PAGO = "2001-03-15";
     const afi = await afiliadosSrv.crear({ rut: rutAleatorio(), nombres: "Test", apellidoPaterno: "Arancel" });
     afiliadoId = afi.id;
     await afiliadosSrv.asignarPlan(afiliadoId, { codPlan: PLAN, fechaInicio: "2024-01-01" });
-    const ua = await usuarioDePrueba(db, "Abogado");
-    const uj = await usuarioDePrueba(db, "Supervisor");
-    abogado = { id: ua.id, rol: ua.rol };
-    jefe = { id: uj.id, rol: uj.rol };
+    const ua = await usuarioDePrueba(db, "ABOGADO");
+    const uj = await usuarioDePrueba(db, "GERENCIA_SERVICIOS");
+    abogado = { id: ua.id, permisos: ua.permisos };
+    jefe = { id: uj.id, permisos: uj.permisos };
     const [c] = await db.insert(causasTermino).values({ nombre: `Causa ${PLAN}` }).returning();
     causaId = c.id;
   });

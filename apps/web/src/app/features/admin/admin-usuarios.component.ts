@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from "@angular/core";
+import { Component, OnInit, computed, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { CardModule } from "primeng/card";
@@ -8,12 +8,16 @@ import { ButtonModule } from "primeng/button";
 import { InputTextModule } from "primeng/inputtext";
 import { SelectModule } from "primeng/select";
 import { ToggleSwitchModule } from "primeng/toggleswitch";
-import { ToastModule } from "primeng/toast";
 import { MessageService } from "primeng/api";
-import { UsuariosAdminService, UsuarioAdmin } from "../../core/services/usuarios-admin.service";
 import type { TableLazyLoadEvent } from "primeng/table";
-
-const ROLES = ["Administrador", "Supervisor", "Abogado", "Operador", "Auditor", "Contador", "Finanzas"] as const;
+import type { Perfil, UpdateUsuarioAdmin } from "@legalmene/shared";
+import {
+  PerfilesApiService,
+  UsuarioAdmin,
+  UsuarioOpcion,
+  UsuariosAdminService,
+} from "../../core/services/usuarios-admin.service";
+import { PromptService } from "../../shared/prompt.service";
 
 @Component({
   selector: "lm-admin-usuarios",
@@ -28,19 +32,17 @@ const ROLES = ["Administrador", "Supervisor", "Abogado", "Operador", "Auditor", 
     InputTextModule,
     SelectModule,
     ToggleSwitchModule,
-    ToastModule,
   ],
   template: `
-    <p-toast></p-toast>
-    <p-card>
-      <ng-template pTemplate="header">
-        <div style="padding:16px 16px 0;">
-          <h2 style="margin:0;">Administración de usuarios</h2>
-          <small class="lm-muted">Cambios sincronizados con Entra ID en el siguiente login</small>
-        </div>
-      </ng-template>
+    <div class="lm-row" style="margin-bottom:16px; align-items:flex-end;">
+      <div style="flex:1;">
+        <h1 style="margin:0 0 4px 0;">Usuarios</h1>
+        <small class="lm-muted">Perfil, jefatura directa y anexo de cada usuario. Quien se desactiva o bloquea no puede operar.</small>
+      </div>
+    </div>
 
-      <div class="lm-row" style="margin-bottom:16px;">
+    <p-card>
+      <div class="lm-row" style="margin-bottom:16px; flex-wrap:wrap;">
         <input
           pInputText
           type="text"
@@ -50,14 +52,14 @@ const ROLES = ["Administrador", "Supervisor", "Abogado", "Operador", "Auditor", 
           style="flex:1; min-width:220px;"
         />
         <p-select
-          [(ngModel)]="filtroRol"
+          [(ngModel)]="filtroPerfil"
           (onChange)="recargar()"
-          [options]="rolOpts"
+          [options]="perfilOpts()"
           optionLabel="label"
           optionValue="value"
-          placeholder="Rol"
+          placeholder="Perfil"
           [showClear]="true"
-          [style]="{ 'min-width': '160px' }"
+          [style]="{ 'min-width': '200px' }"
         ></p-select>
         <p-select
           [(ngModel)]="filtroActivo"
@@ -87,41 +89,75 @@ const ROLES = ["Administrador", "Supervisor", "Abogado", "Operador", "Auditor", 
       >
         <ng-template pTemplate="header">
           <tr>
-            <th>Email</th>
-            <th>Rol</th>
-            <th>Planes</th>
+            <th>Usuario</th>
+            <th>Perfil</th>
+            <th>Jefatura</th>
+            <th>Anexo</th>
             <th>Activo</th>
-            <th>Último login</th>
+            <th>Bloqueo</th>
+            <th>Último ingreso</th>
           </tr>
         </ng-template>
         <ng-template pTemplate="body" let-u>
           <tr>
             <td>
-              <div>{{ u.email }}</div>
-              <small class="lm-muted">{{ u.nombre }}</small>
+              <div>{{ u.nombre }}</div>
+              <small class="lm-muted">{{ u.email }}</small>
             </td>
             <td>
               <p-select
-                [ngModel]="u.rol"
-                (onChange)="cambiarRol(u, $event.value)"
-                [options]="rolOpts"
+                [ngModel]="u.perfilId"
+                (onChange)="guardar(u, { perfilId: $event.value })"
+                [options]="perfilOptsVigentes()"
                 optionLabel="label"
                 optionValue="value"
-                [style]="{ width: '160px' }"
+                [style]="{ width: '220px' }"
                 appendTo="body"
               ></p-select>
             </td>
             <td>
-              <p-tag *ngFor="let p of u.codPlanes" [value]="p" severity="secondary" styleClass="lm-mr-4" [style]="{ 'margin-right': '4px' }"></p-tag>
+              <p-select
+                [ngModel]="u.jefeId"
+                (onChange)="guardar(u, { jefeId: $event.value ?? null })"
+                [options]="jefeOpts(u.id)"
+                optionLabel="label"
+                optionValue="value"
+                [filter]="true"
+                filterBy="label"
+                [showClear]="true"
+                placeholder="Sin jefatura"
+                [style]="{ width: '200px' }"
+                appendTo="body"
+              ></p-select>
             </td>
             <td>
-              <p-toggleSwitch [ngModel]="u.activo" (onChange)="cambiarActivo(u, $event.checked)"></p-toggleSwitch>
+              <input
+                pInputText
+                [ngModel]="u.anexo"
+                (change)="guardar(u, { anexo: $any($event.target).value || null })"
+                maxlength="10"
+                style="width:80px;"
+                aria-label="Anexo telefónico"
+              />
+            </td>
+            <td>
+              <p-toggleSwitch [ngModel]="u.activo" (onChange)="guardar(u, { activo: $event.checked })"></p-toggleSwitch>
+            </td>
+            <td>
+              <ng-container *ngIf="u.bloqueado; else libre">
+                <p-tag value="Bloqueado" severity="danger"></p-tag>
+                <div class="lm-small lm-muted" *ngIf="u.motivoBloqueo">{{ u.motivoBloqueo }}</div>
+                <button pButton type="button" class="p-button-text p-button-sm" label="Desbloquear" (click)="bloquear(u, false)"></button>
+              </ng-container>
+              <ng-template #libre>
+                <button pButton type="button" class="p-button-text p-button-sm p-button-danger" label="Bloquear" (click)="bloquear(u, true)"></button>
+              </ng-template>
             </td>
             <td>{{ u.ultimoLogin ? (u.ultimoLogin | date: 'short') : '—' }}</td>
           </tr>
         </ng-template>
         <ng-template pTemplate="emptymessage">
-          <tr><td colspan="5" style="text-align:center; padding:24px;" class="lm-muted">Sin usuarios.</td></tr>
+          <tr><td colspan="7" style="text-align:center; padding:24px;" class="lm-muted">Sin usuarios.</td></tr>
         </ng-template>
       </p-table>
     </p-card>
@@ -129,36 +165,48 @@ const ROLES = ["Administrador", "Supervisor", "Abogado", "Operador", "Auditor", 
 })
 export class AdminUsuariosComponent implements OnInit {
   private api = inject(UsuariosAdminService);
+  private perfilesApi = inject(PerfilesApiService);
   private msg = inject(MessageService);
+  private prompt = inject(PromptService);
 
   protected data = signal<UsuarioAdmin[]>([]);
   protected total = signal(0);
   protected page = signal(1);
   protected pageSize = signal(25);
   protected loading = signal(false);
+  protected perfiles = signal<Perfil[]>([]);
+  protected opciones = signal<UsuarioOpcion[]>([]);
   protected q = "";
-  protected filtroRol: string | undefined;
+  protected filtroPerfil: string | undefined;
   protected filtroActivo: boolean | undefined;
-  protected rolOpts = ROLES.map((r) => ({ label: r, value: r }));
+
   protected activoOpts = [
     { label: "Activos", value: true },
     { label: "Inactivos", value: false },
   ];
+  protected perfilOpts = computed(() => this.perfiles().map((p) => ({ label: p.nombre, value: p.id })));
+  protected perfilOptsVigentes = computed(() =>
+    this.perfiles()
+      .filter((p) => p.vigente)
+      .map((p) => ({ label: p.nombre, value: p.id })),
+  );
+
+  protected jefeOpts(usuarioId: string) {
+    return this.opciones()
+      .filter((o) => o.id !== usuarioId)
+      .map((o) => ({ label: `${o.nombre} (${o.email})`, value: o.id }));
+  }
 
   ngOnInit() {
+    this.perfilesApi.listar().subscribe((p) => this.perfiles.set(p));
+    this.api.opciones().subscribe((o) => this.opciones.set(o));
     this.recargar();
   }
 
   recargar() {
     this.loading.set(true);
     this.api
-      .listar({
-        page: this.page(),
-        pageSize: this.pageSize(),
-        q: this.q || undefined,
-        rol: this.filtroRol,
-        activo: this.filtroActivo,
-      })
+      .listar({ page: this.page(), pageSize: this.pageSize(), q: this.q || undefined, perfilId: this.filtroPerfil, activo: this.filtroActivo })
       .subscribe({
         next: (res) => {
           this.data.set(res.data);
@@ -170,23 +218,37 @@ export class AdminUsuariosComponent implements OnInit {
   }
 
   onLazy(ev: TableLazyLoadEvent) {
-    const first = ev.first ?? 0;
     const rows = ev.rows ?? this.pageSize();
-    this.page.set(Math.floor(first / rows) + 1);
+    this.page.set(Math.floor((ev.first ?? 0) / rows) + 1);
     this.pageSize.set(rows);
     this.recargar();
   }
 
-  cambiarRol(u: UsuarioAdmin, rol: string) {
-    this.api.actualizar(u.id, { rol }).subscribe({
-      next: () => this.msg.add({ severity: "success", summary: `${u.email} → ${rol}`, life: 2000 }),
-      error: (err) => this.msg.add({ severity: "error", summary: "Error", detail: err.error?.message ?? err.message, life: 4000 }),
+  guardar(u: UsuarioAdmin, patch: UpdateUsuarioAdmin) {
+    this.api.actualizar(u.id, patch).subscribe({
+      next: () => {
+        this.msg.add({ severity: "success", summary: `${u.nombre} actualizado`, life: 2000 });
+        this.recargar();
+      },
+      error: (err) => {
+        this.msg.add({ severity: "error", summary: "No se pudo guardar", detail: err.error?.message ?? err.message, life: 4000 });
+        this.recargar();
+      },
     });
   }
 
-  cambiarActivo(u: UsuarioAdmin, activo: boolean) {
-    this.api.actualizar(u.id, { activo }).subscribe({
-      next: () => this.msg.add({ severity: "success", summary: `${u.email} ${activo ? "activado" : "desactivado"}`, life: 2000 }),
+  async bloquear(u: UsuarioAdmin, bloqueado: boolean) {
+    let motivo: string | undefined;
+    if (bloqueado) {
+      const r = await this.prompt.open({ header: `Bloquear a ${u.nombre}`, label: "Motivo del bloqueo", multiline: true, required: true });
+      if (r === null) return;
+      motivo = r.trim();
+    }
+    this.api.bloquear(u.id, bloqueado, motivo).subscribe({
+      next: () => {
+        this.msg.add({ severity: "success", summary: bloqueado ? "Usuario bloqueado" : "Usuario desbloqueado", life: 2500 });
+        this.recargar();
+      },
       error: (err) => this.msg.add({ severity: "error", summary: "Error", detail: err.error?.message ?? err.message, life: 4000 }),
     });
   }

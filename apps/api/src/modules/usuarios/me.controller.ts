@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from "@nestjs/common";
+import { Controller, Get, Inject, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { CurrentUser, AuthenticatedUser } from "../../common/decorators/current-user.decorator";
@@ -9,14 +9,17 @@ import { UsuariosService } from "./usuarios.service";
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class MeController {
-  constructor(private readonly usuarios: UsuariosService) {}
+  constructor(@Inject(UsuariosService) private readonly usuarios: UsuariosService) {}
 
-  // Devuelve el usuario autenticado (resuelto desde el JWT/dev guard).
-  // Usado por el frontend para renderizar nombre, rol, planes accesibles.
+  // Usuario autenticado con su perfil y permisos: el frontend arma el menú con esto.
   @Get("me")
-  async me(@CurrentUser() user: AuthenticatedUser) {
-    if (!user.id) return user;
-    const full = await this.usuarios.obtenerPorId(user.id);
-    return full ?? user;
+  me(@CurrentUser() user: AuthenticatedUser) {
+    return this.usuarios.actual(user);
+  }
+
+  // Usuarios activos para selects (abogado asignado, responsable, jefe).
+  @Get("usuarios/opciones")
+  opciones() {
+    return this.usuarios.opciones();
   }
 }

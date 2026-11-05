@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import {
   ESTADO_ARANCEL_LABEL,
   ESTADOS_ARANCEL_BLOQUEANTES,
@@ -9,6 +9,7 @@ import {
   type PagoArancel,
 } from "@legalmene/shared";
 import { DRIZZLE, Database } from "../../db/database.module";
+import { filtroAtenciones } from "../../common/acceso/alcance";
 import { atenciones } from "../../db/schema/atenciones";
 import { valoresUf } from "../../db/schema/aranceles";
 import { arancelesAtencion, arancelesAtencionEventos, ArancelAtencionRow } from "../../db/schema/finanzas";
@@ -60,7 +61,10 @@ export class ArancelesAtencionService {
   // Las consultas no tienen arancel. Las asesorías/juicios sin fila (p. ej. creadas antes de
   // que existiera la tabla en un ambiente sin migrar datos) la crean al leerla.
   async obtener(atencionId: string): Promise<ArancelAtencionRow | null> {
-    const [a] = await this.db.select({ tipo: atenciones.tipo }).from(atenciones).where(eq(atenciones.id, atencionId));
+    const [a] = await this.db
+      .select({ tipo: atenciones.tipo })
+      .from(atenciones)
+      .where(and(eq(atenciones.id, atencionId), filtroAtenciones()));
     if (!a) throw new NotFoundException(`Atención ${atencionId} no existe`);
     if (a.tipo === "Consulta") return null;
     const [row] = await this.db.select().from(arancelesAtencion).where(eq(arancelesAtencion.atencionId, atencionId));
@@ -159,7 +163,7 @@ export class ArancelesAtencionService {
       .innerJoin(atenciones, eq(atenciones.id, arancelesAtencion.atencionId))
       .orderBy(desc(arancelesAtencion.updatedAt))
       .limit(200);
-    const rows = estado ? await q.where(eq(arancelesAtencion.estado, estado)) : await q;
+    const rows = await q.where(and(filtroAtenciones(), estado ? eq(arancelesAtencion.estado, estado) : undefined));
     return rows.map((r) => ({ ...r.arancel, correlativo: r.correlativo, asunto: r.asunto, tipo: r.tipo, codPlan: r.codPlan }));
   }
 

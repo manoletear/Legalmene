@@ -108,7 +108,7 @@ export class ArancelesComponent implements OnInit {
   protected guardando = signal(false);
   protected tipos = TIPOS;
   protected filtroCompetencia: string | undefined;
-  protected puedeEditar = computed(() => ["Administrador", "Supervisor"].includes(this.me.user()?.rol ?? ""));
+  protected puedeEditar = computed(() => this.me.tiene("aranceles.administrar"));
 
   protected form = this.fb.group({
     competenciaId: ["", Validators.required],

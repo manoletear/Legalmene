@@ -1,8 +1,9 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { permisosDePerfil, type Permiso } from "@legalmene/shared";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { calcularDv } from "../../src/common/utils/rut";
 import { competencias, materias } from "../../src/db/schema/maestros";
-import { usuarios } from "../../src/db/schema/usuarios";
+import { perfiles, perfilPermisos, usuarios } from "../../src/db/schema/usuarios";
 
 // RUT válido y distinto en cada llamada: el RUT es único global y los specs corren
 // en paralelo sobre la misma base. Rango 40–49 millones para no chocar con el seed.
@@ -44,15 +45,19 @@ export async function borrarMateriaDePrueba(db: NodePgDatabase<any>, ids: Materi
   await db.execute(sql`DELETE FROM competencias WHERE id = ${ids.competenciaId}`);
 }
 
-// Usuario propio del spec (email/oid aleatorios). Borrar con DELETE FROM usuarios WHERE id = ...
+// Usuario propio del spec (email/oid aleatorios) con el perfil indicado y sus permisos
+// efectivos. Borrar con DELETE FROM usuarios WHERE id = ...
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function usuarioDePrueba(db: NodePgDatabase<any>, rol: typeof usuarios.$inferInsert.rol = "Supervisor") {
+export async function usuarioDePrueba(db: NodePgDatabase<any>, perfil = "GERENCIA_SERVICIOS", extra: { jefeId?: string } = {}) {
   const sufijo = Math.random().toString(36).slice(2, 8);
+  const [p] = await db.select().from(perfiles).where(eq(perfiles.codigo, perfil));
+  if (!p) throw new Error(`Perfil ${perfil} no existe`);
   const [u] = await db
     .insert(usuarios)
-    .values({ entraOid: `oid-${sufijo}`, email: `test-${sufijo}@test.cl`, nombre: `Test ${rol}`, rol, codPlanes: [] })
+    .values({ entraOid: `oid-${sufijo}`, email: `test-${sufijo}@test.cl`, nombre: `Test ${perfil}`, perfilId: p.id, jefeId: extra.jefeId ?? null })
     .returning();
-  return u;
+  const asignados = await db.select().from(perfilPermisos).where(eq(perfilPermisos.perfilId, p.id));
+  return { ...u, permisos: permisosDePerfil(p.codigo, asignados.map((a) => a.permiso)) as Permiso[] };
 }
 
 // Borra las atenciones de un plan de prueba junto con sus registros dependientes.

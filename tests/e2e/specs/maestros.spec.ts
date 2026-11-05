@@ -2,21 +2,20 @@ import { expect, test } from "@playwright/test";
 
 const API = process.env.API_BASE ?? "http://localhost:3001/api/v1";
 
-function asUser(rol: string) {
+function asUser(perfil: string) {
   const claims = {
-    entraOid: `dev-${rol.toLowerCase()}`,
-    email: `${rol.toLowerCase()}@test.cl`,
-    nombre: rol,
-    rol,
-    codPlanes: [],
+    entraOid: `dev-${perfil.toLowerCase()}`,
+    email: `${perfil.toLowerCase()}@test.cl`,
+    nombre: perfil,
+    perfil,
   };
   return { "X-Dev-User": Buffer.from(JSON.stringify(claims), "utf-8").toString("base64") };
 }
 
 test.describe("Maestros y coberturas", () => {
   test("cualquier usuario lee maestros; solo Administrador los crea y edita", async ({ request }) => {
-    const abogado = asUser("Abogado");
-    const admin = asUser("Administrador");
+    const abogado = asUser("ABOGADO");
+    const admin = asUser("ADMIN");
 
     const competencias = await request.get(`${API}/maestros/competencias?vigente=true`, { headers: abogado });
     expect(competencias.ok()).toBeTruthy();
@@ -60,7 +59,7 @@ test.describe("Maestros y coberturas", () => {
   });
 
   test("copago según la cobertura del plan DEMO", async ({ request }) => {
-    const headers = asUser("Abogado");
+    const headers = asUser("ABOGADO");
     const comps = await request.get(`${API}/maestros/competencias`, { headers }).then((r) => r.json());
     const laboral = comps.find((c: { nombre: string }) => c.nombre === "Laboral");
     const materias = await request.get(`${API}/maestros/materias?competenciaId=${laboral.id}`, { headers }).then((r) => r.json());

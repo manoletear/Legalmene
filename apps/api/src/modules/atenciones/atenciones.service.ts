@@ -35,6 +35,7 @@ import { WebhooksService } from "../webhooks/webhooks.service";
 import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
 import { PlantillasService } from "../gestiones/plantillas.service";
 import type { AuthenticatedUser } from "../../common/decorators/current-user.decorator";
+import { asegurarAtencionVisible, filtroAtenciones } from "../../common/acceso/alcance";
 import { mensajeFaltantes, validarTransicion } from "./estados";
 import type { CreateAtencionDto, UpdateAtencionDto, FiltroAtencionesDto } from "./dto";
 
@@ -67,9 +68,8 @@ const CAMPOS_CASO = [
   "riesgoCliente",
 ] as const;
 
-const ROLES_JEFATURA = ["Administrador", "Supervisor"];
-
-export type Actor = Pick<AuthenticatedUser, "id" | "rol">;
+// Quién ejecuta la operación (para FKs y permisos puntuales como "Revisado por comité").
+export type Actor = Pick<AuthenticatedUser, "id"> & { permisos?: readonly string[] };
 
 @Injectable()
 export class AtencionesService {
@@ -87,6 +87,7 @@ export class AtencionesService {
     const ftQuery = filtro.q ? sql`plainto_tsquery('spanish', ${filtro.q})` : null;
 
     const where = and(
+      filtroAtenciones(),
       filtro.codPlan ? eq(atenciones.codPlan, filtro.codPlan) : undefined,
       filtro.estado ? eq(atenciones.estado, filtro.estado) : undefined,
       filtro.tipo ? eq(atenciones.tipo, filtro.tipo) : undefined,
@@ -130,13 +131,14 @@ export class AtencionesService {
       .from(atenciones)
       .innerJoin(competencias, eq(competencias.id, atenciones.competenciaId))
       .innerJoin(materias, eq(materias.id, atenciones.materiaId))
-      .where(eq(atenciones.id, id));
+      .where(and(eq(atenciones.id, id), filtroAtenciones()));
     if (!row) throw new NotFoundException(`Atención ${id} no existe`);
     return { ...row, riesgoTotal: riesgoTotal(row) } as unknown as AtencionConMaestros;
   }
 
+  // Toda mutación parte de aquí: una atención que el usuario no ve responde 404.
   private async fila(id: string): Promise<Atencion> {
-    const [row] = await this.db.select().from(atenciones).where(eq(atenciones.id, id));
+    const [row] = await this.db.select().from(atenciones).where(and(eq(atenciones.id, id), filtroAtenciones()));
     if (!row) throw new NotFoundException(`Atención ${id} no existe`);
     return row;
   }
@@ -206,6 +208,7 @@ export class AtencionesService {
       codPlan,
       correlativo,
       estado: ESTADO_INICIAL[input.tipo],
+      creadoPorId: extra.creadoPorId ?? actor?.id ?? null,
       horaInicio: input.tipo === "Consulta" ? new Date() : null,
     };
     const [row] = await this.db.insert(atenciones).values(payload).returning();
@@ -241,8 +244,8 @@ export class AtencionesService {
 
   async actualizar(id: string, patch: UpdateAtencionDto, actor?: Actor): Promise<Atencion> {
     const actual = await this.fila(id);
-    if (patch.revisadoPorComite !== undefined && !ROLES_JEFATURA.includes(actor?.rol ?? "")) {
-      throw new ForbiddenException("Solo Supervisor o Administrador marcan 'Revisado por comité'");
+    if (patch.revisadoPorComite !== undefined && !actor?.permisos?.includes("atenciones.revisar_comite")) {
+      throw new ForbiddenException("Su perfil no puede marcar 'Revisado por comité'");
     }
     if (patch.competenciaId || patch.materiaId) {
       await this.validarMateria(
@@ -380,7 +383,14 @@ export class AtencionesService {
     return row;
   }
 
+  private async asegurarContraparteVisible(id: string): Promise<void> {
+    const [c] = await this.db.select({ atencionId: contrapartes.atencionId }).from(contrapartes).where(eq(contrapartes.id, id));
+    if (!c) throw new NotFoundException(`Contraparte ${id} no existe`);
+    await asegurarAtencionVisible(this.db, c.atencionId);
+  }
+
   async actualizarContraparte(id: string, patch: UpdateContraparte): Promise<ContraparteRow> {
+    await this.asegurarContraparteVisible(id);
     const rut = this.normalizarRut(patch.rut);
     const [row] = await this.db
       .update(contrapartes)
@@ -393,6 +403,7 @@ export class AtencionesService {
 
   // Ley 19.628: la contraparte se desactiva, no se borra.
   async eliminarContraparte(id: string): Promise<ContraparteRow> {
+    await this.asegurarContraparteVisible(id);
     const [row] = await this.db
       .update(contrapartes)
       .set({ vigente: false, updatedAt: new Date() })

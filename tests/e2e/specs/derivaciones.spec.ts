@@ -2,14 +2,14 @@ import { expect, test } from "@playwright/test";
 
 const API = process.env.API_BASE ?? "http://localhost:3001/api/v1";
 
-function asUser(rol: string) {
-  const claims = { entraOid: `dev-${rol.toLowerCase()}`, email: `${rol.toLowerCase()}@test.cl`, nombre: rol, rol, codPlanes: [] };
+function asUser(perfil: string) {
+  const claims = { entraOid: `dev-${perfil.toLowerCase()}`, email: `${perfil.toLowerCase()}@test.cl`, nombre: perfil, perfil };
   return Buffer.from(JSON.stringify(claims), "utf-8").toString("base64");
 }
 
 test.describe("Derivación consulta → juicio", () => {
   test("Abogado solicita, no puede aprobar; la jefatura aprueba en la bandeja y nace el juicio", async ({ page, request }) => {
-    const abogado = { "X-Dev-User": asUser("Abogado") };
+    const abogado = { "X-Dev-User": asUser("ABOGADO") };
 
     type AfiliadoE2E = { id: string; vigencia: string; planes: { codPlan: string; vigente: boolean }[] };
     const afi = (await request.get(`${API}/afiliados`, { headers: abogado }).then((r) => r.json())).data as AfiliadoE2E[];

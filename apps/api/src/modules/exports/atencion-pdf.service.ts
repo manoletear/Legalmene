@@ -1,9 +1,10 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { eq, desc, getTableColumns } from "drizzle-orm";
+import { and, desc, eq, getTableColumns } from "drizzle-orm";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import PDFDocument = require("pdfkit");
 import { Writable } from "stream";
 import { DRIZZLE, Database } from "../../db/database.module";
+import { filtroAtenciones } from "../../common/acceso/alcance";
 import { atenciones } from "../../db/schema/atenciones";
 import { afiliados } from "../../db/schema/afiliados";
 import { gestiones } from "../../db/schema/gestiones";
@@ -22,7 +23,7 @@ export class AtencionPdfService {
       .from(atenciones)
       .innerJoin(competencias, eq(competencias.id, atenciones.competenciaId))
       .innerJoin(materias, eq(materias.id, atenciones.materiaId))
-      .where(eq(atenciones.id, atencionId));
+      .where(and(eq(atenciones.id, atencionId), filtroAtenciones()));
     if (!a) throw new NotFoundException(`Atención ${atencionId} no existe`);
 
     const [afi] = await this.db.select().from(afiliados).where(eq(afiliados.id, a.afiliadoId));

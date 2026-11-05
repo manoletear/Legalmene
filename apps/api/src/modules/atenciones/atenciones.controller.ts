@@ -24,13 +24,13 @@ import {
   UpdateAtencionDto,
   UpdateContraparteDto,
 } from "./dto";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { RolesGuard } from "../../common/guards/roles.guard";
+import { Permiso } from "../../common/decorators/permiso.decorator";
+import { PermisosGuard } from "../../common/guards/permisos.guard";
 import { CurrentUser, AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 
 @ApiTags("atenciones")
 @ApiBearerAuth("EntraID")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermisosGuard)
 @Controller()
 export class AtencionesController {
   constructor(@Inject(AtencionesService) private readonly service: AtencionesService) {}
@@ -46,25 +46,25 @@ export class AtencionesController {
   }
 
   @Post("atenciones/consultas")
-  @Roles("Administrador", "Supervisor", "Abogado", "Operador")
+  @Permiso("atenciones.crear_consulta")
   crearConsulta(@Body() body: CreateAtencionDto, @CurrentUser() user: AuthenticatedUser) {
     return this.service.crear({ ...body, tipo: "Consulta" }, user);
   }
 
   @Post("atenciones/asesorias")
-  @Roles("Administrador", "Supervisor", "Abogado")
+  @Permiso("atenciones.crear_caso")
   crearAsesoria(@Body() body: CreateAtencionDto, @CurrentUser() user: AuthenticatedUser) {
     return this.service.crear({ ...body, tipo: "Asesoria" }, user);
   }
 
   @Post("atenciones/juicios")
-  @Roles("Administrador", "Supervisor", "Abogado")
+  @Permiso("atenciones.crear_caso")
   crearJuicio(@Body() body: CreateAtencionDto, @CurrentUser() user: AuthenticatedUser) {
     return this.service.crear({ ...body, tipo: "Juicio" }, user);
   }
 
   @Patch("atenciones/:id")
-  @Roles("Administrador", "Supervisor", "Abogado")
+  @Permiso("atenciones.editar")
   actualizar(
     @Param("id", ParseUUIDPipe) id: string,
     @Body() body: UpdateAtencionDto,
@@ -74,7 +74,7 @@ export class AtencionesController {
   }
 
   @Post("atenciones/:id/estado")
-  @Roles("Administrador", "Supervisor", "Abogado", "Operador")
+  @Permiso("atenciones.cambiar_estado")
   cambiarEstado(
     @Param("id", ParseUUIDPipe) id: string,
     @Body() body: CambiarEstadoDto,
@@ -84,7 +84,7 @@ export class AtencionesController {
   }
 
   @Post("atenciones/:id/nuevo-correlativo")
-  @Roles("Administrador", "Supervisor", "Abogado", "Operador")
+  @Permiso("atenciones.crear_consulta")
   nuevoCorrelativo(
     @Param("id", ParseUUIDPipe) id: string,
     @Body() body: NuevoCorrelativoDto,
@@ -99,19 +99,19 @@ export class AtencionesController {
   }
 
   @Post("atenciones/:id/contrapartes")
-  @Roles("Administrador", "Supervisor", "Abogado")
+  @Permiso("atenciones.editar")
   crearContraparte(@Param("id", ParseUUIDPipe) id: string, @Body() body: CreateContraparteDto) {
     return this.service.crearContraparte(id, body);
   }
 
   @Put("contrapartes/:id")
-  @Roles("Administrador", "Supervisor", "Abogado")
+  @Permiso("atenciones.editar")
   actualizarContraparte(@Param("id", ParseUUIDPipe) id: string, @Body() body: UpdateContraparteDto) {
     return this.service.actualizarContraparte(id, body);
   }
 
   @Delete("contrapartes/:id")
-  @Roles("Administrador", "Supervisor", "Abogado")
+  @Permiso("atenciones.editar")
   eliminarContraparte(@Param("id", ParseUUIDPipe) id: string) {
     return this.service.eliminarContraparte(id);
   }

@@ -4,13 +4,13 @@ import { and, count, desc, eq } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { auditoria } from "../../db/schema/auditoria";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { RolesGuard } from "../../common/guards/roles.guard";
+import { Permiso } from "../../common/decorators/permiso.decorator";
+import { PermisosGuard } from "../../common/guards/permisos.guard";
 import { AuditArchiveService } from "./audit-archive.service";
 
 @ApiTags("auditoria")
 @ApiBearerAuth("EntraID")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermisosGuard)
 @Controller("auditoria")
 export class AuditController {
   constructor(
@@ -20,7 +20,7 @@ export class AuditController {
 
   // Solo Administrador y Auditor pueden ver el log (cumplimiento Ley 19.628).
   @Get()
-  @Roles("Administrador", "Auditor")
+  @Permiso("auditoria.ver")
   async listar(
     @Query("entidad") entidad?: string,
     @Query("entidadId") entidadId?: string,
@@ -51,7 +51,7 @@ export class AuditController {
   // Manual: archiva auditoría > 1 año a JSONL.gz, devuelve cantidad + archivo.
   // El cron mensual ejecuta el mismo método.
   @Post("archive")
-  @Roles("Administrador")
+  @Permiso("auditoria.archivar")
   archivar() {
     return this.archive.archivar();
   }

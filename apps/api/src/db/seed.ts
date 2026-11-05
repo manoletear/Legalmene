@@ -2,9 +2,9 @@ import "dotenv/config";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { canales, planes } from "./schema/planes";
-import { usuarios } from "./schema/usuarios";
+import { perfiles, usuarios } from "./schema/usuarios";
 import { afiliados, planesAfiliado } from "./schema/afiliados";
 import { valoresUf } from "./schema/aranceles";
 import { sembrarCatalogo } from "./seed-catalogo";
@@ -61,17 +61,51 @@ async function main() {
     ])
     .onConflictDoNothing();
 
+  // Los perfiles los crea la migración 0011; aquí solo se asignan.
+  const perfilesPorCodigo = new Map(
+    (await db.select({ id: perfiles.id, codigo: perfiles.codigo }).from(perfiles)).map((p) => [p.codigo, p.id]),
+  );
+  const perfilId = (codigo: string) => {
+    const id = perfilesPorCodigo.get(codigo);
+    if (!id) throw new Error(`Perfil ${codigo} no existe; ejecute las migraciones`);
+    return id;
+  };
+
   const [admin] = await db
     .insert(usuarios)
     .values({
       entraOid: "00000000-0000-0000-0000-000000000001",
       email: "admin@legalchile.cl",
       nombre: "Admin Demo",
-      rol: "Administrador",
-      codPlanes: ["DEMO", "EMP01"],
+      perfilId: perfilId("ADMIN"),
     })
     .onConflictDoNothing()
     .returning();
+
+  await db
+    .insert(usuarios)
+    .values([
+      {
+        entraOid: "00000000-0000-0000-0000-000000000003",
+        email: "jefatura.judicial@legalchile.cl",
+        nombre: "Jefatura Judicial Demo",
+        perfilId: perfilId("JEFATURA_JUDICIAL"),
+      },
+      {
+        entraOid: "00000000-0000-0000-0000-000000000004",
+        email: "contador@legalchile.cl",
+        nombre: "Contador Demo",
+        perfilId: perfilId("CONTADOR"),
+      },
+      {
+        entraOid: "00000000-0000-0000-0000-000000000005",
+        email: "finanzas@legalchile.cl",
+        nombre: "Finanzas Demo",
+        perfilId: perfilId("GERENCIA_FINANZAS"),
+      },
+    ])
+    .onConflictDoNothing();
+  const [jefe] = await db.select({ id: usuarios.id }).from(usuarios).where(eq(usuarios.email, "jefatura.judicial@legalchile.cl"));
 
   await db
     .insert(usuarios)
@@ -79,8 +113,9 @@ async function main() {
       entraOid: "00000000-0000-0000-0000-000000000002",
       email: "abogado@legalchile.cl",
       nombre: "Abogado Demo",
-      rol: "Abogado",
-      codPlanes: ["DEMO"],
+      perfilId: perfilId("ABOGADO"),
+      jefeId: jefe?.id ?? null,
+      anexo: "201",
     })
     .onConflictDoNothing();
 

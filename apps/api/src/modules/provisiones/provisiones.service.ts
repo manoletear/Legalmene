@@ -17,6 +17,7 @@ import {
   type SolicitarProvision,
 } from "@legalmene/shared";
 import { DRIZZLE, Database } from "../../db/database.module";
+import { filtroAtenciones } from "../../common/acceso/alcance";
 import { atenciones } from "../../db/schema/atenciones";
 import { usuarios } from "../../db/schema/usuarios";
 import {
@@ -58,6 +59,7 @@ export class ProvisionesService {
     const page = filtro.page ?? 1;
     const pageSize = Math.min(filtro.pageSize ?? 50, 200);
     const where = and(
+      filtroAtenciones(),
       filtro.codPlan ? eq(atenciones.codPlan, filtro.codPlan) : undefined,
       filtro.estado ? eq(provisiones.estado, filtro.estado) : undefined,
     );
@@ -184,6 +186,7 @@ export class ProvisionesService {
     observacion: string | null = null,
     validar?: (p: Provision, tx: Tx) => Promise<void>,
   ): Promise<Provision> {
+    await this.obtener(id);
     const row = await this.db.transaction(async (tx) => {
       const [p] = await tx.select().from(provisiones).where(eq(provisiones.id, id)).for("update");
       if (!p) throw new NotFoundException(`Provisión ${id} no existe`);
@@ -295,6 +298,7 @@ export class ProvisionesService {
 
   // Gastos reales y reintegros de saldo solo sobre fondos entregados; nunca más que el saldo.
   async registrarMovimiento(provisionId: string, usuarioId: string, input: RegistrarMovimiento): Promise<ProvisionMovimiento> {
+    await this.obtener(provisionId);
     return this.db.transaction(async (tx) => {
       const [prov] = await tx.select().from(provisiones).where(eq(provisiones.id, provisionId)).for("update");
       if (!prov) throw new NotFoundException(`Provisión ${provisionId} no existe`);
@@ -380,9 +384,15 @@ export class ProvisionesService {
     }
   }
 
+  // 404 si la provisión no existe o pertenece a una atención que el usuario no ve.
   private async obtener(id: string): Promise<Provision> {
     const [row] = await this.db.select().from(provisiones).where(eq(provisiones.id, id));
     if (!row) throw new NotFoundException(`Provisión ${id} no existe`);
+    try {
+      await this.assertAtencion(row.atencionId);
+    } catch {
+      throw new NotFoundException(`Provisión ${id} no existe`);
+    }
     return row;
   }
 
@@ -390,7 +400,7 @@ export class ProvisionesService {
     const [row] = await this.db
       .select({ id: atenciones.id, estado: atenciones.estado })
       .from(atenciones)
-      .where(eq(atenciones.id, atencionId));
+      .where(and(eq(atenciones.id, atencionId), filtroAtenciones()));
     if (!row) throw new NotFoundException(`Atención ${atencionId} no existe`);
     return row;
   }

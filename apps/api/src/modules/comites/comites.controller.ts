@@ -3,13 +3,13 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ComitesService } from "./comites.service";
 import { CurrentUser, AuthenticatedUser } from "../../common/decorators/current-user.decorator";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { RolesGuard } from "../../common/guards/roles.guard";
+import { Permiso } from "../../common/decorators/permiso.decorator";
+import { PermisosGuard } from "../../common/guards/permisos.guard";
 import type { ConvocarComite } from "@legalmene/shared";
 
 @ApiTags("comites")
 @ApiBearerAuth("EntraID")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermisosGuard)
 @Controller()
 export class ComitesController {
   constructor(private readonly service: ComitesService) {}
@@ -20,7 +20,7 @@ export class ComitesController {
   }
 
   @Post("atenciones/:atencionId/comites")
-  @Roles("Administrador", "Supervisor")
+  @Permiso("comites.convocar")
   convocar(
     @Param("atencionId") atencionId: string,
     @CurrentUser() user: AuthenticatedUser,
@@ -33,7 +33,7 @@ export class ComitesController {
   }
 
   @Post("comites/:id/votos")
-  @Roles("Administrador", "Supervisor", "Abogado")
+  @Permiso("comites.votar")
   votar(
     @Param("id") id: string,
     @CurrentUser() user: AuthenticatedUser,
@@ -43,7 +43,7 @@ export class ComitesController {
   }
 
   @Post("comites/:id/cerrar")
-  @Roles("Administrador", "Supervisor")
+  @Permiso("comites.convocar")
   cerrar(
     @Param("id") id: string,
     @Body() body: { decision: "Aprobado" | "Rechazado" | "Diferido"; acta: string },

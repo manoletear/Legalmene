@@ -11,6 +11,7 @@ import { TooltipModule } from "primeng/tooltip";
 import { Popover } from "primeng/popover";
 import { ConfirmDialogModule } from "primeng/confirmdialog";
 import { ToastModule } from "primeng/toast";
+import type { Permiso } from "@legalmene/shared";
 import { MeService } from "./core/services/me.service";
 import { MaintenanceService } from "./core/services/maintenance.service";
 import { NotifInboxApiService, NotifItem } from "./core/services/notif-inbox.service";
@@ -19,7 +20,8 @@ interface NavItem {
   label: string;
   icon: string;
   route: string;
-  rol?: string;
+  // Basta uno de estos permisos para ver la opción.
+  permisos?: Permiso[];
 }
 
 @Component({
@@ -129,7 +131,7 @@ interface NavItem {
         <div class="lm-user-chip" (click)="abrirUserPopover($event)">
           <div class="lm-user-meta" *ngIf="!isMobile()">
             <strong>{{ user.nombre }}</strong>
-            <small>{{ user.rol }}</small>
+            <small>{{ user.perfil.nombre }}</small>
           </div>
           <div class="lm-avatar">{{ avatarIniciales(user.nombre) }}</div>
         </div>
@@ -139,7 +141,7 @@ interface NavItem {
               {{ user.email }}
             </div>
             <div class="lm-small" style="padding:8px 4px;">
-              Perfil: <strong style="color:#2563eb;">{{ user.rol }}</strong>
+              Perfil: <strong style="color:#2563eb;">{{ user.perfil.nombre }}</strong>
             </div>
           </div>
         </p-popover>
@@ -167,7 +169,7 @@ interface NavItem {
               [routerLink]="item.route"
               routerLinkActive="active"
               [routerLinkActiveOptions]="{ exact: item.route === '/dashboard' }"
-              *ngIf="!item.rol || me.user()?.rol === item.rol"
+              *ngIf="!item.permisos || me.algunoDe(item.permisos)"
             >
               <i class="pi {{ item.icon }}"></i> {{ item.label }}
             </a>
@@ -190,7 +192,7 @@ interface NavItem {
               [routerLink]="item.route"
               routerLinkActive="active"
               [routerLinkActiveOptions]="{ exact: item.route === '/dashboard' }"
-              *ngIf="!item.rol || me.user()?.rol === item.rol"
+              *ngIf="!item.permisos || me.algunoDe(item.permisos)"
             >
               <i class="pi {{ item.icon }}"></i> {{ item.label }}
             </a>
@@ -224,24 +226,25 @@ export class AppComponent implements OnInit {
 
   protected menu = computed<NavItem[]>(() => [
     { label: "Dashboard", icon: "pi-home", route: "/dashboard" },
-    { label: "Afiliados", icon: "pi-users", route: "/afiliados" },
+    { label: "Afiliados", icon: "pi-users", route: "/afiliados", permisos: ["afiliados.ver"] },
     { label: "Consultas", icon: "pi-comment", route: "/consultas" },
     { label: "Asesorías", icon: "pi-id-card", route: "/asesorias" },
     { label: "Juicios", icon: "pi-briefcase", route: "/juicios" },
-    { label: "Derivaciones", icon: "pi-share-alt", route: "/derivaciones" },
+    { label: "Derivaciones", icon: "pi-share-alt", route: "/derivaciones", permisos: ["derivaciones.solicitar", "derivaciones.aprobar"] },
     { label: "Aranceles", icon: "pi-dollar", route: "/aranceles" },
     { label: "Coberturas", icon: "pi-percentage", route: "/admin/coberturas" },
     { label: "Provisiones", icon: "pi-wallet", route: "/provisiones" },
-    { label: "Finanzas", icon: "pi-money-bill", route: "/finanzas" },
+    { label: "Finanzas", icon: "pi-money-bill", route: "/finanzas", permisos: ["finanzas.ver"] },
     { label: "Documentos", icon: "pi-folder", route: "/documentos" },
-    { label: "Reportes", icon: "pi-chart-bar", route: "/reportes" },
+    { label: "Reportes", icon: "pi-chart-bar", route: "/reportes", permisos: ["reportes.ver"] },
     { label: "Gestiones", icon: "pi-check-square", route: "/gestiones" },
-    { label: "Cargas masivas", icon: "pi-cloud-upload", route: "/cargas-masivas" },
-    { label: "Pagos", icon: "pi-credit-card", route: "/pagos" },
-    { label: "Auditoría", icon: "pi-history", route: "/auditoria" },
-    { label: "Usuarios", icon: "pi-shield", route: "/admin/usuarios", rol: "Administrador" },
-    { label: "Maestros", icon: "pi-list", route: "/admin/maestros", rol: "Administrador" },
-    { label: "Webhooks", icon: "pi-link", route: "/admin/webhooks", rol: "Administrador" },
+    { label: "Cargas masivas", icon: "pi-cloud-upload", route: "/cargas-masivas", permisos: ["cargas.ejecutar"] },
+    { label: "Pagos", icon: "pi-credit-card", route: "/pagos", permisos: ["pagos.iniciar", "finanzas.ver"] },
+    { label: "Auditoría", icon: "pi-history", route: "/auditoria", permisos: ["auditoria.ver"] },
+    { label: "Usuarios", icon: "pi-shield", route: "/admin/usuarios", permisos: ["usuarios.administrar"] },
+    { label: "Perfiles", icon: "pi-key", route: "/admin/perfiles", permisos: ["perfiles.administrar"] },
+    { label: "Maestros", icon: "pi-list", route: "/admin/maestros", permisos: ["maestros.administrar"] },
+    { label: "Webhooks", icon: "pi-link", route: "/admin/webhooks", permisos: ["webhooks.ver"] },
   ]);
 
   ngOnInit() {

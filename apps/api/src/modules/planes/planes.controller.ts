@@ -2,12 +2,12 @@ import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/co
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { PlanesService } from "./planes.service";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { RolesGuard } from "../../common/guards/roles.guard";
+import { Permiso } from "../../common/decorators/permiso.decorator";
+import { PermisosGuard } from "../../common/guards/permisos.guard";
 
 @ApiTags("planes")
 @ApiBearerAuth("EntraID")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermisosGuard)
 @Controller("planes")
 export class PlanesController {
   constructor(private readonly service: PlanesService) {}
@@ -23,13 +23,13 @@ export class PlanesController {
   }
 
   @Post()
-  @Roles("Administrador")
+  @Permiso("planes.administrar")
   crear(@Body() body: { codPlan: string; nombre: string; descripcion?: string; vigente?: boolean }) {
     return this.service.crear(body);
   }
 
   @Patch(":codPlan")
-  @Roles("Administrador")
+  @Permiso("planes.administrar")
   actualizar(
     @Param("codPlan") codPlan: string,
     @Body() body: { nombre?: string; descripcion?: string; vigente?: boolean },

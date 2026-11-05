@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { and, count, eq, exists, gte, inArray, sql } from "drizzle-orm";
 import { ESTADOS_ACTIVOS, ESTADOS_TERMINALES, EstadoAtencionEnum, type EstadoAtencion } from "@legalmene/shared";
 import { DRIZZLE, Database } from "../../db/database.module";
+import { filtroAtenciones } from "../../common/acceso/alcance";
 import { atenciones } from "../../db/schema/atenciones";
 import { afiliados, planesAfiliado } from "../../db/schema/afiliados";
 import { gestiones } from "../../db/schema/gestiones";
@@ -10,7 +11,8 @@ import { usuarios } from "../../db/schema/usuarios";
 import { provisiones } from "../../db/schema/provisiones";
 import { competencias } from "../../db/schema/maestros";
 
-const porPlan = (codPlan?: string) => (codPlan ? eq(atenciones.codPlan, codPlan) : undefined);
+// Toda consulta del dashboard sobre atenciones respeta lo que el usuario puede ver.
+const porPlan = (codPlan?: string) => and(filtroAtenciones(), codPlan ? eq(atenciones.codPlan, codPlan) : undefined);
 const ESPERAS: EstadoAtencion[] = ["EnEsperaAntecedentes", "EnEsperaArancel", "EnEsperaProvision"];
 
 export interface DashboardKpis {

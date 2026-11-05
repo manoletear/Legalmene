@@ -4,12 +4,13 @@ import { Cache } from "cache-manager";
 import { ApiBearerAuth, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { DashboardService } from "./dashboard.service";
-import { RolesGuard } from "../../common/guards/roles.guard";
+import { PermisosGuard } from "../../common/guards/permisos.guard";
+import { claveAlcance } from "../../common/acceso/alcance";
 
 @ApiTags("dashboard")
 @ApiBearerAuth("EntraID")
 @ApiQuery({ name: "codPlan", required: false, description: "Filtra por plan; sin valor = todos" })
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermisosGuard)
 @Controller("dashboard")
 export class DashboardController {
   constructor(
@@ -17,10 +18,10 @@ export class DashboardController {
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
-  // La key de caché incluye el filtro de plan ("todos" si no viene).
+  // La key de caché incluye el alcance del usuario y el filtro de plan ("todos" si no viene).
   @Get("kpis")
   async kpis(@Query("codPlan") codPlan: string | undefined) {
-    const key = `dashboard:kpis:${codPlan ?? "todos"}`;
+    const key = `dashboard:kpis:${claveAlcance()}:${codPlan ?? "todos"}`;
     const cached = await this.cache.get(key);
     if (cached) return cached;
     const fresh = await this.service.kpis(codPlan);
@@ -62,7 +63,7 @@ export class DashboardController {
   @Get("timeline-atenciones")
   async timeline(@Query("codPlan") codPlan: string | undefined, @Query("dias") dias?: string) {
     const d = dias ? parseInt(dias, 10) : 30;
-    const key = `dashboard:timeline:${codPlan ?? "todos"}:${d}`;
+    const key = `dashboard:timeline:${claveAlcance()}:${codPlan ?? "todos"}:${d}`;
     const cached = await this.cache.get(key);
     if (cached) return cached;
     const fresh = await this.service.timelineAtenciones(codPlan, d);
@@ -72,7 +73,7 @@ export class DashboardController {
 
   @Get("por-competencia")
   async porCompetencia(@Query("codPlan") codPlan: string | undefined) {
-    const key = `dashboard:competencia:${codPlan ?? "todos"}`;
+    const key = `dashboard:competencia:${claveAlcance()}:${codPlan ?? "todos"}`;
     const cached = await this.cache.get(key);
     if (cached) return cached;
     const fresh = await this.service.porCompetencia(codPlan);
@@ -83,7 +84,7 @@ export class DashboardController {
   @Get("carga-abogados")
   async cargaAbogados(@Query("codPlan") codPlan: string | undefined, @Query("limit") limit?: string) {
     const l = limit ? parseInt(limit, 10) : 10;
-    const key = `dashboard:abogados:${codPlan ?? "todos"}:${l}`;
+    const key = `dashboard:abogados:${claveAlcance()}:${codPlan ?? "todos"}:${l}`;
     const cached = await this.cache.get(key);
     if (cached) return cached;
     const fresh = await this.service.cargaPorAbogado(codPlan, l);
@@ -94,7 +95,7 @@ export class DashboardController {
   @Get("por-mes")
   async porMes(@Query("codPlan") codPlan: string | undefined, @Query("meses") meses?: string) {
     const m = meses ? parseInt(meses, 10) : 12;
-    const key = `dashboard:mes:${codPlan ?? "todos"}:${m}`;
+    const key = `dashboard:mes:${claveAlcance()}:${codPlan ?? "todos"}:${m}`;
     const cached = await this.cache.get(key);
     if (cached) return cached;
     const fresh = await this.service.porMes(codPlan, m);

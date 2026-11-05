@@ -4,8 +4,8 @@ import { createZodDto } from "nestjs-zod";
 import { z } from "zod";
 import { EstadoArancelAtencionEnum, ObservacionSchema, PagoArancelSchema, RechazoSchema } from "@legalmene/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { Roles } from "../../common/decorators/roles.decorator";
-import { RolesGuard } from "../../common/guards/roles.guard";
+import { Permiso } from "../../common/decorators/permiso.decorator";
+import { PermisosGuard } from "../../common/guards/permisos.guard";
 import { CurrentUser, AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 import { ArancelesAtencionService } from "./aranceles-atencion.service";
 
@@ -21,13 +21,14 @@ function uid(user: AuthenticatedUser): string {
 
 @ApiTags("aranceles")
 @ApiBearerAuth("EntraID")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermisosGuard)
 @Controller()
 export class ArancelesAtencionController {
   constructor(@Inject(ArancelesAtencionService) private readonly service: ArancelesAtencionService) {}
 
   // Bandeja de finanzas: aranceles por estado (p. ej. Aprobado = pendiente de pago).
   @Get("aranceles-atencion")
+  @Permiso("finanzas.ver")
   listar(@Query() f: FiltroDto) {
     return this.service.listar(f.estado);
   }
@@ -43,25 +44,25 @@ export class ArancelesAtencionController {
   }
 
   @Post("atenciones/:id/arancel/enviar")
-  @Roles("Administrador", "Supervisor", "Abogado")
+  @Permiso("aranceles_atencion.enviar")
   enviar(@Param("id", ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.service.enviarAprobacion(id, uid(user));
   }
 
   @Post("atenciones/:id/arancel/aprobar")
-  @Roles("Administrador", "Supervisor")
+  @Permiso("aranceles_atencion.aprobar")
   aprobar(@Param("id", ParseUUIDPipe) id: string, @Body() body: ObservacionDto, @CurrentUser() user: AuthenticatedUser) {
     return this.service.aprobar(id, uid(user), body.observacion);
   }
 
   @Post("atenciones/:id/arancel/rechazar")
-  @Roles("Administrador", "Supervisor")
+  @Permiso("aranceles_atencion.aprobar")
   rechazar(@Param("id", ParseUUIDPipe) id: string, @Body() body: RechazoDto, @CurrentUser() user: AuthenticatedUser) {
     return this.service.rechazar(id, uid(user), body.observacion);
   }
 
   @Post("atenciones/:id/arancel/pago")
-  @Roles("Administrador", "Contador")
+  @Permiso("aranceles_atencion.registrar_pago")
   pago(@Param("id", ParseUUIDPipe) id: string, @Body() body: PagoArancelDto, @CurrentUser() user: AuthenticatedUser) {
     return this.service.registrarPago(id, uid(user), body);
   }

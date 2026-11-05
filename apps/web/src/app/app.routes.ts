@@ -1,4 +1,5 @@
 import { Routes } from "@angular/router";
+import { permisoGuard } from "./core/permisos";
 
 const atencionesList = () =>
   import("./features/atenciones/atenciones-list.component").then(
@@ -17,6 +18,7 @@ export const routes: Routes = [
   },
   {
     path: "afiliados",
+    canActivate: [permisoGuard("afiliados.ver")],
     loadComponent: () =>
       import("./features/afiliados/afiliados-list.component").then(
         (m) => m.AfiliadosListComponent,
@@ -25,6 +27,7 @@ export const routes: Routes = [
   { path: "atenciones", loadComponent: atencionesList },
   {
     path: "atenciones/nueva",
+    canActivate: [permisoGuard("atenciones.crear_consulta", "atenciones.crear_caso")],
     loadComponent: () =>
       import("./features/atenciones/atencion-form.component").then((m) => m.AtencionFormComponent),
   },
@@ -47,6 +50,7 @@ export const routes: Routes = [
   },
   {
     path: "cargas-masivas",
+    canActivate: [permisoGuard("cargas.ejecutar")],
     loadComponent: () =>
       import("./features/cargas-masivas/cargas-masivas.component").then(
         (m) => m.CargasMasivasComponent,
@@ -54,11 +58,13 @@ export const routes: Routes = [
   },
   {
     path: "pagos",
+    canActivate: [permisoGuard("pagos.iniciar", "finanzas.ver")],
     loadComponent: () =>
       import("./features/pagos/pagos.component").then((m) => m.PagosComponent),
   },
   {
     path: "auditoria",
+    canActivate: [permisoGuard("auditoria.ver")],
     loadComponent: () =>
       import("./features/auditoria/auditoria.component").then((m) => m.AuditoriaComponent),
   },
@@ -69,10 +75,12 @@ export const routes: Routes = [
   },
   {
     path: "finanzas",
+    canActivate: [permisoGuard("finanzas.ver")],
     loadComponent: () => import("./features/finanzas/finanzas.component").then((m) => m.FinanzasComponent),
   },
   {
     path: "derivaciones",
+    canActivate: [permisoGuard("derivaciones.solicitar", "derivaciones.aprobar")],
     loadComponent: () =>
       import("./features/derivaciones/derivaciones.component").then((m) => m.DerivacionesComponent),
   },
@@ -93,16 +101,25 @@ export const routes: Routes = [
   },
   {
     path: "reportes",
+    canActivate: [permisoGuard("reportes.ver")],
     loadComponent: () =>
       import("./features/reportes/reportes.component").then((m) => m.ReportesComponent),
   },
   {
     path: "admin/usuarios",
+    canActivate: [permisoGuard("usuarios.administrar")],
     loadComponent: () =>
       import("./features/admin/admin-usuarios.component").then((m) => m.AdminUsuariosComponent),
   },
   {
+    path: "admin/perfiles",
+    canActivate: [permisoGuard("perfiles.administrar")],
+    loadComponent: () =>
+      import("./features/admin/admin-perfiles.component").then((m) => m.AdminPerfilesComponent),
+  },
+  {
     path: "admin/maestros",
+    canActivate: [permisoGuard("maestros.administrar")],
     loadComponent: () =>
       import("./features/admin/admin-maestros.component").then((m) => m.AdminMaestrosComponent),
   },
@@ -113,6 +130,7 @@ export const routes: Routes = [
   },
   {
     path: "admin/webhooks",
+    canActivate: [permisoGuard("webhooks.ver")],
     loadComponent: () =>
       import("./features/admin/admin-webhooks.component").then((m) => m.AdminWebhooksComponent),
   },
