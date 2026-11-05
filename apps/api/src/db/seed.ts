@@ -8,6 +8,7 @@ import { perfiles, usuarios } from "./schema/usuarios";
 import { afiliados, planesAfiliado } from "./schema/afiliados";
 import { valoresUf } from "./schema/aranceles";
 import { sembrarCatalogo } from "./seed-catalogo";
+import { sembrarDemo } from "./seed-demo";
 
 // UF real del día desde mindicador.cl; si falla se deja sin UF (la UI lo indica).
 async function ufDelDia(): Promise<{ fecha: string; valorCentavos: number } | null> {
@@ -176,6 +177,9 @@ async function main() {
   } else {
     console.warn("No se pudo obtener la UF; los aranceles se mostrarán sin valor en pesos.");
   }
+
+  // Casos ficticios para la demo pública (render.yaml). Nunca en un ambiente con datos reales.
+  if (process.env.SEED_DEMO === "true") await sembrarDemo(db);
 
   console.info("Seed completado. Admin:", admin?.email ?? "(ya existía)");
   await pool.end();
