@@ -25,7 +25,7 @@ ejemplo y nunca deben quedar fijas en el código.
 | Módulos Afiliados / Atenciones / Gestiones / Comités / Pagos | ✅ CRUD base + flujos clave |
 | Cargas masivas FLUJO/STOCK | ✅ Implementado |
 | Frontend Angular 19 | ✅ Shell + Dashboard + Afiliados + Atenciones + Aranceles + Provisiones |
-| Alineación con Anexo PSL | 🟡 Pasos 1 (modelo núcleo) y 2 (maestros, aranceles, coberturas) listos; pasos 3–5 pendientes (ver `docs/requerimientos-anexo-psl.md` §5) |
+| Alineación con Anexo PSL | 🟡 Pasos 1 (modelo núcleo), 2 (maestros, aranceles, coberturas) y 3a (estados, derivaciones, juicios, gestiones predefinidas) listos; 3b–5 pendientes (ver `docs/requerimientos-anexo-psl.md` §5) |
 | Infraestructura AWS (CDK) | ⏳ Pendiente |
 | Migración SQL Server → Postgres | ⏳ Pendiente |
 | WebPay producción | ⏳ Stub (esperar SDK Transbank) |
@@ -126,6 +126,11 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   (`modules/coberturas/copago.ts`): regla del plan más específica (materia+tipo → materia →
   tipo → general); Porcentaje = arancel × (100−%); ValorUF = precio fijo; sin regla o
   SinCobertura = arancel completo. Nunca calcular copagos en el frontend.
+- **Estados de atención**: nunca escribir `atenciones.estado` a mano en un flujo nuevo; usar
+  `AtencionesService.cambiarEstado()` (valida el mapa de `estados-atencion.ts` y los requisitos
+  por etapa de `modules/atenciones/estados.ts`). "Derivada" solo la asigna la aprobación de una
+  derivación. Las actualizaciones automáticas (gestión creada, comité) solo avanzan desde el
+  estado esperado (p. ej. Pendiente → EnGestion).
 - **Reglas de negocio clave (Anexo)**: solo planes vigentes permiten nuevas atenciones;
   aranceles son por materia y la cobertura por plan define el copago; una atención con
   arancel impago queda detenida; no se cierra una asesoría/juicio con gestiones o comité

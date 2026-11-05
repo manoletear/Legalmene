@@ -11,7 +11,9 @@ export interface DashboardKpis {
     abiertas: number;
     enGestion: number;
     enComite: number;
+    enEspera: number;
     cerradas: number;
+    porEstado: Record<string, number>;
     porTipo: { Consulta: number; Asesoria: number; Juicio: number };
     creadasHoy: number;
     creadasUltimos30Dias: number;

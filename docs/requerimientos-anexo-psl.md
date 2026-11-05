@@ -84,10 +84,11 @@ Logs (accesos, acciones, errores con aviso al admin), alta disponibilidad, docum
 | Aranceles | ✅ Paso 2: por materia (y tipo opcional), comunes a todos los planes; la ficha muestra arancel y copago derivados | Estado del arancel por atención (rojo → verde, paso 3) |
 | Maestros | ✅ Paso 2: competencias, materias, procedimientos, tribunales, organismos, tipos de consulta, causas de término, calidades procesales (`/maestros/:tipo`, pantalla Admin › Maestros) | Regiones/ciudades/comunas, tipos de acción, gestiones por materia (paso 3), horarios por perfil |
 | Perfiles | 5 roles fijos | 11 perfiles + permisos por módulo/acción configurables |
-| Consultas | Formulario básico | Canal, grabación, horas automáticas, nuevo correlativo |
-| Derivación | Directa | Con aprobación de jefatura y estados |
-| Juicios | Sin datos judiciales | Tribunal, ROL/RIT, RUC, cuantía, riesgo, contraparte |
-| Gestiones | Libres | Plantillas por materia con orden y plazo; reglas de cierre |
+| Estados de atención | ✅ Paso 3a: estados del Anexo por tipo, mapa de transiciones y requisitos por etapa (`POST /atenciones/:id/estado`) | Retroceso de flujos por el Admin |
+| Consultas | ✅ Paso 3a: canal, tipo de consulta, código de grabación, hora de inicio/término automáticas, respuesta, nuevo correlativo | Búsqueda de grabaciones por anexo telefónico (requiere API del call center) |
+| Derivación | ✅ Paso 3a: solicitud del abogado → aprobación/rechazo de jefatura (bandeja Derivaciones); crea la asesoría/juicio en Asignada | — |
+| Juicios | ✅ Paso 3a: tribunal, ROL/RIT, RUC, cuantía con moneda, procedimiento, calidad procesal, riesgo (materia+cuantía+cliente), contraparte | Audiencias en agenda |
+| Gestiones | ✅ Paso 3a: plantillas por materia/procedimiento con orden y plazo en días hábiles; no se cierra con gestiones o comité pendientes | Feriados chilenos en el cálculo de plazos; correo al cliente al iniciar/terminar gestiones |
 | Provisiones | 3 estados + movimientos | Ciclo de 13 estados con roles de finanzas |
 | Carga masiva | ✅ Paso 1: flujo/stock sobre `planes_afiliado` (persona solo se crea, no se actualiza) | Cargas y bienes; correo de resumen |
 | Búsquedas | Precargan datos | Sin precarga |
@@ -104,6 +105,11 @@ Logs (accesos, acciones, errores con aviso al admin), alta disponibilidad, docum
    - Migración 0008: una competencia por valor del enum legado; las atenciones sin arancel de su competencia quedan en la materia "General"; cada descripción de arancel pasó a ser una materia y los aranceles duplicados entre planes se colapsaron (gana el más antiguo).
    - Copago: regla más específica del plan (materia+tipo → materia → tipo → general); sin regla, el afiliado paga el arancel completo.
    - Pendiente: tribunal/procedimiento/calidad procesal aún no se registran en la atención (paso 3, juicios); tope anual de cobertura no está modelado.
-3. **Flujos** — consulta → derivación aprobada → asesoría/juicio; arancel por atención; provisiones completas; plantillas de gestiones y reglas de cierre.
+3. 🟡 **Flujos** — consulta → derivación aprobada → asesoría/juicio; arancel por atención; provisiones completas; plantillas de gestiones y reglas de cierre.
+   - 3a ✅ Atenciones: un enum `estado_atencion` con subconjunto por tipo (consulta: Iniciada → Respondida/Derivada → Terminada; asesoría/juicio: Asignada → Pendiente → En gestión/Esperas/En comité → Terminada o Abandonada). El mapa vive en `packages/shared/src/types/estados-atencion.ts` y los requisitos por etapa en `modules/atenciones/estados.ts`.
+   - Requisitos: juicio a Pendiente exige tribunal, ROL y cuantía; Terminada exige causa de término y ni gestiones pendientes ni comité abierto; Abandonada exige causa y, con riesgo ≥ 20, "Revisado por comité" (solo Supervisor/Administrador lo marca).
+   - Migración 0009: Abierta → Iniciada (consulta) / Pendiente (asesoría y juicio); Suspendida → EnEsperaAntecedentes; Cerrada/Archivada → Terminada, o Derivada si la consulta originó otra atención. Las derivaciones antiguas no generan filas en `derivaciones` (no guardaban quién las pidió).
+   - Las gestiones predefinidas se crean al abrir/derivar la asesoría o juicio y al definir el procedimiento del juicio; plazo = hoy + N días hábiles (lunes a viernes, sin feriados).
+   - 3b: arancel por atención y ciclo completo de provisiones.
 4. **Perfiles configurables** y control por propiedad de la atención.
 5. **Búsquedas sin precarga, reportes, controller**, cargas y bienes, posesión efectiva.

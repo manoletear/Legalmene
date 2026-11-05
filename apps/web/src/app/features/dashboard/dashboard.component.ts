@@ -16,8 +16,8 @@ import {
   CargaAbogado,
   PorMes,
 } from "../../core/services/dashboard.service";
+import { estadoLabel as etiquetaEstado, estadoSeverity as severidadEstado } from "../../shared/estado-atencion";
 
-type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast";
 
 @Component({
   selector: "lm-dashboard",
@@ -263,8 +263,8 @@ export class DashboardComponent implements OnInit {
     return n.split(/\s+/)[0] || "Usuario";
   });
 
-  protected casosAbiertos = (k: DashboardKpis) =>
-    k.atenciones.abiertas + k.atenciones.enGestion + k.atenciones.enComite;
+  // "abiertas" ya agrupa todos los estados no terminales.
+  protected casosAbiertos = (k: DashboardKpis) => k.atenciones.abiertas;
 
   protected totalAtenciones = computed(() => {
     const k = this.kpis();
@@ -275,14 +275,16 @@ export class DashboardComponent implements OnInit {
     const k = this.kpis();
     if (!k) return [];
     const total = k.atenciones.total || 1;
+    const pe = k.atenciones.porEstado ?? {};
+    const suma = (...es: string[]) => es.reduce((s, e) => s + (pe[e] ?? 0), 0);
     const items = [
-      { label: "En curso", value: k.atenciones.abiertas + k.atenciones.enGestion, color: "#2563eb" },
-      { label: "Pendiente cliente", value: k.atenciones.enComite, color: "#93c5fd" },
-      { label: "En revisión", value: Math.floor(k.atenciones.cerradas * 0.4), color: "#f97316" },
-      { label: "Finalizado", value: Math.floor(k.atenciones.cerradas * 0.5), color: "#22c55e" },
-      { label: "Cerrado", value: Math.floor(k.atenciones.cerradas * 0.1), color: "#cbd5e1" },
+      { label: "Por iniciar", value: suma("Iniciada", "Asignada", "Pendiente"), color: "#2563eb" },
+      { label: "En gestión", value: suma("EnGestion", "Respondida"), color: "#93c5fd" },
+      { label: "En espera / comité", value: suma("EnEsperaAntecedentes", "EnEsperaArancel", "EnEsperaProvision", "EnComite"), color: "#f97316" },
+      { label: "Terminadas", value: suma("Terminada", "Derivada"), color: "#22c55e" },
+      { label: "Abandonadas", value: suma("Abandonada"), color: "#cbd5e1" },
     ];
-    return items.map((r) => ({ ...r, pct: (r.value / total) * 100 }));
+    return items.filter((r) => r.value > 0).map((r) => ({ ...r, pct: (r.value / total) * 100 }));
   });
 
   protected porcentajePrincipal = computed(() => {
@@ -325,21 +327,8 @@ export class DashboardComponent implements OnInit {
     };
   });
 
-  protected estadoLabel(e: string): string {
-    const map: Record<string, string> = {
-      Abierta: "En curso", EnGestion: "En revisión", EnComite: "Pendiente cliente",
-      Cerrada: "Finalizado", Archivada: "Cerrado", Suspendida: "Suspendida",
-    };
-    return map[e] || e;
-  }
-
-  protected estadoSeverity(e: string): Severity {
-    if (e === "Cerrada") return "success";
-    if (e === "EnGestion") return "info";
-    if (e === "EnComite") return "warn";
-    if (e === "Suspendida" || e === "Archivada") return "secondary";
-    return "info";
-  }
+  protected estadoLabel = etiquetaEstado;
+  protected estadoSeverity = severidadEstado;
 
   ngOnInit() {
     this.api.kpis().subscribe({

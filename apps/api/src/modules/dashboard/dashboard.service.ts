@@ -1,5 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, count, eq, exists, gte, sql } from "drizzle-orm";
+import { and, count, eq, exists, gte, inArray, sql } from "drizzle-orm";
+import { ESTADOS_ACTIVOS, ESTADOS_TERMINALES, EstadoAtencionEnum, type EstadoAtencion } from "@legalmene/shared";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { atenciones } from "../../db/schema/atenciones";
 import { afiliados, planesAfiliado } from "../../db/schema/afiliados";
@@ -10,6 +11,7 @@ import { provisiones } from "../../db/schema/provisiones";
 import { competencias } from "../../db/schema/maestros";
 
 const porPlan = (codPlan?: string) => (codPlan ? eq(atenciones.codPlan, codPlan) : undefined);
+const ESPERAS: EstadoAtencion[] = ["EnEsperaAntecedentes", "EnEsperaArancel", "EnEsperaProvision"];
 
 export interface DashboardKpis {
   // null = todos los planes.
@@ -17,10 +19,13 @@ export interface DashboardKpis {
   afiliados: { total: number; activos: number; eliminados: number };
   atenciones: {
     total: number;
+    // Activas = en cualquier estado no terminal.
     abiertas: number;
     enGestion: number;
     enComite: number;
+    enEspera: number;
     cerradas: number;
+    porEstado: Record<EstadoAtencion, number>;
     porTipo: { Consulta: number; Asesoria: number; Juicio: number };
     creadasHoy: number;
     creadasUltimos30Dias: number;
@@ -62,10 +67,11 @@ export class DashboardService {
     const [at] = await this.db
       .select({
         total: count(),
-        abiertas: sql<number>`count(*) filter (where ${atenciones.estado} = 'Abierta')`,
+        abiertas: sql<number>`count(*) filter (where ${inArray(atenciones.estado, [...ESTADOS_ACTIVOS])})`,
         enGestion: sql<number>`count(*) filter (where ${atenciones.estado} = 'EnGestion')`,
         enComite: sql<number>`count(*) filter (where ${atenciones.estado} = 'EnComite')`,
-        cerradas: sql<number>`count(*) filter (where ${atenciones.estado} = 'Cerrada')`,
+        enEspera: sql<number>`count(*) filter (where ${inArray(atenciones.estado, ESPERAS)})`,
+        cerradas: sql<number>`count(*) filter (where ${inArray(atenciones.estado, [...ESTADOS_TERMINALES])})`,
         consultas: sql<number>`count(*) filter (where ${atenciones.tipo} = 'Consulta')`,
         asesorias: sql<number>`count(*) filter (where ${atenciones.tipo} = 'Asesoria')`,
         juicios: sql<number>`count(*) filter (where ${atenciones.tipo} = 'Juicio')`,
@@ -74,6 +80,14 @@ export class DashboardService {
       })
       .from(atenciones)
       .where(porPlan(codPlan));
+
+    const filasEstado = await this.db
+      .select({ estado: atenciones.estado, total: count() })
+      .from(atenciones)
+      .where(porPlan(codPlan))
+      .groupBy(atenciones.estado);
+    const porEstado = Object.fromEntries(EstadoAtencionEnum.options.map((e) => [e, 0])) as Record<EstadoAtencion, number>;
+    for (const f of filasEstado) porEstado[f.estado] = Number(f.total);
 
     // Gestiones y comités se filtran por el plan de su atención.
     const [g] = await this.db
@@ -114,7 +128,9 @@ export class DashboardService {
         abiertas: Number(at?.abiertas ?? 0),
         enGestion: Number(at?.enGestion ?? 0),
         enComite: Number(at?.enComite ?? 0),
+        enEspera: Number(at?.enEspera ?? 0),
         cerradas: Number(at?.cerradas ?? 0),
+        porEstado,
         porTipo: {
           Consulta: Number(at?.consultas ?? 0),
           Asesoria: Number(at?.asesorias ?? 0),
@@ -165,7 +181,7 @@ export class DashboardService {
     return rows.map((r) => ({ competencia: r.competencia, total: Number(r.total) }));
   }
 
-  // Top abogados por atenciones activas (Abierta/EnGestion/EnComite).
+  // Top abogados por atenciones activas (estados no terminales).
   // Identifica cuellos de botella de carga.
   async cargaPorAbogado(
     codPlan: string | undefined,
@@ -175,14 +191,14 @@ export class DashboardService {
       .select({
         abogadoId: atenciones.abogadoAsignadoId,
         email: usuarios.email,
-        activas: sql<number>`count(*) filter (where ${atenciones.estado} in ('Abierta','EnGestion','EnComite'))`,
+        activas: sql<number>`count(*) filter (where ${inArray(atenciones.estado, [...ESTADOS_ACTIVOS])})`,
         total: count(),
       })
       .from(atenciones)
       .innerJoin(usuarios, eq(atenciones.abogadoAsignadoId, usuarios.id))
       .where(porPlan(codPlan))
       .groupBy(atenciones.abogadoAsignadoId, usuarios.email)
-      .orderBy(sql`count(*) filter (where ${atenciones.estado} in ('Abierta','EnGestion','EnComite')) desc`)
+      .orderBy(sql`count(*) filter (where ${inArray(atenciones.estado, [...ESTADOS_ACTIVOS])}) desc`)
       .limit(limit);
     return rows.map((r) => ({
       abogadoId: r.abogadoId ?? "",

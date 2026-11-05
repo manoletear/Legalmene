@@ -66,6 +66,7 @@ const RUN = !!process.env.DATABASE_URL;
         correlativo: `TEST-PROV-${SUFIJO}`,
         afiliadoId: afi.id,
         tipo: "Juicio",
+        estado: "EnGestion",
         ...cm,
         asunto: "Test provisiones",
       })

@@ -12,9 +12,9 @@ import { TagModule } from "primeng/tag";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { PlanesApiService } from "../../core/services/planes.service";
 import { MaestrosApiService } from "../../core/services/maestros.service";
-import type { AtencionConMaestros } from "@legalmene/shared";
+import { ESTADOS_TERMINALES, type AtencionConMaestros } from "@legalmene/shared";
+import { ESTADO_OPCIONES, estadoLabel as etiquetaEstado, estadoSeverity as severidadEstado } from "../../shared/estado-atencion";
 
-type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast";
 
 @Component({
   selector: "lm-reportes",
@@ -257,12 +257,7 @@ export class ReportesComponent implements OnInit {
     { label: "Asesoría", value: "Asesoria" },
     { label: "Juicio", value: "Juicio" },
   ];
-  protected estadoOpts = [
-    { label: "Abierta", value: "Abierta" },
-    { label: "En gestión", value: "EnGestion" },
-    { label: "En comité", value: "EnComite" },
-    { label: "Cerrada", value: "Cerrada" },
-  ];
+  protected estadoOpts = ESTADO_OPCIONES;
   private planesApi = inject(PlanesApiService);
   protected planOpts = signal<{ label: string; value: string }[]>([]);
   protected canalOpts = [
@@ -313,7 +308,7 @@ export class ReportesComponent implements OnInit {
       })
       .subscribe((res) => {
         this.data.set(res.data);
-        const activos = res.data.filter((a) => a.estado !== "Cerrada" && a.estado !== "Archivada").length;
+        const activos = res.data.filter((a) => !ESTADOS_TERMINALES.includes(a.estado)).length;
         const consultas = res.data.filter((a) => a.tipo === "Consulta").length;
         this.resultados.set({ total: res.total, activos, consultas });
       });
@@ -338,20 +333,6 @@ export class ReportesComponent implements OnInit {
     return t > 0 ? Math.round((this.resultados().consultas / t) * 100) : 0;
   }
 
-  estadoLabel(e: string): string {
-    const map: Record<string, string> = {
-      Abierta: "En curso", EnGestion: "En revisión", EnComite: "Pendiente cliente",
-      Cerrada: "Finalizado", Archivada: "Cerrado", Suspendida: "Suspendida",
-    };
-    return map[e] || e;
-  }
-
-  estadoSeverity(e: string): Severity {
-    if (e === "Cerrada") return "success";
-    if (e === "Archivada") return "secondary";
-    if (e === "EnGestion") return "info";
-    if (e === "EnComite") return "warn";
-    if (e === "Suspendida") return "danger";
-    return "success";
-  }
+  estadoLabel = etiquetaEstado;
+  estadoSeverity = severidadEstado;
 }

@@ -4,24 +4,35 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
 } from "@nestjs/common";
-import { and, eq, count, ilike, sql, desc, getTableColumns } from "drizzle-orm";
+import { and, eq, count, ilike, inArray, sql, desc, getTableColumns } from "drizzle-orm";
+import {
+  ESTADO_INICIAL,
+  PLANES_SIN_COBERTURA,
+  riesgoTotal,
+  type AtencionConMaestros,
+  type CambiarEstado,
+  type CreateContraparte,
+  type NuevoCorrelativo,
+  type TipoAtencion,
+  type UpdateContraparte,
+} from "@legalmene/shared";
 import { DRIZZLE, Database } from "../../db/database.module";
-import { atenciones, Atencion, NuevaAtencion } from "../../db/schema/atenciones";
+import { atenciones, contrapartes, Atencion, ContraparteRow, NuevaAtencion } from "../../db/schema/atenciones";
 import { afiliados } from "../../db/schema/afiliados";
-import { PLANES_SIN_COBERTURA } from "@legalmene/shared";
+import { gestiones } from "../../db/schema/gestiones";
+import { comites } from "../../db/schema/comites";
+import { causasTermino, competencias, materias } from "../../db/schema/maestros";
 import { planesDeAfiliados } from "../afiliados/vigencia";
-import { competencias, materias } from "../../db/schema/maestros";
 import { siguienteCorrelativo } from "../../common/utils/correlativo";
+import { formatearRut, rutValido } from "../../common/utils/rut";
 import { WebhooksService } from "../webhooks/webhooks.service";
 import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
-import type { AtencionConMaestros, TipoAtencion } from "@legalmene/shared";
-import type {
-  CreateAtencionDto,
-  UpdateAtencionDto,
-  DerivarAtencionDto,
-  FiltroAtencionesDto,
-} from "./dto";
+import { PlantillasService } from "../gestiones/plantillas.service";
+import type { AuthenticatedUser } from "../../common/decorators/current-user.decorator";
+import { mensajeFaltantes, validarTransicion } from "./estados";
+import type { CreateAtencionDto, UpdateAtencionDto, FiltroAtencionesDto } from "./dto";
 
 // Columnas de la atención + nombres de competencia y materia para mostrar.
 const columnasConMaestros = {
@@ -36,12 +47,33 @@ const APLICA: Record<TipoAtencion, "aplicaConsulta" | "aplicaAsesoria" | "aplica
   Juicio: "aplicaJuicio",
 };
 
+// Campos que solo existen para un tipo de atención.
+const CAMPOS_CONSULTA = ["canalContacto", "tipoConsultaId", "codigoGrabacion", "respuesta"] as const;
+const CAMPOS_CASO = [
+  "organismoId",
+  "procedimientoId",
+  "tribunalId",
+  "rolCausa",
+  "ruc",
+  "cuantiaMonto",
+  "cuantiaMoneda",
+  "calidadProcesalId",
+  "riesgoMateria",
+  "riesgoCuantia",
+  "riesgoCliente",
+] as const;
+
+const ROLES_JEFATURA = ["Administrador", "Supervisor"];
+
+export type Actor = Pick<AuthenticatedUser, "id" | "rol">;
+
 @Injectable()
 export class AtencionesService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     @Inject(WebhooksService) private readonly webhooks: WebhooksService,
     @Inject(NotifInboxService) private readonly notif: NotifInboxService,
+    @Inject(PlantillasService) private readonly plantillas: PlantillasService,
   ) {}
 
   async buscar(filtro: FiltroAtencionesDto) {
@@ -79,7 +111,7 @@ export class AtencionesService {
       this.db.select({ value: count() }).from(atenciones).where(where),
     ]);
     return {
-      data: rows,
+      data: rows.map((r) => ({ ...r, riesgoTotal: riesgoTotal(r) })),
       page: filtro.page,
       pageSize: filtro.pageSize,
       total,
@@ -95,11 +127,17 @@ export class AtencionesService {
       .innerJoin(materias, eq(materias.id, atenciones.materiaId))
       .where(eq(atenciones.id, id));
     if (!row) throw new NotFoundException(`Atención ${id} no existe`);
-    return row as unknown as AtencionConMaestros;
+    return { ...row, riesgoTotal: riesgoTotal(row) } as unknown as AtencionConMaestros;
+  }
+
+  private async fila(id: string): Promise<Atencion> {
+    const [row] = await this.db.select().from(atenciones).where(eq(atenciones.id, id));
+    if (!row) throw new NotFoundException(`Atención ${id} no existe`);
+    return row;
   }
 
   // La materia debe ser vigente, de la competencia indicada y aplicable al tipo de atención.
-  private async validarMateria(competenciaId: string, materiaId: string, tipo: TipoAtencion): Promise<void> {
+  async validarMateria(competenciaId: string, materiaId: string, tipo: TipoAtencion): Promise<void> {
     const [m] = await this.db.select().from(materias).where(eq(materias.id, materiaId));
     if (!m) throw new BadRequestException(`Materia ${materiaId} no existe`);
     if (m.competenciaId !== competenciaId) {
@@ -137,22 +175,48 @@ export class AtencionesService {
     );
   }
 
+  // Quita los campos que no corresponden al tipo (p. ej. tribunal en una consulta).
+  private limpiarPorTipo<T extends Record<string, unknown>>(tipo: TipoAtencion, data: T): T {
+    const fuera: readonly string[] = tipo === "Consulta" ? CAMPOS_CASO : CAMPOS_CONSULTA;
+    const out = { ...data };
+    for (const k of fuera) delete out[k];
+    return out;
+  }
+
   async crear(
-    input: CreateAtencionDto & { tipo: "Consulta" | "Asesoria" | "Juicio" },
+    input: CreateAtencionDto & { tipo: TipoAtencion },
+    actor?: Actor,
+    extra: Partial<NuevaAtencion> = {},
   ): Promise<Atencion> {
     const codPlan = input.codPlan;
     await this.validarPlanDeAtencion(input.afiliadoId, codPlan);
     await this.validarMateria(input.competenciaId, input.materiaId, input.tipo);
 
     const correlativo = await siguienteCorrelativo(this.db, input.tipo);
+    const datos = this.limpiarPorTipo(input.tipo, { ...input });
     const payload: NuevaAtencion = {
-      ...input,
+      ...datos,
+      ...extra,
       tipo: input.tipo,
       codPlan,
       correlativo,
-      estado: input.estado ?? "Abierta",
+      estado: ESTADO_INICIAL[input.tipo],
+      horaInicio: input.tipo === "Consulta" ? new Date() : null,
     };
     const [row] = await this.db.insert(atenciones).values(payload).returning();
+
+    if (row.tipo !== "Consulta") {
+      const responsableId = row.abogadoAsignadoId ?? actor?.id;
+      if (responsableId) {
+        await this.plantillas.instanciar({
+          atencionId: row.id,
+          materiaId: row.materiaId,
+          procedimientoId: row.procedimientoId,
+          responsableId,
+        });
+      }
+    }
+
     await this.webhooks.emitir(codPlan, "atencion.creada", { atencion: row });
     if (row.abogadoAsignadoId) {
       await this.notif.crear({
@@ -168,8 +232,11 @@ export class AtencionesService {
     return row;
   }
 
-  async actualizar(id: string, patch: UpdateAtencionDto): Promise<Atencion> {
-    const actual = await this.obtener(id);
+  async actualizar(id: string, patch: UpdateAtencionDto, actor?: Actor): Promise<Atencion> {
+    const actual = await this.fila(id);
+    if (patch.revisadoPorComite !== undefined && !ROLES_JEFATURA.includes(actor?.rol ?? "")) {
+      throw new ForbiddenException("Solo Supervisor o Administrador marcan 'Revisado por comité'");
+    }
     if (patch.competenciaId || patch.materiaId) {
       await this.validarMateria(
         patch.competenciaId ?? actual.competenciaId,
@@ -177,61 +244,143 @@ export class AtencionesService {
         actual.tipo,
       );
     }
+    const datos = this.limpiarPorTipo(actual.tipo, { ...patch });
     const [row] = await this.db
       .update(atenciones)
-      .set({ ...patch, updatedAt: new Date() })
+      .set({ ...datos, updatedAt: new Date() })
       .where(eq(atenciones.id, id))
+      .returning();
+
+    // Al definir el procedimiento de un juicio se agregan sus gestiones predefinidas.
+    if (row.tipo === "Juicio" && patch.procedimientoId && patch.procedimientoId !== actual.procedimientoId) {
+      const responsableId = row.abogadoAsignadoId ?? actor?.id;
+      if (responsableId) {
+        await this.plantillas.instanciar({
+          atencionId: row.id,
+          materiaId: null,
+          procedimientoId: row.procedimientoId,
+          responsableId,
+        });
+      }
+    }
+    return row;
+  }
+
+  async cambiarEstado(id: string, input: CambiarEstado, bloqueoArancel: string | null = null): Promise<Atencion> {
+    const actual = await this.fila(id);
+    const causaTerminoId = input.causaTerminoId ?? actual.causaTerminoId;
+    if (input.causaTerminoId) {
+      const [c] = await this.db.select({ id: causasTermino.id }).from(causasTermino).where(eq(causasTermino.id, input.causaTerminoId));
+      if (!c) throw new BadRequestException(`Causa de término ${input.causaTerminoId} no existe`);
+    }
+
+    const [[g], [c]] = await Promise.all([
+      this.db
+        .select({ n: count() })
+        .from(gestiones)
+        .where(and(eq(gestiones.atencionId, id), inArray(gestiones.estado, ["Pendiente", "Vencida"]))),
+      this.db
+        .select({ n: count() })
+        .from(comites)
+        .where(and(eq(comites.atencionId, id), inArray(comites.estado, ["Convocado", "EnSesion"]))),
+    ]);
+
+    const faltan = validarTransicion({ ...actual, causaTerminoId }, input.estado, {
+      gestionesPendientes: Number(g?.n ?? 0),
+      comitesAbiertos: Number(c?.n ?? 0),
+      bloqueoArancel,
+    });
+    if (faltan.length > 0) throw new BadRequestException(mensajeFaltantes(input.estado, faltan));
+
+    const ahora = new Date();
+    const cierra = ["Terminada", "Abandonada"].includes(input.estado);
+    const set: Partial<NuevaAtencion> = {
+      estado: input.estado,
+      causaTerminoId,
+      updatedAt: ahora,
+    };
+    if (cierra) set.fechaCierre = input.fechaTermino ? new Date(input.fechaTermino) : ahora;
+    if (actual.tipo === "Consulta" && ["Respondida", "Terminada"].includes(input.estado) && !actual.horaTermino) {
+      set.horaTermino = ahora;
+      if (input.estado === "Terminada") set.fechaCierre = ahora;
+    }
+    if (input.observacion) {
+      set.metadata = { ...(actual.metadata ?? {}), ultimaObservacionEstado: input.observacion };
+    }
+    const [row] = await this.db.update(atenciones).set(set).where(eq(atenciones.id, id)).returning();
+    await this.webhooks.emitir(row.codPlan, "atencion.estado", { atencionId: id, desde: actual.estado, hasta: row.estado });
+    return row;
+  }
+
+  // Anexo §VI 3.5.1: varias consultas en la misma llamada generan un correlativo cada una.
+  async nuevoCorrelativo(consultaId: string, input: NuevoCorrelativo, actor?: Actor): Promise<Atencion> {
+    const origen = await this.fila(consultaId);
+    if (origen.tipo !== "Consulta") throw new BadRequestException("Solo una consulta admite nuevo correlativo");
+    return this.crear(
+      {
+        codPlan: origen.codPlan,
+        afiliadoId: origen.afiliadoId,
+        competenciaId: input.competenciaId,
+        materiaId: input.materiaId,
+        asunto: input.asunto,
+        canalContacto: origen.canalContacto,
+        tipoConsultaId: input.tipoConsultaId ?? origen.tipoConsultaId,
+        codigoGrabacion: origen.codigoGrabacion,
+        respuesta: input.respuesta ?? null,
+        abogadoAsignadoId: origen.abogadoAsignadoId,
+        prioridad: origen.prioridad,
+        tipo: "Consulta",
+      } as CreateAtencionDto & { tipo: TipoAtencion },
+      actor,
+      { metadata: { correlativoOrigen: origen.correlativo } },
+    );
+  }
+
+  // --- Contrapartes ---
+
+  async listarContrapartes(atencionId: string): Promise<ContraparteRow[]> {
+    await this.fila(atencionId);
+    return this.db
+      .select()
+      .from(contrapartes)
+      .where(and(eq(contrapartes.atencionId, atencionId), eq(contrapartes.vigente, true)));
+  }
+
+  private normalizarRut(rut: string | null | undefined): string | null | undefined {
+    if (rut === undefined || rut === null || rut === "") return rut === "" ? null : rut;
+    if (!rutValido(rut)) throw new BadRequestException(`RUT de contraparte inválido: ${rut}`);
+    return formatearRut(rut);
+  }
+
+  async crearContraparte(atencionId: string, input: CreateContraparte): Promise<ContraparteRow> {
+    const a = await this.fila(atencionId);
+    if (a.tipo === "Consulta") throw new BadRequestException("Las consultas no registran contraparte");
+    const [row] = await this.db
+      .insert(contrapartes)
+      .values({ ...input, rut: this.normalizarRut(input.rut) ?? null, atencionId })
       .returning();
     return row;
   }
 
-  // Derivar: Consulta -> Asesoría -> Juicio. Crea nueva atención enlazada por metadata.
-  async derivar(payload: DerivarAtencionDto): Promise<Atencion> {
-    const origen = await this.obtener(payload.atencionId);
-    const codPlan = origen.codPlan;
-    if (origen.tipo === "Juicio") {
-      throw new BadRequestException("No se puede derivar un juicio");
-    }
-    if (origen.tipo === "Asesoria" && payload.nuevoTipo === "Asesoria") {
-      throw new BadRequestException("Asesoría ya está en ese estado; use Juicio");
-    }
-
-    const correlativo = await siguienteCorrelativo(this.db, payload.nuevoTipo);
-    const [nueva] = await this.db
-      .insert(atenciones)
-      .values({
-        codPlan,
-        correlativo,
-        afiliadoId: origen.afiliadoId,
-        tipo: payload.nuevoTipo,
-        estado: "Abierta",
-        competenciaId: origen.competenciaId,
-        materiaId: origen.materiaId,
-        asunto: origen.asunto,
-        descripcion: origen.descripcion,
-        abogadoAsignadoId: payload.abogadoDestinoId ?? origen.abogadoAsignadoId,
-        prioridad: origen.prioridad,
-        metadata: { derivadaDe: origen.id, motivoDerivacion: payload.motivo },
-      })
+  async actualizarContraparte(id: string, patch: UpdateContraparte): Promise<ContraparteRow> {
+    const rut = this.normalizarRut(patch.rut);
+    const [row] = await this.db
+      .update(contrapartes)
+      .set({ ...patch, ...(rut !== undefined ? { rut } : {}), updatedAt: new Date() })
+      .where(eq(contrapartes.id, id))
       .returning();
+    if (!row) throw new NotFoundException(`Contraparte ${id} no existe`);
+    return row;
+  }
 
-    await this.db
-      .update(atenciones)
-      .set({ estado: "Cerrada", fechaCierre: new Date(), updatedAt: new Date() })
-      .where(eq(atenciones.id, origen.id));
-
-    await this.webhooks.emitir(codPlan, "atencion.derivada", { origen, nueva });
-    if (nueva.abogadoAsignadoId) {
-      await this.notif.crear({
-        codPlan,
-        usuarioId: nueva.abogadoAsignadoId,
-        severidad: "warn",
-        titulo: `Derivada a ${nueva.tipo}: ${nueva.correlativo}`,
-        detalle: `Desde ${origen.correlativo} — ${payload.motivo}`,
-        accionUrl: `/atenciones/${nueva.id}`,
-        metadata: { atencionId: nueva.id, origenId: origen.id, tipo: nueva.tipo },
-      });
-    }
-    return nueva;
+  // Ley 19.628: la contraparte se desactiva, no se borra.
+  async eliminarContraparte(id: string): Promise<ContraparteRow> {
+    const [row] = await this.db
+      .update(contrapartes)
+      .set({ vigente: false, updatedAt: new Date() })
+      .where(eq(contrapartes.id, id))
+      .returning();
+    if (!row) throw new NotFoundException(`Contraparte ${id} no existe`);
+    return row;
   }
 }

@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { comites, participantesComite, NuevoComite } from "../../db/schema/comites";
 import { atenciones } from "../../db/schema/atenciones";
@@ -40,10 +40,11 @@ export class ComitesService {
         })),
       );
 
+      // Solo un caso en trabajo pasa a comité; las consultas y los casos en espera no cambian.
       await tx
         .update(atenciones)
         .set({ estado: "EnComite", updatedAt: new Date() })
-        .where(eq(atenciones.id, input.atencionId));
+        .where(and(eq(atenciones.id, input.atencionId), inArray(atenciones.estado, ["Pendiente", "EnGestion"])));
 
       return comite;
     }).then(async (comite) => {
@@ -112,7 +113,7 @@ export class ComitesService {
     await this.db
       .update(atenciones)
       .set({ estado: "EnGestion", updatedAt: new Date() })
-      .where(eq(atenciones.id, comite.atencionId));
+      .where(and(eq(atenciones.id, comite.atencionId), eq(atenciones.estado, "EnComite")));
     return updated;
   }
 

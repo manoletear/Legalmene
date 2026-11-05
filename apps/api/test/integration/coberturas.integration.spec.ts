@@ -55,7 +55,7 @@ const RUN = !!process.env.DATABASE_URL;
     afiliadoId = afi.id;
     const [at] = await db
       .insert(atenciones)
-      .values({ codPlan: PLAN, correlativo: `TEST-COB-${SUF}`, afiliadoId, tipo: "Juicio", ...cm, asunto: "Copago" })
+      .values({ codPlan: PLAN, correlativo: `TEST-COB-${SUF}`, afiliadoId, tipo: "Juicio", estado: "Asignada", ...cm, asunto: "Copago" })
       .returning();
     atencionId = at.id;
   });

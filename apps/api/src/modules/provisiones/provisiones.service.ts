@@ -29,7 +29,7 @@ export interface FiltroProvisiones {
   codPlan?: string;
 }
 
-const ESTADOS_ATENCION_CERRADA = ["Cerrada", "Archivada"];
+const ESTADOS_ATENCION_CERRADA: string[] = ["Terminada", "Abandonada", "Derivada"];
 const clp = (n: number) => "$" + n.toLocaleString("es-CL");
 
 // Neto utilizado de una provisión: gastos menos reintegros.

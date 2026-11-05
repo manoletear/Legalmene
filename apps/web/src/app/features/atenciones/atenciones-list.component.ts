@@ -13,6 +13,7 @@ import { authHeaders } from "../../core/interceptors/auth.interceptor";
 import { environment } from "../../../environments/environment";
 import type { AtencionConMaestros } from "@legalmene/shared";
 import type { TableLazyLoadEvent } from "primeng/table";
+import { ESTADO_OPCIONES, estadoLabel as etiquetaEstado, estadoSeverity as severidadEstado } from "../../shared/estado-atencion";
 
 @Component({
   selector: "lm-atenciones-list",
@@ -139,13 +140,8 @@ export class AtencionesListComponent implements OnInit {
     { label: "Asesoría", value: "Asesoria" },
     { label: "Juicio", value: "Juicio" },
   ];
-  protected estadoOpts = [
-    { label: "Abierta", value: "Abierta" },
-    { label: "En gestión", value: "EnGestion" },
-    { label: "En comité", value: "EnComite" },
-    { label: "Suspendida", value: "Suspendida" },
-    { label: "Cerrada", value: "Cerrada" },
-  ];
+  protected estadoOpts = ESTADO_OPCIONES;
+  protected estadoLabel = etiquetaEstado;
 
   ngOnInit() {
     const tipoFiltro = this.route.snapshot.data["tipoFiltro"];
@@ -198,11 +194,7 @@ export class AtencionesListComponent implements OnInit {
     return t === "Juicio" ? "danger" : t === "Asesoria" ? "warn" : "info";
   }
 
-  estadoSeverity(e: string): "success" | "info" | "warn" | "danger" | "secondary" | "contrast" {
-    if (e === "Cerrada" || e === "Archivada") return "secondary";
-    if (e === "EnComite" || e === "Suspendida") return "warn";
-    return "info";
-  }
+  estadoSeverity = severidadEstado;
 
   exportarCsv() {
     const url = `${environment.apiBaseUrl}/exports/atenciones.csv`;

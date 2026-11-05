@@ -9,6 +9,7 @@ import { DatabaseModule, PG_POOL } from "../../src/db/database.module";
 import { planes } from "../../src/db/schema/planes";
 import { AfiliadosService } from "../../src/modules/afiliados/afiliados.service";
 import { AtencionesService } from "../../src/modules/atenciones/atenciones.service";
+import { PlantillasService } from "../../src/modules/gestiones/plantillas.service";
 import { CargasMasivasService } from "../../src/modules/cargas-masivas/cargas-masivas.service";
 import { WebhooksService } from "../../src/modules/webhooks/webhooks.service";
 import { NotifInboxService } from "../../src/modules/notif-inbox/notif-inbox.service";
@@ -43,6 +44,7 @@ const RUN = !!process.env.DATABASE_URL;
       providers: [
         AfiliadosService,
         AtencionesService,
+        PlantillasService,
         CargasMasivasService,
         { provide: WebhooksService, useValue: { emitir: async () => undefined } },
         { provide: NotifInboxService, useValue: { crear: async () => null } },

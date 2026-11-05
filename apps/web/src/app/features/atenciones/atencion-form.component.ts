@@ -7,14 +7,13 @@ import { InputTextModule } from "primeng/inputtext";
 import { TextareaModule } from "primeng/textarea";
 import { SelectModule } from "primeng/select";
 import { ButtonModule } from "primeng/button";
-import { ToastModule } from "primeng/toast";
 import { MessageService } from "primeng/api";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { AfiliadosApiService } from "../../core/services/afiliados.service";
 import { MaestrosApiService } from "../../core/services/maestros.service";
 import { CoberturasApiService } from "../../core/services/coberturas.service";
 import { PLANES_SIN_COBERTURA } from "@legalmene/shared";
-import type { AfiliadoConPlanes, Competencia, CopagoResultado, Materia, TipoAtencion } from "@legalmene/shared";
+import type { AfiliadoConPlanes, CanalContacto, Competencia, CopagoResultado, MaestroSimple, Materia, TipoAtencion } from "@legalmene/shared";
 
 @Component({
   selector: "lm-atencion-form",
@@ -27,10 +26,8 @@ import type { AfiliadoConPlanes, Competencia, CopagoResultado, Materia, TipoAten
     TextareaModule,
     SelectModule,
     ButtonModule,
-    ToastModule,
   ],
   template: `
-    <p-toast></p-toast>
     <p-card header="Nueva atención">
       <form [formGroup]="form" (ngSubmit)="submit()" class="lm-col" style="gap:16px; max-width:680px;">
         <div class="lm-col" style="gap:4px;">
@@ -120,6 +117,23 @@ import type { AfiliadoConPlanes, Competencia, CopagoResultado, Materia, TipoAten
           <input pInputText type="text" formControlName="asunto" placeholder="Resumen del caso (ej. Despido de Juan Pérez)" />
         </div>
 
+        <ng-container *ngIf="form.value.tipo === 'Consulta'">
+          <div class="lm-row" style="gap:12px; flex-wrap:wrap;">
+            <div class="lm-col" style="gap:4px; flex:1; min-width:200px;">
+              <label>Canal</label>
+              <p-select formControlName="canalContacto" [options]="canalOpts" optionLabel="label" optionValue="value" appendTo="body" placeholder="Canal de contacto"></p-select>
+            </div>
+            <div class="lm-col" style="gap:4px; flex:1; min-width:200px;">
+              <label>Tipo de consulta</label>
+              <p-select formControlName="tipoConsultaId" [options]="tiposConsulta()" optionLabel="nombre" optionValue="id" appendTo="body" placeholder="Tipo" [showClear]="true"></p-select>
+            </div>
+          </div>
+          <div class="lm-col" style="gap:4px;">
+            <label>Código de grabación</label>
+            <input pInputText type="text" formControlName="codigoGrabacion" placeholder="Opcional (llamadas grabadas)" />
+          </div>
+        </ng-container>
+
         <div class="lm-col" style="gap:4px;">
           <label>Descripción</label>
           <textarea pTextarea rows="4" formControlName="descripcion"></textarea>
@@ -156,6 +170,14 @@ export class AtencionFormComponent {
   protected competencias = signal<Competencia[]>([]);
   protected materias = signal<Materia[]>([]);
   protected copago = signal<CopagoResultado | null>(null);
+  protected tiposConsulta = signal<MaestroSimple[]>([]);
+  protected canalOpts: { label: string; value: CanalContacto }[] = [
+    { label: "Telefónico", value: "Telefonico" },
+    { label: "Presencial", value: "Presencial" },
+    { label: "Correo electrónico", value: "Email" },
+    { label: "Chat", value: "Chat" },
+    { label: "Videoconferencia", value: "Videoconferencia" },
+  ];
 
   protected afiliados = signal<AfiliadoConPlanes[]>([]);
   protected planOpts = signal<{ label: string; value: string; disabled: boolean }[]>([]);
@@ -189,11 +211,15 @@ export class AtencionFormComponent {
     asunto: ["", [Validators.required, Validators.maxLength(250)]],
     descripcion: [""],
     prioridad: ["Media"],
+    canalContacto: ["Telefonico"],
+    tipoConsultaId: [null as string | null],
+    codigoGrabacion: [""],
   });
 
   constructor() {
     this.afiliadosApi.buscar({ pageSize: 200 }).subscribe((res) => this.afiliados.set(res.data));
     this.maestrosApi.listar("competencias", { vigente: true }).subscribe((c) => this.competencias.set(c));
+    this.maestrosApi.listar("tipos-consulta", { vigente: true }).subscribe((t) => this.tiposConsulta.set(t));
   }
 
   // Materias vigentes de la competencia que aplican al tipo de atención elegido.
@@ -261,6 +287,13 @@ export class AtencionFormComponent {
       asunto: v.asunto!,
       descripcion: v.descripcion || undefined,
       prioridad: v.prioridad as "Media",
+      ...(v.tipo === "Consulta"
+        ? {
+            canalContacto: (v.canalContacto as CanalContacto) || undefined,
+            tipoConsultaId: v.tipoConsultaId || undefined,
+            codigoGrabacion: v.codigoGrabacion || undefined,
+          }
+        : {}),
     };
     const obs =
       v.tipo === "Consulta"

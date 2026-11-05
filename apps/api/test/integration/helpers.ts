@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { calcularDv } from "../../src/common/utils/rut";
 import { competencias, materias } from "../../src/db/schema/maestros";
+import { usuarios } from "../../src/db/schema/usuarios";
 
 // RUT válido y distinto en cada llamada: el RUT es único global y los specs corren
 // en paralelo sobre la misma base. Rango 40–49 millones para no chocar con el seed.
@@ -37,7 +38,30 @@ export async function materiaDePrueba(db: NodePgDatabase<any>): Promise<MateriaP
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function borrarMateriaDePrueba(db: NodePgDatabase<any>, ids: MateriaPrueba): Promise<void> {
   await db.execute(sql`DELETE FROM aranceles WHERE materia_id IN (SELECT id FROM materias WHERE competencia_id = ${ids.competenciaId})`);
+  await db.execute(sql`DELETE FROM gestiones_plantilla WHERE materia_id IN (SELECT id FROM materias WHERE competencia_id = ${ids.competenciaId})`);
   await db.execute(sql`DELETE FROM coberturas WHERE materia_id IN (SELECT id FROM materias WHERE competencia_id = ${ids.competenciaId})`);
   await db.execute(sql`DELETE FROM materias WHERE competencia_id = ${ids.competenciaId}`);
   await db.execute(sql`DELETE FROM competencias WHERE id = ${ids.competenciaId}`);
+}
+
+// Usuario propio del spec (email/oid aleatorios). Borrar con DELETE FROM usuarios WHERE id = ...
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function usuarioDePrueba(db: NodePgDatabase<any>, rol: typeof usuarios.$inferInsert.rol = "Supervisor") {
+  const sufijo = Math.random().toString(36).slice(2, 8);
+  const [u] = await db
+    .insert(usuarios)
+    .values({ entraOid: `oid-${sufijo}`, email: `test-${sufijo}@test.cl`, nombre: `Test ${rol}`, rol, codPlanes: [] })
+    .returning();
+  return u;
+}
+
+// Borra las atenciones de un plan de prueba junto con sus registros dependientes.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function borrarAtencionesDePlan(db: NodePgDatabase<any>, codPlan: string): Promise<void> {
+  const ids = sql`(SELECT id FROM atenciones WHERE cod_plan = ${codPlan})`;
+  await db.execute(sql`DELETE FROM derivaciones WHERE consulta_id IN ${ids} OR atencion_derivada_id IN ${ids}`);
+  await db.execute(sql`DELETE FROM contrapartes WHERE atencion_id IN ${ids}`);
+  await db.execute(sql`DELETE FROM provision_movimientos WHERE provision_id IN (SELECT id FROM provisiones WHERE atencion_id IN ${ids})`);
+  await db.execute(sql`DELETE FROM provisiones WHERE atencion_id IN ${ids}`);
+  await db.execute(sql`DELETE FROM atenciones WHERE cod_plan = ${codPlan}`);
 }

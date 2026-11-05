@@ -12,7 +12,6 @@ import { TextareaModule } from "primeng/textarea";
 import { SelectModule } from "primeng/select";
 import { DividerModule } from "primeng/divider";
 import { TabsModule } from "primeng/tabs";
-import { ToastModule } from "primeng/toast";
 import { MessageService } from "primeng/api";
 import { PromptService } from "../../shared/prompt.service";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
@@ -20,13 +19,24 @@ import { GestionesApiService } from "../../core/services/gestiones.service";
 import { ComitesApiService } from "../../core/services/comites.service";
 import { DocumentosApiService, DocumentoMeta } from "../../core/services/documentos.service";
 import { ProvisionesApiService } from "../../core/services/provisiones.service";
-import type { AtencionConMaestros, Comite, CopagoResultado, Gestion, ResumenProvisionAtencion } from "@legalmene/shared";
+import { MeService } from "../../core/services/me.service";
+import { AtencionFlujoComponent } from "./atencion-flujo.component";
+import {
+  ESTADO_LABEL,
+  ETAPAS_PIPELINE,
+  ESTADOS_TERMINALES,
+  type AtencionConMaestros,
+  type Comite,
+  type CopagoResultado,
+  type EstadoAtencion,
+  type Gestion,
+  type ResumenProvisionAtencion,
+} from "@legalmene/shared";
 
 type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast";
 
 interface PipelineStep {
   label: string;
-  date?: string;
   done: boolean;
   current: boolean;
   pending: boolean;
@@ -47,10 +57,9 @@ interface PipelineStep {
     SelectModule,
     DividerModule,
     TabsModule,
-    ToastModule,
+    AtencionFlujoComponent,
   ],
   template: `
-    <p-toast></p-toast>
     <ng-container *ngIf="atencion() as a">
       <!-- Breadcrumb -->
       <div class="lm-row" style="font-size:13px; margin-bottom:12px;">
@@ -112,9 +121,8 @@ interface PipelineStep {
                 <span style="width:10px; height:10px; border-radius:50%; background:#22c55e;"></span>
                 <strong style="color:#0f172a;">{{ estadoLabel(a.estado) }}</strong>
               </div>
-              <div class="lm-info-row"><span>Etapa actual</span></div>
-              <strong style="color:#0f172a;">{{ etapaActual() }}</strong>
-              <div class="lm-info-card-footer">Ver timeline completo →</div>
+              <div class="lm-info-row"><span>Tipo</span><strong>{{ a.tipo === 'Asesoria' ? 'Asesoría' : a.tipo }}</strong></div>
+              <div class="lm-info-row" *ngIf="a.tipo === 'Juicio'"><span>Riesgo</span><strong>{{ a.riesgoTotal }}</strong></div>
             </div>
 
             <div class="lm-info-card">
@@ -160,6 +168,8 @@ interface PipelineStep {
             </div>
           </div>
 
+          <lm-atencion-flujo [atencion]="a" (cambio)="cargar(a.id)"></lm-atencion-flujo>
+
           <!-- Pipeline horizontal -->
           <p-card>
             <div class="lm-pipeline">
@@ -169,7 +179,6 @@ interface PipelineStep {
                   <i *ngIf="step.current" class="pi pi-circle-fill" style="font-size:10px;"></i>
                 </div>
                 <strong style="font-size:12px;">{{ step.label }}</strong>
-                <small *ngIf="step.date">{{ step.date }}</small>
                 <small *ngIf="step.current" style="color:#2563eb; font-weight:600;">Actual</small>
                 <small *ngIf="step.pending" class="lm-muted">Pendiente</small>
               </div>
@@ -367,6 +376,7 @@ export class AtencionDetailComponent implements OnInit {
   private msg = inject(MessageService);
   private prompt = inject(PromptService);
   private provisionesApi = inject(ProvisionesApiService);
+  private me = inject(MeService);
 
   protected atencion = signal<AtencionConMaestros | null>(null);
   protected resumenProvision = signal<ResumenProvisionAtencion | null>(null);
@@ -387,14 +397,16 @@ export class AtencionDetailComponent implements OnInit {
     "Notificacion", "AnalisisDocumental", "Resolucion", "Otra",
   ];
 
-  private static readonly DEV_ADMIN_ID = "5dea0886-7856-452c-85af-eb2f2e65e726";
-
   protected formGestion = this.fb.group({
     tipo: ["LlamadaTelefonica", Validators.required],
     titulo: ["", [Validators.required, Validators.maxLength(200)]],
     detalle: [""],
-    responsableId: [AtencionDetailComponent.DEV_ADMIN_ID, Validators.required],
   });
+
+  // Responsable por defecto: el abogado del caso o, si no tiene, el usuario actual.
+  private responsableId(): string | undefined {
+    return this.atencion()?.abogadoAsignadoId ?? this.me.user()?.id;
+  }
 
   protected vencimientos = [
     { fecha: "25/06/2024 09:00", descripcion: "Audiencia de juicio", distancia: "En 7 días" },
@@ -402,20 +414,20 @@ export class AtencionDetailComponent implements OnInit {
     { fecha: "05/06/2024", descripcion: "Informe pericial", distancia: "En 16 días" },
   ];
 
+  // Pipeline de etapas definido junto al mapa de transiciones (shared/estados-atencion).
   protected pipeline = computed<PipelineStep[]>(() => {
     const a = this.atencion();
     if (!a) return [];
-    const base = [
-      { label: "Ingreso de consulta", date: undefined, done: true, current: false, pending: false },
-      { label: "Evaluación", date: undefined, done: a.tipo !== "Consulta" || a.estado !== "Abierta", current: a.tipo === "Consulta" && a.estado === "Abierta", pending: false },
-      { label: "Demanda presentada", date: undefined, done: a.tipo === "Juicio", current: false, pending: false },
-      { label: "En tramitación", date: undefined, done: false, current: a.estado === "EnGestion", pending: a.estado === "Abierta" },
-      { label: "Sentencia", date: undefined, done: a.estado === "Cerrada", current: false, pending: a.estado !== "Cerrada" },
-      { label: "Cierre", date: undefined, done: a.estado === "Cerrada", current: false, pending: a.estado !== "Cerrada" },
-    ];
-    return base.map((s) => ({
-      ...s,
-      date: a.fechaApertura ? new Date(a.fechaApertura).toLocaleDateString("es-CL") : undefined,
+    const etapas = ETAPAS_PIPELINE[a.tipo];
+    const terminal = ESTADOS_TERMINALES.includes(a.estado);
+    // Los estados de espera se muestran sobre la etapa "Pendiente".
+    const actual = etapas.includes(a.estado) ? a.estado : a.estado.startsWith("EnEspera") ? "Pendiente" : null;
+    const idx = actual ? etapas.indexOf(actual) : terminal ? etapas.length : 0;
+    return etapas.map((e, i) => ({
+      label: i === idx && actual !== a.estado ? `${ESTADO_LABEL[e]} · ${ESTADO_LABEL[a.estado]}` : ESTADO_LABEL[e],
+      done: i < idx || (a.estado === "Terminada" && i === idx),
+      current: i === idx && a.estado !== "Terminada",
+      pending: i > idx,
     }));
   });
 
@@ -478,29 +490,15 @@ export class AtencionDetailComponent implements OnInit {
     return "mfernandez@legalchile.cl";
   }
 
-  etapaActual(): string {
-    const a = this.atencion();
-    if (!a) return "";
-    if (a.estado === "Cerrada") return "Cerrado";
-    if (a.estado === "EnGestion") return "En tramitación";
-    if (a.estado === "EnComite") return "En comité";
-    return "Demanda presentada";
+  estadoLabel(e: EstadoAtencion): string {
+    return ESTADO_LABEL[e] ?? e;
   }
 
-  estadoLabel(e: string): string {
-    const map: Record<string, string> = {
-      Abierta: "En curso", EnGestion: "En curso", EnComite: "Pendiente cliente",
-      Cerrada: "Finalizado", Archivada: "Cerrado", Suspendida: "Suspendida",
-    };
-    return map[e] || e;
-  }
-
-  estadoSeverity(e: string): Severity {
-    if (e === "Cerrada") return "success";
-    if (e === "EnGestion") return "success";
-    if (e === "EnComite") return "warn";
-    if (e === "Archivada" || e === "Suspendida") return "secondary";
-    return "success";
+  estadoSeverity(e: EstadoAtencion): Severity {
+    if (e === "Terminada") return "success";
+    if (e === "Abandonada" || e === "Derivada") return "secondary";
+    if (e.startsWith("EnEspera") || e === "EnComite") return "warn";
+    return "info";
   }
 
   decisionSeverity(d: string): Severity {
@@ -536,7 +534,7 @@ export class AtencionDetailComponent implements OnInit {
       .crear(atencionId, {
         tipo: "LlamadaTelefonica",
         titulo,
-        responsableId: AtencionDetailComponent.DEV_ADMIN_ID,
+        responsableId: this.responsableId()!,
         documentosIds: [],
       })
       .subscribe(() => {
@@ -554,7 +552,7 @@ export class AtencionDetailComponent implements OnInit {
     });
     if (!motivo) return;
     this.comitesApi
-      .convocar(atencionId, { motivo, participantesIds: [AtencionDetailComponent.DEV_ADMIN_ID] })
+      .convocar(atencionId, { motivo, participantesIds: [this.me.user()?.id ?? ""].filter(Boolean) })
       .subscribe(() => {
         this.msg.add({ severity: "success", summary: "Comité convocado", life: 2000 });
         this.cargar(atencionId);

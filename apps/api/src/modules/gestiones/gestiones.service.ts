@@ -106,8 +106,14 @@ export class GestionesService {
     const [row] = await this.db.insert(gestiones).values(payload).returning();
     await this.db
       .update(atenciones)
-      .set({ fechaUltimaGestion: new Date(), estado: "EnGestion", updatedAt: new Date() })
+      .set({ fechaUltimaGestion: new Date(), updatedAt: new Date() })
       .where(eq(atenciones.id, input.atencionId));
+    // Registrar una gestión inicia el trabajo de un caso Pendiente; en otros estados
+    // (espera de arancel, comité, etc.) el estado no cambia.
+    await this.db
+      .update(atenciones)
+      .set({ estado: "EnGestion" })
+      .where(and(eq(atenciones.id, input.atencionId), eq(atenciones.estado, "Pendiente")));
     await this.notif.crear({
       codPlan,
       usuarioId: row.responsableId,

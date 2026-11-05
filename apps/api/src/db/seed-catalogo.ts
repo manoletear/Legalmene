@@ -11,6 +11,8 @@ import {
   tribunales,
 } from "./schema/maestros";
 import { aranceles, coberturas } from "./schema/aranceles";
+import { gestionesPlantilla } from "./schema/gestiones";
+import type { TipoGestion } from "@legalmene/shared";
 
 // Catálogo de ejemplo para el ambiente demo. Idempotente: claves naturales + ON CONFLICT.
 // Los valores en UF son referenciales para la demo, no la matriz real de LegalChile.
@@ -114,6 +116,28 @@ const COBERTURAS: CoberturaSeed[] = [
   { codPlan: "METLIFE", modalidad: "SinCobertura" },
 ];
 
+interface PlantillaSeed {
+  materia?: [string, string];
+  procedimiento?: [string, string];
+  orden: number;
+  titulo: string;
+  tipo: TipoGestion;
+  plazo: number;
+}
+
+// Gestiones estándar por materia/procedimiento (Anexo §XIV: orden y plazo de cumplimiento).
+const PLANTILLAS: PlantillaSeed[] = [
+  { materia: ["Laboral", "Despido injustificado"], orden: 1, titulo: "Contactar al cliente y solicitar antecedentes", tipo: "LlamadaTelefonica", plazo: 1 },
+  { materia: ["Laboral", "Despido injustificado"], orden: 2, titulo: "Revisar carta de despido y finiquito", tipo: "AnalisisDocumental", plazo: 3 },
+  { materia: ["Laboral", "Despido injustificado"], orden: 3, titulo: "Redactar y presentar demanda", tipo: "EscritoJudicial", plazo: 5 },
+  { materia: ["Familia", "Pensión de alimentos"], orden: 1, titulo: "Entrevista con el cliente", tipo: "Reunion", plazo: 2 },
+  { materia: ["Familia", "Pensión de alimentos"], orden: 2, titulo: "Solicitar mediación obligatoria", tipo: "Otra", plazo: 5 },
+  { materia: ["Civil", "Arrendamiento"], orden: 1, titulo: "Revisar contrato de arriendo", tipo: "AnalisisDocumental", plazo: 2 },
+  { procedimiento: ["Laboral", "Procedimiento de aplicación general"], orden: 10, titulo: "Preparar audiencia preparatoria", tipo: "Audiencia", plazo: 15 },
+  { procedimiento: ["Laboral", "Procedimiento de aplicación general"], orden: 11, titulo: "Preparar audiencia de juicio", tipo: "Audiencia", plazo: 30 },
+  { procedimiento: ["Civil", "Juicio ejecutivo"], orden: 10, titulo: "Requerimiento de pago y embargo", tipo: "Notificacion", plazo: 10 },
+];
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function sembrarCatalogo(db: NodePgDatabase<any>): Promise<void> {
   await db
@@ -185,4 +209,22 @@ export async function sembrarCatalogo(db: NodePgDatabase<any>): Promise<void> {
       })),
     )
     .onConflictDoNothing();
+
+  // Sin clave natural: se siembran solo si la tabla está vacía.
+  const [hayPlantillas] = await db.select({ id: gestionesPlantilla.id }).from(gestionesPlantilla).limit(1);
+  if (!hayPlantillas) {
+    const proc = new Map(
+      (await db.select().from(procedimientos)).map((p) => [`${p.competenciaId}|${p.nombre}`, p.id] as const),
+    );
+    await db.insert(gestionesPlantilla).values(
+      PLANTILLAS.map((p) => ({
+        materiaId: p.materia ? materiaId(p.materia[0], p.materia[1]) : null,
+        procedimientoId: p.procedimiento ? proc.get(`${comp.get(p.procedimiento[0])}|${p.procedimiento[1]}`)! : null,
+        orden: p.orden,
+        titulo: p.titulo,
+        tipo: p.tipo,
+        plazoDiasHabiles: p.plazo,
+      })),
+    );
+  }
 }

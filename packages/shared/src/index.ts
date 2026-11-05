@@ -10,3 +10,5 @@ export * from "./types/arancel";
 export * from "./types/provision";
 export * from "./types/maestros";
 export * from "./types/cobertura";
+export * from "./types/estados-atencion";
+export * from "./types/flujos";
