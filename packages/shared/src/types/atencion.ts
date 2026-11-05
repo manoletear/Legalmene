@@ -65,6 +65,15 @@ export type AtencionConMaestros = Atencion & {
   riesgoTotal: number;
 };
 
+// Ficha de la atención: además trae afiliado, plan y responsable para mostrarlos.
+export type FichaAtencion = AtencionConMaestros & {
+  afiliado: { rut: string; nombre: string; email: string | null; telefono: string | null };
+  // fecha_inicio de la relación RUT–Plan bajo la que se atendió (null si es REZAGADO/METLIFE).
+  afiliadoDesde: string | null;
+  planNombre: string | null;
+  responsable: { id: string; nombre: string; email: string; perfil: string } | null;
+};
+
 // Riesgo del juicio = materia + cuantía + cliente (Anexo §VIII); ≥ 20 exige revisión de comité.
 export const UMBRAL_RIESGO_COMITE = 20;
 export function riesgoTotal(a: { riesgoMateria?: number | null; riesgoCuantia?: number | null; riesgoCliente?: number | null }): number {

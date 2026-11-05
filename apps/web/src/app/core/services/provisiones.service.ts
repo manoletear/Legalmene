@@ -48,7 +48,7 @@ export class ProvisionesApiService {
   private http = inject(HttpClient);
   private base = environment.apiBaseUrl;
 
-  listar(opts: { page?: number; pageSize?: number; estado?: string }): Observable<ProvisionesPage> {
+  listar(opts: Record<string, string | number | undefined>): Observable<ProvisionesPage> {
     let params = new HttpParams();
     Object.entries(opts).forEach(([k, v]) => {
       if (v !== undefined && v !== null && v !== "") params = params.set(k, String(v));

@@ -1,9 +1,30 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
 import { ulid } from "ulid";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { pagos, NuevoPago, Pago } from "../../db/schema/pagos";
-import type { IniciarPago } from "@legalmene/shared";
+import type { CriteriosBusqueda, IniciarPago } from "@legalmene/shared";
+import { rangoFechas, rutComparable } from "../../common/busqueda/criterios";
+
+export interface FiltroPagos extends Pick<CriteriosBusqueda, "rut" | "codPlan" | "fechaDesde" | "fechaHasta"> {
+  page?: number;
+  pageSize?: number;
+  estado?: string;
+  ordenCompra?: string;
+}
+
+export function condicionPagos(f: FiltroPagos): SQL | undefined {
+  const rut = f.rut ? rutComparable(f.rut) : "";
+  return and(
+    f.codPlan ? eq(pagos.codPlan, f.codPlan) : undefined,
+    f.estado ? eq(pagos.estado, f.estado as "Iniciado") : undefined,
+    f.ordenCompra ? ilike(pagos.ordenCompra, `%${f.ordenCompra}%`) : undefined,
+    rut
+      ? sql`${pagos.afiliadoId} in (select a.id from afiliados a where upper(regexp_replace(a.rut, '[^0-9kK]', '', 'g')) like ${`%${rut}%`})`
+      : undefined,
+    rangoFechas(pagos.fechaIniciado, f.fechaDesde, f.fechaHasta),
+  );
+}
 
 /**
  * MVP de pagos. Integración real con Transbank WebPay queda pendiente:
@@ -16,15 +37,10 @@ import type { IniciarPago } from "@legalmene/shared";
 export class PagosService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  async listar(
-    opts: { page?: number; pageSize?: number; estado?: string; codPlan?: string } = {},
-  ) {
+  async listar(opts: FiltroPagos = {}) {
     const page = opts.page ?? 1;
     const pageSize = Math.min(opts.pageSize ?? 50, 200);
-    const where = and(
-      opts.codPlan ? eq(pagos.codPlan, opts.codPlan) : undefined,
-      opts.estado ? eq(pagos.estado, opts.estado as "Iniciado") : undefined,
-    );
+    const where = condicionPagos(opts);
     const [rows, [{ value: total }]] = await Promise.all([
       this.db
         .select()

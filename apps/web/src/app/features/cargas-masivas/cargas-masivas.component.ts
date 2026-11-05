@@ -6,7 +6,6 @@ import { ButtonModule } from "primeng/button";
 import { SelectModule } from "primeng/select";
 import { TableModule } from "primeng/table";
 import { ProgressBarModule } from "primeng/progressbar";
-import { ToastModule } from "primeng/toast";
 import { MessageService } from "primeng/api";
 import { CargasMasivasApiService } from "../../core/services/cargas-masivas.service";
 import { PlanesApiService } from "../../core/services/planes.service";
@@ -24,10 +23,8 @@ import type { CargaMasivaResultado, TipoCargaMasiva } from "@legalmene/shared";
     SelectModule,
     TableModule,
     ProgressBarModule,
-    ToastModule,
   ],
   template: `
-    <p-toast></p-toast>
     <p-card>
       <ng-template pTemplate="header">
         <div style="padding:16px 16px 0;">

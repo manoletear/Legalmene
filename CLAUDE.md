@@ -54,7 +54,7 @@ apps/
       common/         # acceso/ (contexto y alcance), decorators (CurrentUser, Permiso), guards, utils
       modules/        # auth, planes, afiliados, atenciones, gestiones,
                       # comites, pagos, cargas-masivas, maestros, aranceles,
-                      # coberturas, provisiones, health
+                      # coberturas, provisiones, exports, reportes, health
   web/                # Frontend Angular 19
     src/app/
       core/           # Interceptors, services compartidos
@@ -152,6 +152,13 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   arancel impago queda detenida; no se cierra una asesoría/juicio con gestiones o comité
   pendientes; no se pide nueva entrega de provisión con rendiciones pendientes; las
   búsquedas no precargan datos.
+- **Búsquedas (Anexo §XI)**: usar `lm-criterios-busqueda` (`apps/web/src/app/shared`) y no pedir datos
+  hasta "Buscar"; en la API, los criterios comunes son `CriteriosBusquedaSchema` (shared) y se aplican
+  con `condicionAtencion()` (`common/busqueda/criterios.ts`) junto con `filtroAtenciones()`.
+- **Exportaciones y reportes**: XLSX con `libroXlsx()` (`modules/exports/xlsx.ts`, exceljs), nunca CSV;
+  tope `MAX_FILAS_EXPORTACION`; las descargas del frontend pasan por `descargarArchivo()`. Las
+  fórmulas de reportes viven en `modules/reportes` (`calculo.ts` + `reportes.service.ts`); la tasa de
+  uso está pendiente de validar con LegalChile.
 - **Sin datos de mockup en el código**: si un valor no existe en la API, mostrar vacío o
   "sin datos", nunca una cifra inventada.
 - **RUTs**: siempre normalizar con `formatearRut()` antes de comparar/insertar.

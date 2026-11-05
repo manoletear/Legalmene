@@ -4,10 +4,19 @@ import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { PagosService } from "./pagos.service";
 import { Permiso } from "../../common/decorators/permiso.decorator";
 import { PermisosGuard } from "../../common/guards/permisos.guard";
-import { IniciarPagoSchema } from "@legalmene/shared";
+import { CriteriosBusquedaSchema, IniciarPagoSchema } from "@legalmene/shared";
+import { z } from "zod";
 import { createZodDto } from "nestjs-zod";
 
 class IniciarPagoDto extends createZodDto(IniciarPagoSchema) {}
+class FiltroPagosDto extends createZodDto(
+  CriteriosBusquedaSchema.pick({ rut: true, codPlan: true, fechaDesde: true, fechaHasta: true }).extend({
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(200).default(50),
+    estado: z.string().optional(),
+    ordenCompra: z.string().trim().min(1).optional(),
+  }),
+) {}
 
 @ApiTags("pagos")
 @ApiBearerAuth("EntraID")
@@ -18,18 +27,8 @@ export class PagosController {
 
   @Get()
   @Permiso("pagos.ver")
-  listar(
-    @Query("page") page?: string,
-    @Query("pageSize") pageSize?: string,
-    @Query("estado") estado?: string,
-    @Query("codPlan") codPlan?: string,
-  ) {
-    return this.service.listar({
-      codPlan,
-      page: page ? parseInt(page, 10) : undefined,
-      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
-      estado,
-    });
+  listar(@Query() filtro: FiltroPagosDto) {
+    return this.service.listar(filtro);
   }
 
   @Post("iniciar")

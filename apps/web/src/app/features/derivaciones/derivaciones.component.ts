@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from "@angular/core";
+import { Component, computed, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { RouterLink } from "@angular/router";
@@ -12,6 +12,8 @@ import type { DerivacionRow } from "@legalmene/shared";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { MeService } from "../../core/services/me.service";
 import { PromptService } from "../../shared/prompt.service";
+import { CriteriosBusquedaComponent, type Criterios } from "../../shared/criterios-busqueda.component";
+import { descargarArchivo } from "../../shared/descarga";
 
 type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast";
 
@@ -19,25 +21,33 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
 @Component({
   selector: "lm-derivaciones",
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, CardModule, SelectModule, ButtonModule, TableModule, TagModule],
+  imports: [CommonModule, FormsModule, RouterLink, CardModule, SelectModule, ButtonModule, TableModule, TagModule, CriteriosBusquedaComponent],
   template: `
     <div class="lm-row" style="margin-bottom:16px; align-items:flex-end;">
       <div style="flex:1;">
         <h1 style="margin:0 0 4px 0;">Derivaciones</h1>
         <small class="lm-muted">Consultas que el abogado propone derivar a asesoría o juicio. Aprueba la jefatura del abogado.</small>
       </div>
-      <p-select
-        [(ngModel)]="filtroEstado"
-        (onChange)="recargar()"
-        [options]="estadoOpts"
-        placeholder="Todos los estados"
-        [showClear]="true"
-        [style]="{ width: '200px' }"
-      ></p-select>
     </div>
 
     <p-card>
-      <p-table [value]="data()" [loading]="loading()" styleClass="p-datatable-sm">
+      <lm-criterios-busqueda
+        [campos]="['correlativo', 'rut', 'abogado', 'plan', 'fechas']"
+        [estados]="estadoOpts"
+        [iniciales]="{ estado: 'Solicitada' }"
+        etiquetaCorrelativo="Consulta"
+        etiquetaFecha="Solicitud"
+        [exportable]="true"
+        [puedeExportar]="!!criterios()"
+        (buscar)="buscar($event)"
+        (exportar)="exportar($event)"
+        (limpiado)="criterios.set(null)"
+      ></lm-criterios-busqueda>
+      <div *ngIf="!criterios()" class="lm-vacio-busqueda">
+        <i class="pi pi-search"></i>
+        <p>Ingrese criterios y presione Buscar (por defecto, las solicitudes pendientes)</p>
+      </div>
+      <p-table *ngIf="criterios()" [value]="data()" [loading]="loading()" styleClass="p-datatable-sm" [style]="{ 'margin-top': '16px' }">
         <ng-template pTemplate="header">
           <tr>
             <th>Consulta</th><th>Derivar a</th><th>Motivo</th><th>Estado</th><th>Solicitada por</th><th>Fecha</th><th></th>
@@ -67,7 +77,7 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
     </p-card>
   `,
 })
-export class DerivacionesComponent implements OnInit {
+export class DerivacionesComponent {
   private api = inject(AtencionesApiService);
   private me = inject(MeService);
   private msg = inject(MessageService);
@@ -75,17 +85,28 @@ export class DerivacionesComponent implements OnInit {
 
   protected data = signal<DerivacionRow[]>([]);
   protected loading = signal(false);
-  protected filtroEstado: string | undefined = "Solicitada";
-  protected estadoOpts = ["Solicitada", "Aprobada", "Rechazada"];
+  protected criterios = signal<Criterios | null>(null);
+  protected estadoOpts = ["Solicitada", "Aprobada", "Rechazada"].map((e) => ({ label: e, value: e }));
   protected esJefatura = computed(() => this.me.tiene("derivaciones.aprobar"));
 
-  ngOnInit() {
+  buscar(c: Criterios) {
+    this.criterios.set(c);
     this.recargar();
   }
 
+  async exportar(c: Criterios) {
+    try {
+      await descargarArchivo("/exports/busquedas/derivaciones.xlsx", `derivaciones-${new Date().toISOString().slice(0, 10)}.xlsx`, { params: c });
+    } catch (e) {
+      this.msg.add({ severity: "error", summary: "No se pudo exportar", detail: (e as Error).message, life: 6000 });
+    }
+  }
+
   recargar() {
+    const c = this.criterios();
+    if (!c) return;
     this.loading.set(true);
-    this.api.listarDerivaciones({ estado: this.filtroEstado, pageSize: 100 }).subscribe({
+    this.api.listarDerivaciones({ ...c, pageSize: 200 }).subscribe({
       next: (r) => {
         this.data.set(r.data);
         this.loading.set(false);

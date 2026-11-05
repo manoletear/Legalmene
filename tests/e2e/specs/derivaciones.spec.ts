@@ -41,7 +41,10 @@ test.describe("Derivación consulta → juicio", () => {
     expect(aprobarAbogado.status()).toBe(403);
 
     // La jefatura (admin por defecto en modo demo) aprueba desde la bandeja.
+    // La bandeja no precarga: viene con estado "Solicitada" y espera a "Buscar".
     await page.goto("/derivaciones");
+    await expect(page.getByText("Ingrese criterios y presione Buscar")).toBeVisible();
+    await page.getByRole("button", { name: "Buscar" }).click();
     const fila = page.locator("tr", { hasText: consulta.correlativo });
     await expect(fila).toBeVisible();
     await fila.getByRole("button", { name: "Aprobar" }).click();

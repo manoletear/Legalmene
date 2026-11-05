@@ -9,7 +9,7 @@ export class PagosApiService {
   private http = inject(HttpClient);
   private base = `${environment.apiBaseUrl}/pagos`;
 
-  listar(opts: { page?: number; pageSize?: number; estado?: string }): Observable<PaginatedResult<Pago>> {
+  listar(opts: Record<string, string | number | undefined>): Observable<PaginatedResult<Pago>> {
     let params = new HttpParams();
     Object.entries(opts).forEach(([k, v]) => {
       if (v !== undefined && v !== null && v !== "") params = params.set(k, String(v));

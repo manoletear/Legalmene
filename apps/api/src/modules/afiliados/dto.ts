@@ -18,5 +18,7 @@ export const FiltroAfiliadosSchema = z.object({
   q: z.string().optional(), // texto libre (rut, nombre, email)
   vigencia: z.enum(["Activo", "Inactivo", "Eliminado"]).optional(),
   codPlan: z.string().optional(),
+  canalId: z.string().uuid().optional(),
+  rut: z.string().trim().min(1).optional(),
 });
 export class FiltroAfiliadosDto extends createZodDto(FiltroAfiliadosSchema) {}

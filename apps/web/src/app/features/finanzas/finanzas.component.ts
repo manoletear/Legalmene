@@ -17,6 +17,8 @@ import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { ProvisionesApiService } from "../../core/services/provisiones.service";
 import { MeService } from "../../core/services/me.service";
 import { PromptService } from "../../shared/prompt.service";
+import { CriteriosBusquedaComponent, type Criterios } from "../../shared/criterios-busqueda.component";
+import { descargarArchivo } from "../../shared/descarga";
 
 // Estados de provisión que requieren acción de Contador o Finanzas.
 const ESTADOS_FINANZAS: EstadoProvision[] = ["Solicitada", "Autorizada", "Disponible", "Rendida"];
@@ -25,7 +27,7 @@ const ESTADOS_FINANZAS: EstadoProvision[] = ["Solicitada", "Autorizada", "Dispon
 @Component({
   selector: "lm-finanzas",
   standalone: true,
-  imports: [CommonModule, RouterLink, CardModule, ButtonModule, TableModule],
+  imports: [CommonModule, RouterLink, CardModule, ButtonModule, TableModule, CriteriosBusquedaComponent],
   template: `
     <div style="margin-bottom:16px;">
       <h1 style="margin:0 0 4px 0;">Finanzas</h1>
@@ -63,6 +65,38 @@ const ESTADOS_FINANZAS: EstadoProvision[] = ["Solicitada", "Autorizada", "Dispon
           <tr><td colspan="5" style="text-align:center; padding:24px;" class="lm-muted">Sin aranceles pendientes de pago.</td></tr>
         </ng-template>
       </p-table>
+
+    <p-card header="Búsqueda de aranceles por atención" [style]="{ 'margin-top': '16px', display: 'block' }">
+      <lm-criterios-busqueda
+        [campos]="['correlativo', 'rut', 'plan', 'canal', 'materia', 'fechas']"
+        [estados]="estadoArancelOpts"
+        etiquetaFecha="Apertura"
+        [exportable]="true"
+        [puedeExportar]="!!criterios()"
+        (buscar)="buscar($event)"
+        (exportar)="exportar($event)"
+        (limpiado)="criterios.set(null); resultados.set([])"
+      ></lm-criterios-busqueda>
+      <div *ngIf="!criterios()" class="lm-vacio-busqueda">
+        <i class="pi pi-search"></i>
+        <p>Ingrese criterios y presione Buscar</p>
+      </div>
+      <p-table *ngIf="criterios()" [value]="resultados()" [loading]="buscando()" styleClass="p-datatable-sm" [style]="{ 'margin-top': '16px' }">
+        <ng-template pTemplate="header">
+          <tr><th>Caso</th><th>Plan</th><th>Estado</th><th style="text-align:right;">Copago</th></tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-a>
+          <tr>
+            <td><a [routerLink]="['/atenciones', a.atencionId]" class="lm-mono">{{ a.correlativo }}</a><div class="lm-small lm-muted">{{ a.asunto }}</div></td>
+            <td>{{ a.codPlan }}</td>
+            <td>{{ etiqueta(a.estado) }}</td>
+            <td style="text-align:right;">{{ (a.copagoUfCentesimas ?? 0) / 100 | number: '1.0-2' }} UF</td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr><td colspan="4" style="text-align:center; padding:24px;" class="lm-muted">Sin resultados para estos criterios.</td></tr>
+        </ng-template>
+      </p-table>
     </p-card>
   `,
 })
@@ -78,6 +112,10 @@ export class FinanzasComponent implements OnInit {
   protected conteos = signal<Partial<Record<EstadoProvision, number>>>({});
   protected montos = signal<Partial<Record<EstadoProvision, number>>>({});
   protected loading = signal(false);
+  protected criterios = signal<Criterios | null>(null);
+  protected resultados = signal<ArancelAtencionRow[]>([]);
+  protected buscando = signal(false);
+  protected estadoArancelOpts = (Object.keys(ESTADO_ARANCEL_LABEL) as ArancelAtencionRow["estado"][]).map((e) => ({ label: ESTADO_ARANCEL_LABEL[e], value: e }));
   protected puedeCobrar = computed(() => this.me.tiene("aranceles_atencion.registrar_pago"));
 
   ngOnInit() {
@@ -103,6 +141,30 @@ export class FinanzasComponent implements OnInit {
       this.conteos.set(c);
       this.montos.set(m);
     });
+  }
+
+  buscar(c: Criterios) {
+    this.criterios.set(c);
+    this.buscando.set(true);
+    const { estado, ...resto } = c;
+    this.atencionesApi.arancelesPorEstado(estado, resto).subscribe({
+      next: (r) => {
+        this.resultados.set(r);
+        this.buscando.set(false);
+      },
+      error: (err) => {
+        this.buscando.set(false);
+        this.msg.add({ severity: "error", summary: "No se pudo buscar", detail: err.error?.message ?? err.message, life: 5000 });
+      },
+    });
+  }
+
+  async exportar(c: Criterios) {
+    try {
+      await descargarArchivo("/exports/busquedas/aranceles.xlsx", `aranceles-${new Date().toISOString().slice(0, 10)}.xlsx`, { params: { ...c } });
+    } catch (e) {
+      this.msg.add({ severity: "error", summary: "No se pudo exportar", detail: (e as Error).message, life: 6000 });
+    }
   }
 
   protected etiqueta(e: ArancelAtencionRow["estado"]): string {

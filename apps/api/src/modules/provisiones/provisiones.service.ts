@@ -1,3 +1,5 @@
+import type { CriteriosBusqueda } from "@legalmene/shared";
+import { condicionAtencion } from "../../common/busqueda/criterios";
 import {
   BadRequestException,
   ConflictException,
@@ -32,11 +34,10 @@ import { diasHabilesEntre, hoyChileISO } from "../../common/utils/dias-habiles";
 
 type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
-export interface FiltroProvisiones {
+export interface FiltroProvisiones extends CriteriosBusqueda {
   page?: number;
   pageSize?: number;
   estado?: EstadoProvision;
-  codPlan?: string;
 }
 
 const ESTADOS_ATENCION_CERRADA: string[] = ["Terminada", "Abandonada", "Derivada"];
@@ -60,7 +61,7 @@ export class ProvisionesService {
     const pageSize = Math.min(filtro.pageSize ?? 50, 200);
     const where = and(
       filtroAtenciones(),
-      filtro.codPlan ? eq(atenciones.codPlan, filtro.codPlan) : undefined,
+      condicionAtencion(filtro, provisiones.fechaSolicitud),
       filtro.estado ? eq(provisiones.estado, filtro.estado) : undefined,
     );
     const [rows, [{ value: total }]] = await Promise.all([

@@ -10,6 +10,8 @@ import { comites } from "../../db/schema/comites";
 import { usuarios } from "../../db/schema/usuarios";
 import { provisiones } from "../../db/schema/provisiones";
 import { competencias } from "../../db/schema/maestros";
+import { fechaChile } from "../../common/busqueda/criterios";
+import { hoyChileISO, sumarDiasHabiles } from "../../common/utils/dias-habiles";
 
 // Toda consulta del dashboard sobre atenciones respeta lo que el usuario puede ver.
 const porPlan = (codPlan?: string) => and(filtroAtenciones(), codPlan ? eq(atenciones.codPlan, codPlan) : undefined);
@@ -31,8 +33,14 @@ export interface DashboardKpis {
     porTipo: { Consulta: number; Asesoria: number; Juicio: number };
     creadasHoy: number;
     creadasUltimos30Dias: number;
+    consultasHoy: number;
+    consultasAyer: number;
+    // Consultas activas sin abogado asignado.
+    consultasSinAsignar: number;
   };
-  gestiones: { pendientes: number; vencidas: number };
+  // porVencer: pendientes con compromiso en los próximos 3 días; escritosPorVencer: escritos
+  // judiciales pendientes que vencen dentro de 5 días hábiles.
+  gestiones: { pendientes: number; vencidas: number; porVencer: number; escritosPorVencer: number };
   comites: { abiertos: number };
   provisiones: { pendientes: number; montoPendiente: number };
 }
@@ -46,6 +54,9 @@ export class DashboardService {
     inicioHoy.setUTCHours(0, 0, 0, 0);
     const hace30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const ahora = new Date();
+    const en3Dias = new Date(ahora.getTime() + 3 * 24 * 60 * 60 * 1000);
+    const hoy = hoyChileISO(ahora);
+    const limiteEscritos = sumarDiasHabiles(hoy, 5);
 
     // Una sola pasada por tabla con agregados condicionales para minimizar roundtrips.
     const [afi] = await this.db
@@ -79,6 +90,9 @@ export class DashboardService {
         juicios: sql<number>`count(*) filter (where ${atenciones.tipo} = 'Juicio')`,
         creadasHoy: sql<number>`count(*) filter (where ${atenciones.fechaApertura} >= ${inicioHoy})`,
         creadas30: sql<number>`count(*) filter (where ${atenciones.fechaApertura} >= ${hace30})`,
+        consultasHoy: sql<number>`count(*) filter (where ${atenciones.tipo} = 'Consulta' and ${fechaChile(atenciones.fechaApertura)} = ${hoy}::date)`,
+        consultasAyer: sql<number>`count(*) filter (where ${atenciones.tipo} = 'Consulta' and ${fechaChile(atenciones.fechaApertura)} = (${hoy}::date - 1))`,
+        consultasSinAsignar: sql<number>`count(*) filter (where ${atenciones.tipo} = 'Consulta' and ${atenciones.abogadoAsignadoId} is null and ${inArray(atenciones.estado, [...ESTADOS_ACTIVOS])})`,
       })
       .from(atenciones)
       .where(porPlan(codPlan));
@@ -96,6 +110,8 @@ export class DashboardService {
       .select({
         pendientes: sql<number>`count(*) filter (where ${gestiones.estado} = 'Pendiente')`,
         vencidas: sql<number>`count(*) filter (where ${gestiones.estado} = 'Pendiente' and ${gestiones.fechaCompromiso} < ${ahora})`,
+        porVencer: sql<number>`count(*) filter (where ${gestiones.estado} = 'Pendiente' and ${gestiones.fechaCompromiso} >= ${ahora} and ${gestiones.fechaCompromiso} < ${en3Dias})`,
+        escritosPorVencer: sql<number>`count(*) filter (where ${gestiones.estado} = 'Pendiente' and ${gestiones.tipo} = 'EscritoJudicial' and ${fechaChile(gestiones.fechaCompromiso)} between ${hoy}::date and ${limiteEscritos}::date)`,
       })
       .from(gestiones)
       .innerJoin(atenciones, eq(gestiones.atencionId, atenciones.id))
@@ -141,10 +157,15 @@ export class DashboardService {
         },
         creadasHoy: Number(at?.creadasHoy ?? 0),
         creadasUltimos30Dias: Number(at?.creadas30 ?? 0),
+        consultasHoy: Number(at?.consultasHoy ?? 0),
+        consultasAyer: Number(at?.consultasAyer ?? 0),
+        consultasSinAsignar: Number(at?.consultasSinAsignar ?? 0),
       },
       gestiones: {
         pendientes: Number(g?.pendientes ?? 0),
         vencidas: Number(g?.vencidas ?? 0),
+        porVencer: Number(g?.porVencer ?? 0),
+        escritosPorVencer: Number(g?.escritosPorVencer ?? 0),
       },
       comites: {
         abiertos: Number(c?.abiertos ?? 0),

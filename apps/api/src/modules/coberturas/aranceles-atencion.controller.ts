@@ -1,8 +1,7 @@
 import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Post, Query, UnauthorizedException, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { createZodDto } from "nestjs-zod";
-import { z } from "zod";
-import { EstadoArancelAtencionEnum, ObservacionSchema, PagoArancelSchema, RechazoSchema } from "@legalmene/shared";
+import { CriteriosBusquedaSchema, EstadoArancelAtencionEnum, ObservacionSchema, PagoArancelSchema, RechazoSchema } from "@legalmene/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Permiso } from "../../common/decorators/permiso.decorator";
 import { PermisosGuard } from "../../common/guards/permisos.guard";
@@ -12,7 +11,7 @@ import { ArancelesAtencionService } from "./aranceles-atencion.service";
 class PagoArancelDto extends createZodDto(PagoArancelSchema) {}
 class ObservacionDto extends createZodDto(ObservacionSchema) {}
 class RechazoDto extends createZodDto(RechazoSchema) {}
-class FiltroDto extends createZodDto(z.object({ estado: EstadoArancelAtencionEnum.optional() })) {}
+class FiltroDto extends createZodDto(CriteriosBusquedaSchema.extend({ estado: EstadoArancelAtencionEnum.optional() })) {}
 
 function uid(user: AuthenticatedUser): string {
   if (!user?.id) throw new UnauthorizedException("Usuario sin id resuelto");
@@ -30,7 +29,7 @@ export class ArancelesAtencionController {
   @Get("aranceles-atencion")
   @Permiso("finanzas.ver")
   listar(@Query() f: FiltroDto) {
-    return this.service.listar(f.estado);
+    return this.service.listar(f);
   }
 
   @Get("atenciones/:id/arancel")

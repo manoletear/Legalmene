@@ -1,3 +1,4 @@
+import { CriteriosBusquedaSchema } from "@legalmene/shared";
 import {
   DevolucionSchema,
   EntregaSchema,
@@ -19,7 +20,7 @@ export class RechazoDto extends createZodDto(RechazoSchema) {}
 export class EntregaDto extends createZodDto(EntregaSchema) {}
 export class DevolucionDto extends createZodDto(DevolucionSchema) {}
 
-export const FiltroProvisionesSchema = z.object({
+export const FiltroProvisionesSchema = CriteriosBusquedaSchema.extend({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
   estado: EstadoProvisionEnum.optional(),

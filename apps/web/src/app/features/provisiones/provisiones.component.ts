@@ -13,13 +13,15 @@ import { ESTADO_PROVISION_LABEL, EstadoProvisionEnum, type EstadoProvision } fro
 import { ProvisionesApiService, ProvisionRow } from "../../core/services/provisiones.service";
 import { MeService } from "../../core/services/me.service";
 import { PromptService } from "../../shared/prompt.service";
+import { CriteriosBusquedaComponent, type Criterios } from "../../shared/criterios-busqueda.component";
+import { descargarArchivo } from "../../shared/descarga";
 import { AccionProvision, accionesProvision, severidadProvision } from "../../shared/provision-acciones";
 import { Observable } from "rxjs";
 
 @Component({
   selector: "lm-provisiones",
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, CardModule, SelectModule, ButtonModule, TableModule, TagModule],
+  imports: [CommonModule, FormsModule, RouterLink, CardModule, SelectModule, ButtonModule, TableModule, TagModule, CriteriosBusquedaComponent],
   template: `
     <div class="lm-row" style="margin-bottom:16px; align-items:flex-end;">
       <div style="flex:1;">
@@ -29,20 +31,27 @@ import { Observable } from "rxjs";
           Finanzas pone los fondos a disposición y los entrega, y el abogado rinde los gastos.
         </small>
       </div>
-      <p-select
-        [(ngModel)]="filtroEstado"
-        (onChange)="setEstado($event.value)"
-        [options]="estadoOpts"
-        optionLabel="label"
-        optionValue="value"
-        placeholder="Todos los estados"
-        [showClear]="true"
-        [style]="{ width: '240px' }"
-      ></p-select>
     </div>
 
     <p-card>
+      <lm-criterios-busqueda
+        [campos]="['correlativo', 'rut', 'abogado', 'plan', 'fechas']"
+        [estados]="estadoOpts"
+        [iniciales]="iniciales"
+        etiquetaFecha="Solicitud"
+        [exportable]="true"
+        [puedeExportar]="!!criterios()"
+        (buscar)="buscar($event)"
+        (exportar)="exportar($event)"
+        (limpiado)="criterios.set(null)"
+      ></lm-criterios-busqueda>
+      <div *ngIf="!criterios()" class="lm-vacio-busqueda">
+        <i class="pi pi-search"></i>
+        <p>Ingrese criterios y presione Buscar</p>
+      </div>
       <p-table
+        *ngIf="criterios()"
+        [style]="{ 'margin-top': '16px' }"
         [value]="data()"
         [lazy]="true"
         (onLazyLoad)="onLazy($event)"
@@ -103,18 +112,38 @@ export class ProvisionesComponent implements OnInit {
   protected page = signal(1);
   protected pageSize = signal(25);
   protected loading = signal(false);
-  protected filtroEstado: string | undefined = undefined;
+  protected criterios = signal<Criterios | null>(null);
+  protected iniciales: Criterios = {};
   protected estadoOpts = EstadoProvisionEnum.options.map((value) => ({ label: ESTADO_PROVISION_LABEL[value], value }));
 
   ngOnInit() {
-    // La bandeja de Finanzas enlaza aquí con ?estado=...
-    this.filtroEstado = this.route.snapshot.queryParamMap.get("estado") ?? undefined;
+    // La bandeja de Finanzas y el dashboard enlazan aquí con ?estado=...: búsqueda explícita.
+    const estado = this.route.snapshot.queryParamMap.get("estado");
+    if (estado) {
+      this.iniciales = { estado };
+      this.buscar({ estado });
+    }
+  }
+
+  buscar(c: Criterios) {
+    this.criterios.set(c);
+    this.page.set(1);
     this.recargar();
   }
 
+  async exportar(c: Criterios) {
+    try {
+      await descargarArchivo("/exports/busquedas/provisiones.xlsx", `provisiones-${new Date().toISOString().slice(0, 10)}.xlsx`, { params: c });
+    } catch (e) {
+      this.msg.add({ severity: "error", summary: "No se pudo exportar", detail: (e as Error).message, life: 6000 });
+    }
+  }
+
   recargar() {
+    const c = this.criterios();
+    if (!c) return;
     this.loading.set(true);
-    this.api.listar({ page: this.page(), pageSize: this.pageSize(), estado: this.filtroEstado }).subscribe({
+    this.api.listar({ ...c, page: this.page(), pageSize: this.pageSize() }).subscribe({
       next: (res) => {
         this.data.set(res.data);
         this.total.set(res.total);
@@ -124,15 +153,11 @@ export class ProvisionesComponent implements OnInit {
     });
   }
 
-  setEstado(e: string | undefined) {
-    this.filtroEstado = e;
-    this.page.set(1);
-    this.recargar();
-  }
-
   onLazy(ev: TableLazyLoadEvent) {
     const rows = ev.rows ?? this.pageSize();
-    this.page.set(Math.floor((ev.first ?? 0) / rows) + 1);
+    const page = Math.floor((ev.first ?? 0) / rows) + 1;
+    if (page === this.page() && rows === this.pageSize() && this.data().length) return;
+    this.page.set(page);
     this.pageSize.set(rows);
     this.recargar();
   }

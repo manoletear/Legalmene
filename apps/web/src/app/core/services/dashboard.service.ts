@@ -17,8 +17,11 @@ export interface DashboardKpis {
     porTipo: { Consulta: number; Asesoria: number; Juicio: number };
     creadasHoy: number;
     creadasUltimos30Dias: number;
+    consultasHoy: number;
+    consultasAyer: number;
+    consultasSinAsignar: number;
   };
-  gestiones: { pendientes: number; vencidas: number };
+  gestiones: { pendientes: number; vencidas: number; porVencer: number; escritosPorVencer: number };
   comites: { abiertos: number };
   provisiones: { pendientes: number; montoPendiente: number };
 }

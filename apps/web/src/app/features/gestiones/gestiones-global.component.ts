@@ -8,7 +8,6 @@ import { TagModule } from "primeng/tag";
 import { ButtonModule } from "primeng/button";
 import { SelectModule } from "primeng/select";
 import { CheckboxModule } from "primeng/checkbox";
-import { ToastModule } from "primeng/toast";
 import { MessageService } from "primeng/api";
 import { GestionesGlobalService, GestionGlobalRow } from "../../core/services/gestiones-global.service";
 import { PromptService } from "../../shared/prompt.service";
@@ -29,10 +28,8 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
     ButtonModule,
     SelectModule,
     CheckboxModule,
-    ToastModule,
   ],
   template: `
-    <p-toast></p-toast>
     <p-card>
       <ng-template pTemplate="header">
         <div style="padding:16px 16px 0;">

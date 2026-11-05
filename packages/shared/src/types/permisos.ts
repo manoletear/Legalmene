@@ -58,6 +58,7 @@ export const MODULOS_PERMISOS = [
     modulo: "Reportes",
     permisos: {
       "reportes.ver": "Ver reportes",
+      "controller.ver": "Ver carga de trabajo por usuario (controller)",
       "exportar.datos": "Exportar datos a planilla",
     },
   },
@@ -139,6 +140,7 @@ const JEFATURA: Permiso[] = [
   "afiliados.crear",
   "afiliados.editar",
   "reportes.ver",
+  "controller.ver",
   "exportar.datos",
 ];
 

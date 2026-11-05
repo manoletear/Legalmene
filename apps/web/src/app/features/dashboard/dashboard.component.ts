@@ -54,7 +54,7 @@ import { estadoLabel as etiquetaEstado, estadoSeverity as severidadEstado } from
             <div style="flex:1;">
               <div class="lm-kpi-label">Casos abiertos <i class="pi pi-info-circle lm-muted" style="font-size:11px;"></i></div>
               <div class="lm-kpi-value lm-mono">{{ casosAbiertos(k) | number }}</div>
-              <span class="lm-kpi-delta up"><i class="pi pi-arrow-up"></i> +8,7% vs. ayer</span>
+              <span class="lm-small lm-muted">{{ k.atenciones.creadasHoy | number }} ingresadas hoy</span>
             </div>
           </div>
         </p-card>
@@ -64,8 +64,11 @@ import { estadoLabel as etiquetaEstado, estadoSeverity as severidadEstado } from
             <div class="lm-kpi-icon green"><i class="pi pi-comment"></i></div>
             <div style="flex:1;">
               <div class="lm-kpi-label">Consultas del día <i class="pi pi-info-circle lm-muted" style="font-size:11px;"></i></div>
-              <div class="lm-kpi-value lm-mono">{{ k.atenciones.creadasHoy | number }}</div>
-              <span class="lm-kpi-delta up"><i class="pi pi-arrow-up"></i> +12,5% vs. ayer</span>
+              <div class="lm-kpi-value lm-mono">{{ k.atenciones.consultasHoy | number }}</div>
+              <span class="lm-kpi-delta" [class.up]="deltaConsultas(k) > 0" [class.down]="deltaConsultas(k) < 0">
+                <i *ngIf="deltaConsultas(k) !== 0" class="pi" [class.pi-arrow-up]="deltaConsultas(k) > 0" [class.pi-arrow-down]="deltaConsultas(k) < 0"></i>
+                {{ deltaConsultas(k) > 0 ? "+" : "" }}{{ deltaConsultas(k) }} vs. ayer ({{ k.atenciones.consultasAyer }})
+              </span>
             </div>
           </div>
         </p-card>
@@ -75,8 +78,8 @@ import { estadoLabel as etiquetaEstado, estadoSeverity as severidadEstado } from
             <div class="lm-kpi-icon orange"><i class="pi pi-clock"></i></div>
             <div style="flex:1;">
               <div class="lm-kpi-label">SLA por vencer <i class="pi pi-info-circle lm-muted" style="font-size:11px;"></i></div>
-              <div class="lm-kpi-value lm-mono">{{ k.gestiones.pendientes | number }}</div>
-              <span class="lm-kpi-delta down"><i class="pi pi-arrow-down"></i> -4 vs. ayer</span>
+              <div class="lm-kpi-value lm-mono">{{ k.gestiones.porVencer | number }}</div>
+              <span class="lm-small lm-muted">{{ k.gestiones.vencidas | number }} ya vencidas</span>
             </div>
           </div>
         </p-card>
@@ -99,9 +102,7 @@ import { estadoLabel as etiquetaEstado, estadoSeverity as severidadEstado } from
           <ng-template pTemplate="header">
             <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 16px 0;">
               <h3 style="margin:0;">Atenciones por estado <i class="pi pi-info-circle lm-muted" style="font-size:12px;"></i></h3>
-              <span class="lm-row" style="background:#fff; border:1px solid #e2e8f0; padding:4px 10px; border-radius:6px; font-size:12px; cursor:pointer;">
-                Este mes <i class="pi pi-chevron-down" style="font-size:10px;"></i>
-              </span>
+              <span class="lm-small lm-muted">Atenciones visibles</span>
             </div>
           </ng-template>
           <div style="display:flex; gap:24px; align-items:center;">
@@ -140,9 +141,7 @@ import { estadoLabel as etiquetaEstado, estadoSeverity as severidadEstado } from
           <ng-template pTemplate="header">
             <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 16px 0;">
               <h3 style="margin:0;">Carga por abogado <i class="pi pi-info-circle lm-muted" style="font-size:12px;"></i></h3>
-              <span class="lm-row" style="background:#fff; border:1px solid #e2e8f0; padding:4px 10px; border-radius:6px; font-size:12px; cursor:pointer;">
-                Este mes <i class="pi pi-chevron-down" style="font-size:10px;"></i>
-              </span>
+              <span class="lm-small lm-muted">Atenciones visibles</span>
             </div>
           </ng-template>
           <div style="display:flex; flex-direction:column; gap:12px;">
@@ -156,7 +155,7 @@ import { estadoLabel as etiquetaEstado, estadoSeverity as severidadEstado } from
               <div style="width:40px; text-align:right; font-weight:600; font-size:13px; color:#0f172a;">{{ a.total }}</div>
             </div>
             <div style="display:flex; justify-content:space-between; padding-top:8px; border-top:1px solid #f1f5f9; font-size:11px; color:#94a3b8;">
-              <span>0</span><span>50</span><span>100</span><span>150</span>
+              <span>0</span><span>{{ maxCarga() }}</span>
             </div>
             <div style="text-align:center; font-size:11px; color:#94a3b8;">Atenciones</div>
           </div>
@@ -174,37 +173,29 @@ import { estadoLabel as etiquetaEstado, estadoSeverity as severidadEstado } from
           <div>
             <div class="lm-alert-row">
               <div class="lm-alert-icon critical"><i class="pi pi-clock"></i></div>
-              <div style="flex:1; font-size:14px; color:#475569;">{{ alertas().vencer3 }} casos con SLA por vencer en los próximos 3 días</div>
+              <div style="flex:1; font-size:14px; color:#475569;">{{ alertas().vencer3 }} gestiones con plazo en los próximos 3 días</div>
               <p-tag value="Crítico" severity="danger"></p-tag>
-              <a style="color:#2563eb; font-size:13px; font-weight:500; cursor:pointer; margin-left:8px;">Ver casos</a>
+              <a routerLink="/gestiones" style="color:#2563eb; font-size:13px; font-weight:500; cursor:pointer; margin-left:8px;">Ver gestiones</a>
             </div>
             <div class="lm-alert-row">
               <div class="lm-alert-icon high"><i class="pi pi-clock"></i></div>
               <div style="flex:1; font-size:14px; color:#475569;">{{ alertas().escritos }} escritos con plazo de entrega en los próximos 5 días</div>
               <p-tag value="Alto" severity="warn"></p-tag>
-              <a style="color:#2563eb; font-size:13px; font-weight:500; cursor:pointer; margin-left:8px;">Ver escritos</a>
+              <a routerLink="/gestiones" style="color:#2563eb; font-size:13px; font-weight:500; cursor:pointer; margin-left:8px;">Ver gestiones</a>
             </div>
             <div class="lm-alert-row">
               <div class="lm-alert-icon info"><i class="pi pi-file"></i></div>
               <div style="flex:1; font-size:14px; color:#475569;">{{ alertas().provisiones }} provisiones pendientes de aprobación</div>
               <p-tag value="Medio" severity="info"></p-tag>
-              <a routerLink="/provisiones" style="color:#2563eb; font-size:13px; font-weight:500; cursor:pointer; margin-left:8px;">Ver provisiones</a>
+              <a routerLink="/provisiones" [queryParams]="{ estado: 'Solicitada' }" style="color:#2563eb; font-size:13px; font-weight:500; cursor:pointer; margin-left:8px;">Ver provisiones</a>
             </div>
             <div class="lm-alert-row">
               <div class="lm-alert-icon info"><i class="pi pi-users"></i></div>
               <div style="flex:1; font-size:14px; color:#475569;">{{ alertas().consultas }} consultas sin asignar</div>
               <p-tag value="Informativo" severity="secondary"></p-tag>
-              <a style="color:#2563eb; font-size:13px; font-weight:500; cursor:pointer; margin-left:8px;">Ver consultas</a>
+              <a routerLink="/consultas" style="color:#2563eb; font-size:13px; font-weight:500; cursor:pointer; margin-left:8px;">Ver consultas</a>
             </div>
-            <div class="lm-alert-row">
-              <div class="lm-alert-icon info"><i class="pi pi-file"></i></div>
-              <div style="flex:1; font-size:14px; color:#475569;">{{ alertas().documentos }} documentos pendientes de firma</div>
-              <p-tag value="Informativo" severity="secondary"></p-tag>
-              <a style="color:#2563eb; font-size:13px; font-weight:500; cursor:pointer; margin-left:8px;">Ver documentos</a>
-            </div>
-            <div style="text-align:center; padding-top:12px;">
-              <a style="color:#2563eb; font-size:13px; font-weight:500; cursor:pointer;">Ver todas las alertas →</a>
-            </div>
+
           </div>
         </p-card>
 
@@ -306,6 +297,8 @@ export class DashboardComponent implements OnInit {
     });
   });
 
+  protected maxCarga = () => Math.max(...this.cargaAbogados().map((a) => a.total), 0);
+
   protected barWidth = (v: number) => {
     const max = Math.max(...this.cargaAbogados().map((a) => a.total), 1);
     return (v / max) * 100;
@@ -319,13 +312,14 @@ export class DashboardComponent implements OnInit {
   protected alertas = computed(() => {
     const k = this.kpis();
     return {
-      vencer3: k?.gestiones.vencidas ?? 23,
-      escritos: 15,
+      vencer3: k?.gestiones.porVencer ?? 0,
+      escritos: k?.gestiones.escritosPorVencer ?? 0,
       provisiones: k?.provisiones.pendientes ?? 0,
-      consultas: 12,
-      documentos: 4,
+      consultas: k?.atenciones.consultasSinAsignar ?? 0,
     };
   });
+
+  protected deltaConsultas = (k: DashboardKpis) => k.atenciones.consultasHoy - k.atenciones.consultasAyer;
 
   protected estadoLabel = etiquetaEstado;
   protected estadoSeverity = severidadEstado;

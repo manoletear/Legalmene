@@ -1,15 +1,27 @@
-import { Controller, Get, Header, Inject, Param, Query, Res, UseGuards } from "@nestjs/common";
+import { BadRequestException, Controller, Get, Header, Inject, Param, Query, Res, UseGuards } from "@nestjs/common";
+import { createZodDto } from "nestjs-zod";
+import { z } from "zod";
+import { BUSQUEDAS_EXPORTABLES, CriteriosBusquedaSchema, type BusquedaExportable } from "@legalmene/shared";
+import { MIME_XLSX } from "./xlsx";
 import { Response } from "express";
-import { ApiBearerAuth, ApiQuery, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ExportsService } from "./exports.service";
 import { AtencionPdfService } from "./atencion-pdf.service";
 import { Permiso } from "../../common/decorators/permiso.decorator";
 import { PermisosGuard } from "../../common/guards/permisos.guard";
 
+class FiltroExportacionDto extends createZodDto(
+  CriteriosBusquedaSchema.extend({
+    estado: z.string().optional(),
+    q: z.string().trim().min(1).optional(),
+    vigencia: z.string().optional(),
+    ordenCompra: z.string().trim().min(1).optional(),
+  }),
+) {}
+
 @ApiTags("exports")
 @ApiBearerAuth("EntraID")
-@ApiQuery({ name: "codPlan", required: false })
 @UseGuards(JwtAuthGuard, PermisosGuard)
 @Controller("exports")
 export class ExportsController {
@@ -18,29 +30,17 @@ export class ExportsController {
     @Inject(AtencionPdfService) private readonly pdf: AtencionPdfService,
   ) {}
 
-  @Get("afiliados.csv")
+  // Búsquedas del Anexo §XI en XLSX. Mismos criterios y alcance que la pantalla de búsqueda.
+  @Get("busquedas/:tipo.xlsx")
   @Permiso("exportar.datos")
-  @Header("Content-Type", "text/csv; charset=utf-8")
-  async afiliados(@Query("codPlan") codPlan: string | undefined, @Res() res: Response) {
-    const csv = await this.service.afiliadosCsv(codPlan);
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="afiliados-${codPlan ?? "todos"}-${new Date().toISOString().slice(0, 10)}.csv"`,
-    );
-    // BOM para que Excel detecte UTF-8 automáticamente.
-    res.send("﻿" + csv);
-  }
-
-  @Get("atenciones.csv")
-  @Permiso("exportar.datos")
-  @Header("Content-Type", "text/csv; charset=utf-8")
-  async atenciones(@Query("codPlan") codPlan: string | undefined, @Res() res: Response) {
-    const csv = await this.service.atencionesCsv(codPlan);
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="atenciones-${codPlan ?? "todos"}-${new Date().toISOString().slice(0, 10)}.csv"`,
-    );
-    res.send("﻿" + csv);
+  async busqueda(@Param("tipo") tipo: string, @Query() filtro: FiltroExportacionDto, @Res() res: Response) {
+    if (!(BUSQUEDAS_EXPORTABLES as readonly string[]).includes(tipo)) {
+      throw new BadRequestException(`Búsqueda ${tipo} no exportable`);
+    }
+    const { archivo } = await this.service.busqueda(tipo as BusquedaExportable, filtro);
+    res.setHeader("Content-Type", MIME_XLSX);
+    res.setHeader("Content-Disposition", `attachment; filename="${tipo}-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+    res.send(archivo);
   }
 
   @Get("atenciones/:id.pdf")

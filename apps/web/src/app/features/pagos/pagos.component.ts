@@ -8,8 +8,9 @@ import { SelectModule } from "primeng/select";
 import { ButtonModule } from "primeng/button";
 import { TableModule } from "primeng/table";
 import { TagModule } from "primeng/tag";
-import { ToastModule } from "primeng/toast";
 import { MessageService } from "primeng/api";
+import { CriteriosBusquedaComponent, type Criterios } from "../../shared/criterios-busqueda.component";
+import { descargarArchivo } from "../../shared/descarga";
 import { PagosApiService } from "../../core/services/pagos.service";
 import { AfiliadosApiService } from "../../core/services/afiliados.service";
 import type { AfiliadoConPlanes, Pago } from "@legalmene/shared";
@@ -32,10 +33,9 @@ import type { TableLazyLoadEvent } from "primeng/table";
     ButtonModule,
     TableModule,
     TagModule,
-    ToastModule,
+    CriteriosBusquedaComponent,
   ],
   template: `
-    <p-toast></p-toast>
     <p-card [style]="{ 'margin-bottom': '16px', display: 'block' }">
       <ng-template pTemplate="header">
         <div style="padding:16px 16px 0;">
@@ -74,21 +74,28 @@ import type { TableLazyLoadEvent } from "primeng/table";
     <p-card>
       <ng-template pTemplate="header">
         <div class="lm-row" style="padding:16px 16px 0;">
-          <h2 style="margin:0; flex:1;">Historial</h2>
-          <p-select
-            [(ngModel)]="filtroEstado"
-            (onChange)="setEstado($event.value)"
-            [options]="estadoOpts"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="Estado"
-            [showClear]="true"
-            [style]="{ width: '180px' }"
-          ></p-select>
+          <h2 style="margin:0; flex:1;">Búsqueda de pagos WebPay</h2>
         </div>
       </ng-template>
 
+      <lm-criterios-busqueda
+        [campos]="['correlativo', 'rut', 'plan', 'fechas']"
+        [estados]="estadoOpts"
+        etiquetaCorrelativo="Número de orden"
+        placeholderCorrelativo="OC-…"
+        [exportable]="true"
+        [puedeExportar]="!!criterios()"
+        (buscar)="buscar($event)"
+        (exportar)="exportar($event)"
+        (limpiado)="criterios.set(null)"
+      ></lm-criterios-busqueda>
+      <div *ngIf="!criterios()" class="lm-vacio-busqueda">
+        <i class="pi pi-search"></i>
+        <p>Ingrese criterios y presione Buscar</p>
+      </div>
       <p-table
+        *ngIf="criterios()"
+        [style]="{ 'margin-top': '16px' }"
         [value]="data()"
         [lazy]="true"
         (onLazyLoad)="onLazy($event)"
@@ -139,7 +146,7 @@ export class PagosComponent implements OnInit {
   protected pageSize = signal(25);
   protected loading = signal(false);
   protected iniciando = signal(false);
-  protected filtroEstado: string | undefined;
+  protected criterios = signal<Criterios | null>(null);
 
   protected estadoOpts = [
     { label: "Iniciado", value: "Iniciado" },
@@ -163,12 +170,33 @@ export class PagosComponent implements OnInit {
 
   ngOnInit() {
     this.afiliadosApi.buscar({ pageSize: 200 }).subscribe((res) => this.afiliados.set(res.data));
+  }
+
+  // "Correlativo" del formulario es el número de orden de compra.
+  private params(c: Criterios) {
+    const { correlativo, ...resto } = c;
+    return { ...resto, ordenCompra: correlativo };
+  }
+
+  buscar(c: Criterios) {
+    this.criterios.set(c);
+    this.page.set(1);
     this.recargar();
   }
 
+  async exportar(c: Criterios) {
+    try {
+      await descargarArchivo("/exports/busquedas/pagos.xlsx", `pagos-webpay-${new Date().toISOString().slice(0, 10)}.xlsx`, { params: this.params(c) });
+    } catch (e) {
+      this.msg.add({ severity: "error", summary: "No se pudo exportar", detail: (e as Error).message, life: 6000 });
+    }
+  }
+
   recargar() {
+    const c = this.criterios();
+    if (!c) return;
     this.loading.set(true);
-    this.api.listar({ page: this.page(), pageSize: this.pageSize(), estado: this.filtroEstado }).subscribe({
+    this.api.listar({ ...this.params(c), page: this.page(), pageSize: this.pageSize() }).subscribe({
       next: (res) => {
         this.data.set(res.data);
         this.total.set(res.total);
@@ -178,16 +206,11 @@ export class PagosComponent implements OnInit {
     });
   }
 
-  setEstado(e: string | undefined) {
-    this.filtroEstado = e;
-    this.page.set(1);
-    this.recargar();
-  }
-
   onLazy(ev: TableLazyLoadEvent) {
-    const first = ev.first ?? 0;
     const rows = ev.rows ?? this.pageSize();
-    this.page.set(Math.floor(first / rows) + 1);
+    const page = Math.floor((ev.first ?? 0) / rows) + 1;
+    if (page === this.page() && rows === this.pageSize() && this.data().length) return;
+    this.page.set(page);
     this.pageSize.set(rows);
     this.recargar();
   }

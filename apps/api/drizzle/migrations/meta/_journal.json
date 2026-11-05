@@ -92,6 +92,13 @@
       "when": 1793890029900,
       "tag": "0012_pagos_permisos",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793892025942,
+      "tag": "0013_controller_permiso",
+      "breakpoints": true
     }
   ]
 }

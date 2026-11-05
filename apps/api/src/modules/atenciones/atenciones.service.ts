@@ -6,13 +6,13 @@ import {
   ConflictException,
   ForbiddenException,
 } from "@nestjs/common";
-import { and, eq, count, ilike, inArray, sql, desc, getTableColumns } from "drizzle-orm";
+import { and, eq, count, inArray, sql, desc, getTableColumns } from "drizzle-orm";
 import {
   ESTADOS_PROVISION_ABIERTOS,
   ESTADO_INICIAL,
   PLANES_SIN_COBERTURA,
   riesgoTotal,
-  type AtencionConMaestros,
+  type FichaAtencion,
   type CambiarEstado,
   type CreateContraparte,
   type NuevoCorrelativo,
@@ -22,6 +22,7 @@ import {
 import { DRIZZLE, Database } from "../../db/database.module";
 import { atenciones, contrapartes, Atencion, ContraparteRow, NuevaAtencion } from "../../db/schema/atenciones";
 import { afiliados } from "../../db/schema/afiliados";
+import { usuarios } from "../../db/schema/usuarios";
 import { gestiones } from "../../db/schema/gestiones";
 import { comites } from "../../db/schema/comites";
 import { provisiones } from "../../db/schema/provisiones";
@@ -37,6 +38,7 @@ import { PlantillasService } from "../gestiones/plantillas.service";
 import type { AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 import { asegurarAtencionVisible, filtroAtenciones } from "../../common/acceso/alcance";
 import { mensajeFaltantes, validarTransicion } from "./estados";
+import { condicionAtencion } from "../../common/busqueda/criterios";
 import type { CreateAtencionDto, UpdateAtencionDto, FiltroAtencionesDto } from "./dto";
 
 // Columnas de la atención + nombres de competencia y materia para mostrar.
@@ -88,14 +90,10 @@ export class AtencionesService {
 
     const where = and(
       filtroAtenciones(),
-      filtro.codPlan ? eq(atenciones.codPlan, filtro.codPlan) : undefined,
+      condicionAtencion(filtro),
       filtro.estado ? eq(atenciones.estado, filtro.estado) : undefined,
       filtro.tipo ? eq(atenciones.tipo, filtro.tipo) : undefined,
-      filtro.abogadoId ? eq(atenciones.abogadoAsignadoId, filtro.abogadoId) : undefined,
       filtro.afiliadoId ? eq(atenciones.afiliadoId, filtro.afiliadoId) : undefined,
-      filtro.competenciaId ? eq(atenciones.competenciaId, filtro.competenciaId) : undefined,
-      filtro.materiaId ? eq(atenciones.materiaId, filtro.materiaId) : undefined,
-      filtro.correlativo ? ilike(atenciones.correlativo, `%${filtro.correlativo}%`) : undefined,
       ftQuery ? sql`search_vector @@ ${ftQuery}` : undefined,
     );
     const offset = (filtro.page - 1) * filtro.pageSize;
@@ -125,15 +123,50 @@ export class AtencionesService {
     };
   }
 
-  async obtener(id: string): Promise<AtencionConMaestros> {
+  async obtener(id: string): Promise<FichaAtencion> {
     const [row] = await this.db
-      .select(columnasConMaestros)
+      .select({
+        ...columnasConMaestros,
+        afiliadoRut: afiliados.rut,
+        afiliadoNombre: sql<string>`${afiliados.nombres} || ' ' || ${afiliados.apellidoPaterno} || coalesce(' ' || ${afiliados.apellidoMaterno}, '')`,
+        afiliadoEmail: afiliados.email,
+        afiliadoTelefono: afiliados.telefono,
+        afiliadoDesde: sql<string | null>`(select to_char(pa.fecha_inicio, 'YYYY-MM-DD') from planes_afiliado pa where pa.afiliado_id = ${atenciones.afiliadoId} and pa.cod_plan = ${atenciones.codPlan})`,
+        planNombre: sql<string | null>`(select p.nombre from planes p where p.cod_plan = ${atenciones.codPlan})`,
+        responsableNombre: usuarios.nombre,
+        responsableEmail: usuarios.email,
+        responsablePerfil: sql<string | null>`(select pf.nombre from perfiles pf where pf.id = ${usuarios.perfilId})`,
+      })
       .from(atenciones)
       .innerJoin(competencias, eq(competencias.id, atenciones.competenciaId))
       .innerJoin(materias, eq(materias.id, atenciones.materiaId))
+      .innerJoin(afiliados, eq(afiliados.id, atenciones.afiliadoId))
+      .leftJoin(usuarios, eq(usuarios.id, atenciones.abogadoAsignadoId))
       .where(and(eq(atenciones.id, id), filtroAtenciones()));
     if (!row) throw new NotFoundException(`Atención ${id} no existe`);
-    return { ...row, riesgoTotal: riesgoTotal(row) } as unknown as AtencionConMaestros;
+    const {
+      afiliadoRut,
+      afiliadoNombre,
+      afiliadoEmail,
+      afiliadoTelefono,
+      afiliadoDesde,
+      planNombre,
+      responsableNombre,
+      responsableEmail,
+      responsablePerfil,
+      ...atencion
+    } = row;
+    return {
+      ...atencion,
+      riesgoTotal: riesgoTotal(atencion),
+      afiliado: { rut: afiliadoRut, nombre: afiliadoNombre, email: afiliadoEmail, telefono: afiliadoTelefono },
+      afiliadoDesde,
+      planNombre,
+      responsable:
+        atencion.abogadoAsignadoId && responsableNombre
+          ? { id: atencion.abogadoAsignadoId, nombre: responsableNombre, email: responsableEmail ?? "", perfil: responsablePerfil ?? "" }
+          : null,
+    } as unknown as FichaAtencion;
   }
 
   // Toda mutación parte de aquí: una atención que el usuario no ve responde 404.

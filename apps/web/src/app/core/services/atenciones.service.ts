@@ -10,6 +10,7 @@ import type {
   PagoArancel,
   Atencion,
   AtencionConMaestros,
+  FichaAtencion,
   CambiarEstado,
   Contraparte,
   CopagoResultado,
@@ -21,18 +22,16 @@ import type {
   SolicitarDerivacion,
   UpdateAtencion,
   UpdateContraparte,
+  CriteriosBusqueda,
+  TipoAtencion,
 } from "@legalmene/shared";
 
-export interface BuscarAtencionesOpts {
+export interface BuscarAtencionesOpts extends Partial<CriteriosBusqueda> {
   page?: number;
   pageSize?: number;
-  tipo?: "Consulta" | "Asesoria" | "Juicio";
+  tipo?: TipoAtencion;
   estado?: string;
-  correlativo?: string;
   afiliadoId?: string;
-  codPlan?: string;
-  competenciaId?: string;
-  materiaId?: string;
   q?: string;
 }
 
@@ -50,8 +49,8 @@ export class AtencionesApiService {
     return this.http.get<PaginatedResult<AtencionConMaestros>>(this.base, { params });
   }
 
-  obtener(id: string): Observable<AtencionConMaestros> {
-    return this.http.get<AtencionConMaestros>(`${this.base}/${id}`);
+  obtener(id: string): Observable<FichaAtencion> {
+    return this.http.get<FichaAtencion>(`${this.base}/${id}`);
   }
 
   copago(id: string): Observable<CopagoResultado & { codPlan: string }> {
@@ -87,7 +86,7 @@ export class AtencionesApiService {
     return this.http.post(`${this.base}/${id}/derivaciones`, payload);
   }
 
-  listarDerivaciones(opts: { estado?: string; consultaId?: string; page?: number; pageSize?: number } = {}) {
+  listarDerivaciones(opts: Partial<CriteriosBusqueda> & { estado?: string; consultaId?: string; page?: number; pageSize?: number } = {}) {
     let params = new HttpParams();
     Object.entries(opts).forEach(([k, v]) => {
       if (v !== undefined && v !== null && v !== "") params = params.set(k, String(v));
@@ -145,9 +144,10 @@ export class AtencionesApiService {
     return this.http.post<ArancelAtencion>(`${this.base}/${id}/arancel/pago`, payload);
   }
 
-  arancelesPorEstado(estado?: string): Observable<ArancelAtencionRow[]> {
+  arancelesPorEstado(estado?: string, criterios: Record<string, string | undefined> = {}): Observable<ArancelAtencionRow[]> {
     let params = new HttpParams();
     if (estado) params = params.set("estado", estado);
+    for (const [k, v] of Object.entries(criterios)) if (v) params = params.set(k, v);
     return this.http.get<ArancelAtencionRow[]>(`${this.api}/aranceles-atencion`, { params });
   }
 }

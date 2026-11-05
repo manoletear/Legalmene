@@ -91,7 +91,7 @@ Logs (accesos, acciones, errores con aviso al admin), alta disponibilidad, docum
 | Gestiones | ✅ Paso 3a: plantillas por materia/procedimiento con orden y plazo en días hábiles; no se cierra con gestiones o comité pendientes | Feriados chilenos en el cálculo de plazos; correo al cliente al iniciar/terminar gestiones |
 | Provisiones | ✅ Paso 3b: Solicitada → Pagada → En aprobación → Autorizada/Rechazada → Disponible → Entregada → Rendida → Cerrada, con roles Contador/Finanzas, bitácora de eventos, rendición con gastos/reintegros y bloqueo de nuevas entregas con montos por rendir; vuelve de Disponible a Pagada si no se retira en 2 días hábiles | Rendición ligada a "Rendido a cliente"; comprobantes de gasto obligatorios |
 | Carga masiva | ✅ Paso 1: flujo/stock sobre `planes_afiliado` (persona solo se crea, no se actualiza) | Cargas y bienes; correo de resumen |
-| Búsquedas | Precargan datos | Sin precarga |
+| Búsquedas y reportes | ✅ Paso 5a: búsquedas sin precarga con exportación XLSX (tope 50.000 filas, permiso `exportar.datos`), reportes por plan/canal, afiliados activos por mes, informe con selección de campos y controller de usuarios | Validar con LegalChile la fórmula de tasa de uso; envío programado de informes por correo |
 | Posesión efectiva | No existe | Módulo nuevo |
 
 ## 5. Plan de trabajo
@@ -121,3 +121,16 @@ Logs (accesos, acciones, errores con aviso al admin), alta disponibilidad, docum
    - Ingreso: solo correos de `ALLOWED_EMAIL_DOMAIN` (por defecto legalchile.cl). Un usuario nuevo de Entra ID entra con el perfil Administrativo hasta que el administrador le asigne otro; el perfil nunca se toma del token. Usuarios inactivos o bloqueados reciben 403 y queda un registro `ACCESO_DENEGADO` en auditoría. El bloqueo por intentos fallidos lo hace Entra ID Smart Lockout (configuración del tenant).
    - Pendiente: jerarquía de jefaturas de más de un nivel (hoy solo reportes directos); horarios de disponibilidad por perfil.
 5. **Búsquedas sin precarga, reportes, controller**, cargas y bienes, posesión efectiva.
+   - 5a ✅ Búsquedas (§XI): Afiliados, Consultas/Asesorías/Juicios, Derivaciones, Aranceles por atención (en `/finanzas`), Provisiones y Pagos WebPay usan el formulario común `lm-criterios-busqueda` (correlativo, RUT, abogado, plan, canal, competencia, materia, fechas y estado según la pantalla). No piden datos hasta "Buscar"; las bandejas (derivaciones, provisiones) vienen con su estado pendiente prellenado pero también esperan a "Buscar". Un enlace con `?rut=`, `?estado=` o `?q=` cuenta como búsqueda explícita. La API no rechaza listados sin filtro (los usan los selectores de otros formularios); la regla "sin precarga" vive en la pantalla.
+   - Exportación: `GET /exports/busquedas/:tipo.xlsx` (afiliados, consultas, asesorías, juicios, derivaciones, aranceles, provisiones, pagos) con los mismos criterios y alcance que la pantalla, permiso `exportar.datos` (más `afiliados.ver`, `finanzas.ver` o `pagos.ver` según la búsqueda) y tope de 50.000 filas con mensaje para acotar. Reemplaza las exportaciones CSV.
+   - Reportes (`/reportes`, permiso `reportes.ver`), todos con período y descarga XLSX:
+     - **Afiliados vigentes** del plan = RUT distintos con una relación RUT–Plan que toca el período (inicio ≤ hasta y sin término o término ≥ desde).
+     - **Consultas** del plan = consultas abiertas en el período por RUT de la nómina del plan, dentro de la vigencia de esa relación RUT–Plan (sin importar el plan con que se registró). **Asesorías, juicios y posesiones** = las registradas bajo el plan en el período.
+     - **Tasa de uso** = total de atenciones ÷ afiliados vigentes, con 4 decimales; "sin afiliados" si no hay (fórmula a validar con LegalChile).
+     - Por canal: mismas reglas sobre los planes del canal (RUT y atenciones distintos), con el detalle por plan.
+     - Afiliados activos por mes: misma regla de vigencia mes a mes, máximo 36 meses.
+     - Informe de atenciones (`POST /reportes/informe.xlsx`): tipos y campos elegidos; hoja "Resumen" (plan × tipo) y una hoja por tipo.
+     - Todo acotado al alcance de atenciones del usuario.
+   - Controller de usuarios (`/reportes?vista=controller`, permiso nuevo `controller.ver` para jefaturas y Gerencia de Servicios, migración 0013): por abogado asignado, atenciones asignadas, pendientes (no terminales), terminadas, por estado, gestiones pendientes y vencidas, y comités abiertos donde participa; filtros período, plan, canal, perfil y jefatura; dentro del alcance del usuario.
+   - Dashboard y ficha del caso sin cifras de maqueta: consultas de hoy vs. ayer, SLA = gestiones pendientes que vencen en 3 días, escritos judiciales por vencer en 5 días hábiles, consultas sin asignar; la ficha muestra afiliado, plan, responsable, próxima audiencia, alertas y vencimientos reales (se ocultan si no hay).
+   - La búsqueda global del encabezado lleva un RUT a Afiliados y el resto a Atenciones.

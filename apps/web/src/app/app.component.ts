@@ -272,7 +272,9 @@ export class AppComponent implements OnInit {
   ejecutarBusqueda() {
     const q = this.searchTerm.trim();
     if (!q) return;
-    void this.router.navigate(["/reportes"], { queryParams: { q } });
+    // Un RUT va a la búsqueda de afiliados; el resto, a la búsqueda de atenciones (búsqueda explícita).
+    if (/^[0-9.\s]{6,}-?[0-9kK]$/.test(q)) void this.router.navigate(["/afiliados"], { queryParams: { rut: q } });
+    else void this.router.navigate(["/atenciones"], { queryParams: { q } });
   }
 
   avatarIniciales(nombre: string): string {

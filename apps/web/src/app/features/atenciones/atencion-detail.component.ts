@@ -20,12 +20,14 @@ import { ComitesApiService } from "../../core/services/comites.service";
 import { DocumentosApiService, DocumentoMeta } from "../../core/services/documentos.service";
 import { ProvisionesApiService } from "../../core/services/provisiones.service";
 import { MeService } from "../../core/services/me.service";
+import { PermisoDirective } from "../../core/permisos";
+import { UsuariosAdminService } from "../../core/services/usuarios-admin.service";
 import { AtencionFlujoComponent } from "./atencion-flujo.component";
 import {
   ESTADO_LABEL,
   ETAPAS_PIPELINE,
   ESTADOS_TERMINALES,
-  type AtencionConMaestros,
+  type FichaAtencion,
   type Comite,
   type CopagoResultado,
   type EstadoAtencion,
@@ -36,6 +38,24 @@ import {
   ESTADO_ARANCEL_COLOR,
   ESTADO_ARANCEL_LABEL,
 } from "@legalmene/shared";
+
+interface AlertaCaso {
+  nivel: "critical" | "high" | "info";
+  icono: string;
+  titulo: string;
+  detalle: string;
+  etiqueta: string;
+  severidad: "danger" | "warn" | "info";
+}
+
+// Días calendario desde hoy hasta la fecha (negativo si ya pasó).
+function diasHasta(iso: string): number {
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const d = new Date(iso);
+  d.setHours(0, 0, 0, 0);
+  return Math.round((d.getTime() - hoy.getTime()) / 86_400_000);
+}
 
 type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast";
 
@@ -53,6 +73,7 @@ interface PipelineStep {
     CommonModule,
     ReactiveFormsModule,
     RouterLink,
+    PermisoDirective,
     CardModule,
     TagModule,
     ButtonModule,
@@ -87,15 +108,16 @@ interface PipelineStep {
           <div class="lm-grid lm-grid-4">
             <div class="lm-info-card">
               <div class="lm-info-card-header"><i class="pi pi-user"></i> Datos del afiliado</div>
-              <div class="lm-info-main">{{ afiliadoNombre() }}</div>
-              <div class="lm-info-row"><span>RUT</span><strong>{{ afiliadoRut() }}</strong></div>
-              <div class="lm-info-row"><span>Afiliado desde</span><strong>{{ a.fechaApertura | date: 'dd/MM/yyyy' }}</strong></div>
-              <div class="lm-info-card-footer">Ver ficha del afiliado →</div>
+              <div class="lm-info-main">{{ a.afiliado.nombre }}</div>
+              <div class="lm-info-row"><span>RUT</span><strong>{{ a.afiliado.rut }}</strong></div>
+              <div class="lm-info-row"><span>Afiliado desde</span><strong>{{ a.afiliadoDesde ? (a.afiliadoDesde | date: 'dd/MM/yyyy') : '—' }}</strong></div>
+              <div class="lm-info-row" *ngIf="a.afiliado.telefono"><span>Teléfono</span><strong>{{ a.afiliado.telefono }}</strong></div>
+              <div class="lm-info-card-footer"><a routerLink="/afiliados" [queryParams]="{ rut: a.afiliado.rut }">Ver ficha del afiliado →</a></div>
             </div>
 
             <div class="lm-info-card">
               <div class="lm-info-card-header"><i class="pi pi-shield"></i> Plan y cobertura</div>
-              <div class="lm-info-main">Plan {{ a.codPlan }}</div>
+              <div class="lm-info-main">{{ a.planNombre ?? a.codPlan }}</div>
               <div class="lm-info-row"><span>Cobertura</span><strong>{{ coberturaTexto() }}</strong></div>
               <div class="lm-info-card-footer"><a routerLink="/admin/coberturas" [queryParams]="{ plan: a.codPlan }">Ver coberturas del plan →</a></div>
             </div>
@@ -110,10 +132,13 @@ interface PipelineStep {
 
             <div class="lm-info-card">
               <div class="lm-info-card-header"><i class="pi pi-user-edit"></i> Responsable</div>
-              <div class="lm-info-main">{{ responsableNombre() }}</div>
-              <div class="lm-info-row"><span>Cargo</span><strong>Abogado/a Senior</strong></div>
-              <div class="lm-info-row"><span>Email</span><strong class="lm-small">{{ responsableEmail() }}</strong></div>
-              <div class="lm-info-card-footer">Ver carga del abogado →</div>
+              <ng-container *ngIf="a.responsable as r; else sinResponsable">
+                <div class="lm-info-main">{{ r.nombre }}</div>
+                <div class="lm-info-row"><span>Perfil</span><strong>{{ r.perfil }}</strong></div>
+                <div class="lm-info-row"><span>Email</span><strong class="lm-small">{{ r.email }}</strong></div>
+                <div *lmPermiso="'controller.ver'" class="lm-info-card-footer"><a routerLink="/reportes" [queryParams]="{ vista: 'controller' }">Ver carga del abogado →</a></div>
+              </ng-container>
+              <ng-template #sinResponsable><div class="lm-info-main lm-muted">Sin asignar</div></ng-template>
             </div>
           </div>
 
@@ -133,8 +158,7 @@ interface PipelineStep {
               <div class="lm-info-card-header"><i class="pi pi-calendar"></i> Fechas clave</div>
               <div class="lm-info-row"><span>Ingreso</span><strong>{{ a.fechaApertura | date: 'dd/MM/yyyy' }}</strong></div>
               <div class="lm-info-row"><span>Última gestión</span><strong>{{ a.fechaUltimaGestion ? (a.fechaUltimaGestion | date: 'dd/MM/yyyy') : '—' }}</strong></div>
-              <div class="lm-info-row"><span>Próxima audiencia</span><strong>25/06/2024</strong></div>
-              <div class="lm-info-card-footer">Ver todas las fechas →</div>
+              <div class="lm-info-row"><span>Próxima audiencia</span><strong>{{ proximaAudiencia() ? (proximaAudiencia() | date: 'dd/MM/yyyy HH:mm') : '—' }}</strong></div>
             </div>
 
             <div class="lm-info-card">
@@ -250,7 +274,7 @@ interface PipelineStep {
                           {{ g.createdAt | date: 'dd/MM/yyyy HH:mm' }}
                         </td>
                         <td style="padding:10px 4px;">{{ g.titulo }}</td>
-                        <td style="padding:10px 4px; color:#475569;">{{ responsableNombre() }}</td>
+                        <td style="padding:10px 4px; color:#475569;">{{ nombreUsuario(g.responsableId) }}</td>
                         <td style="padding:10px 4px;"><p-tag [value]="g.estado === 'Completada' ? 'Realizada' : g.estado === 'Pendiente' ? 'Programada' : g.estado" [severity]="g.estado === 'Completada' ? 'success' : 'info'"></p-tag></td>
                         <td style="padding:10px 4px;"><button pButton icon="pi pi-ellipsis-v" [text]="true" severity="secondary" size="small"></button></td>
                       </tr>
@@ -299,58 +323,38 @@ interface PipelineStep {
 
         <!-- Side rail derecho -->
         <div class="lm-col" style="gap:16px;">
-          <p-card>
+          <p-card *ngIf="alertas().length > 0">
             <ng-template pTemplate="header">
               <div class="lm-row" style="padding:16px 16px 0;">
                 <h3 style="margin:0; flex:1;">Alertas</h3>
-                <p-tag value="3" severity="danger"></p-tag>
+                <p-tag [value]="'' + alertas().length" severity="danger"></p-tag>
               </div>
             </ng-template>
-            <div class="lm-alert-row">
-              <div class="lm-alert-icon critical"><i class="pi pi-clock"></i></div>
+            <div *ngFor="let al of alertas()" class="lm-alert-row">
+              <div class="lm-alert-icon" [ngClass]="al.nivel"><i class="pi {{ al.icono }}"></i></div>
               <div style="flex:1;">
-                <div style="font-size:13px; color:#475569;">Audiencia programada en 7 días</div>
-                <small class="lm-muted">25/06/2024 09:00</small>
+                <div style="font-size:13px; color:#475569;">{{ al.titulo }}</div>
+                <small class="lm-muted">{{ al.detalle }}</small>
               </div>
-              <p-tag value="Crítico" severity="danger"></p-tag>
-            </div>
-            <div class="lm-alert-row">
-              <div class="lm-alert-icon high"><i class="pi pi-clock"></i></div>
-              <div style="flex:1;">
-                <div style="font-size:13px; color:#475569;">Vence plazo de réplica en 5 días</div>
-                <small class="lm-muted">27/05/2024</small>
-              </div>
-              <p-tag value="Alto" severity="warn"></p-tag>
-            </div>
-            <div class="lm-alert-row">
-              <div class="lm-alert-icon info"><i class="pi pi-file"></i></div>
-              <div style="flex:1;">
-                <div style="font-size:13px; color:#475569;">Documento pendiente de firma</div>
-                <small class="lm-muted">Poder simple.pdf</small>
-              </div>
-              <p-tag value="Informativo" severity="info"></p-tag>
-            </div>
-            <div style="text-align:center; padding-top:8px;">
-              <a style="color:#2563eb; font-size:13px; font-weight:500;">Ver todas las alertas →</a>
+              <p-tag [value]="al.etiqueta" [severity]="al.severidad"></p-tag>
             </div>
           </p-card>
 
-          <p-card>
+          <p-card *ngIf="vencimientos().length > 0">
             <ng-template pTemplate="header">
               <div style="padding:16px 16px 0;">
                 <h3 style="margin:0;">Próximos vencimientos</h3>
               </div>
             </ng-template>
             <div class="lm-col" style="gap:10px;">
-              <div *ngFor="let v of vencimientos" class="lm-row">
+              <div *ngFor="let v of vencimientos()" class="lm-row">
                 <i class="pi pi-calendar" style="color:#2563eb;"></i>
                 <div style="flex:1;">
-                  <div style="font-size:13px; color:#0f172a; font-weight:500;">{{ v.fecha }}</div>
-                  <small class="lm-muted">{{ v.descripcion }}</small>
+                  <div style="font-size:13px; color:#0f172a; font-weight:500;">{{ v.fecha | date: 'dd/MM/yyyy HH:mm' }}</div>
+                  <small class="lm-muted">{{ v.titulo }}</small>
                 </div>
-                <p-tag [value]="v.distancia" severity="info"></p-tag>
+                <p-tag [value]="v.distancia" [severity]="v.vencida ? 'danger' : 'info'"></p-tag>
               </div>
-              <a style="color:#2563eb; font-size:13px; font-weight:500; text-align:center; cursor:pointer;">Ver calendario completo →</a>
             </div>
           </p-card>
 
@@ -401,8 +405,14 @@ export class AtencionDetailComponent implements OnInit {
   private prompt = inject(PromptService);
   private provisionesApi = inject(ProvisionesApiService);
   protected me = inject(MeService);
+  private usuariosApi = inject(UsuariosAdminService);
+  private nombres = signal(new Map<string, string>());
 
-  protected atencion = signal<AtencionConMaestros | null>(null);
+  protected nombreUsuario(id: string | null | undefined): string {
+    return (id && this.nombres().get(id)) || "—";
+  }
+
+  protected atencion = signal<FichaAtencion | null>(null);
   protected resumenProvision = signal<ResumenProvisionAtencion | null>(null);
   protected copago = signal<CopagoResultado | null>(null);
   protected arancel = signal<ArancelAtencion | null>(null);
@@ -433,11 +443,62 @@ export class AtencionDetailComponent implements OnInit {
     return this.atencion()?.abogadoAsignadoId ?? this.me.user()?.id;
   }
 
-  protected vencimientos = [
-    { fecha: "25/06/2024 09:00", descripcion: "Audiencia de juicio", distancia: "En 7 días" },
-    { fecha: "27/05/2024", descripcion: "Plazo de réplica", distancia: "En 5 días" },
-    { fecha: "05/06/2024", descripcion: "Informe pericial", distancia: "En 16 días" },
-  ];
+  private pendientesConPlazo = computed(() =>
+    this.gestiones()
+      .filter((g) => g.estado === "Pendiente" && g.fechaCompromiso)
+      .sort((x, y) => new Date(x.fechaCompromiso!).getTime() - new Date(y.fechaCompromiso!).getTime()),
+  );
+
+  protected vencimientos = computed(() =>
+    this.pendientesConPlazo()
+      .slice(0, 5)
+      .map((g) => {
+        const dias = diasHasta(g.fechaCompromiso!);
+        return {
+          fecha: g.fechaCompromiso!,
+          titulo: g.titulo,
+          vencida: dias < 0,
+          distancia: dias < 0 ? `Vencida hace ${-dias} d` : dias === 0 ? "Hoy" : `En ${dias} d`,
+        };
+      }),
+  );
+
+  protected proximaAudiencia = computed(
+    () =>
+      this.pendientesConPlazo().find((g) => g.tipo === "Audiencia" && diasHasta(g.fechaCompromiso!) >= 0)?.fechaCompromiso ?? null,
+  );
+
+  // Alertas derivadas de datos reales: plazos de gestiones, arancel por pagar y provisiones.
+  protected alertas = computed<AlertaCaso[]>(() => {
+    const out: AlertaCaso[] = [];
+    for (const g of this.pendientesConPlazo()) {
+      const dias = diasHasta(g.fechaCompromiso!);
+      if (dias > 7) continue;
+      const fecha = new Date(g.fechaCompromiso!).toLocaleDateString("es-CL");
+      if (dias < 0) out.push({ nivel: "critical", icono: "pi-clock", titulo: `${g.titulo}: plazo vencido`, detalle: fecha, etiqueta: "Crítico", severidad: "danger" });
+      else
+        out.push({
+          nivel: dias <= 3 ? "critical" : "high",
+          icono: "pi-clock",
+          titulo: `${g.titulo}: vence ${dias === 0 ? "hoy" : `en ${dias} días`}`,
+          detalle: fecha,
+          etiqueta: dias <= 3 ? "Crítico" : "Alto",
+          severidad: dias <= 3 ? "danger" : "warn",
+        });
+    }
+    const ar = this.arancel();
+    if (ar && ["Requerido", "EnAprobacion", "Aprobado"].includes(ar.estado)) {
+      out.push({ nivel: "high", icono: "pi-dollar", titulo: `Arancel ${ESTADO_ARANCEL_LABEL[ar.estado].toLowerCase()}`, detalle: "El caso espera el pago del copago", etiqueta: "Alto", severidad: "warn" });
+    }
+    const r = this.resumenProvision();
+    if (r && r.saldoPorRendir > 0) {
+      out.push({ nivel: "info", icono: "pi-wallet", titulo: "Provisión con saldo por rendir", detalle: `$ ${r.saldoPorRendir.toLocaleString("es-CL")}`, etiqueta: "Informativo", severidad: "info" });
+    }
+    if (r && r.pendientePago > 0) {
+      out.push({ nivel: "info", icono: "pi-wallet", titulo: "Provisión pendiente de pago del cliente", detalle: `$ ${r.pendientePago.toLocaleString("es-CL")}`, etiqueta: "Informativo", severidad: "info" });
+    }
+    return out;
+  });
 
   // Pipeline de etapas definido junto al mapa de transiciones (shared/estados-atencion).
   protected pipeline = computed<PipelineStep[]>(() => {
@@ -457,6 +518,7 @@ export class AtencionDetailComponent implements OnInit {
   });
 
   ngOnInit() {
+    this.usuariosApi.opciones().subscribe((us) => this.nombres.set(new Map(us.map((u) => [u.id, u.nombre]))));
     const id = this.route.snapshot.paramMap.get("id");
     if (id) this.cargar(id);
   }
@@ -535,22 +597,6 @@ export class AtencionDetailComponent implements OnInit {
     if (tipo === "Consulta") return "Consultas";
     if (tipo === "Asesoria") return "Asesorías";
     return "Juicios";
-  }
-
-  afiliadoNombre(): string {
-    return "María Fernández";
-  }
-
-  afiliadoRut(): string {
-    return "12.345.678-9";
-  }
-
-  responsableNombre(): string {
-    return "María Fernández";
-  }
-
-  responsableEmail(): string {
-    return "mfernandez@legalchile.cl";
   }
 
   estadoLabel(e: EstadoAtencion): string {

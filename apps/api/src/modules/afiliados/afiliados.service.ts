@@ -18,6 +18,7 @@ import {
 import { planes } from "../../db/schema/planes";
 import { formatearRut, rutValido } from "../../common/utils/rut";
 import { planesDeAfiliados } from "./vigencia";
+import { rutComparable } from "../../common/busqueda/criterios";
 import type { CreateAfiliadoDto, UpdateAfiliadoDto, FiltroAfiliadosDto } from "./dto";
 
 @Injectable()
@@ -43,6 +44,12 @@ export class AfiliadosService {
                 ),
               ),
           )
+        : undefined,
+      filtro.canalId
+        ? sql`exists (select 1 from planes_afiliado pa join planes p on p.cod_plan = pa.cod_plan where pa.afiliado_id = ${afiliados.id} and p.canal_id = ${filtro.canalId})`
+        : undefined,
+      filtro.rut
+        ? sql`upper(regexp_replace(${afiliados.rut}, '[^0-9kK]', '', 'g')) like ${`%${rutComparable(filtro.rut)}%`}`
         : undefined,
       filtro.vigencia ? eq(afiliados.vigencia, filtro.vigencia) : undefined,
       filtro.q && !useFts

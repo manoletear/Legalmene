@@ -1,3 +1,5 @@
+import type { CriteriosBusqueda } from "@legalmene/shared";
+import { condicionAtencion } from "../../common/busqueda/criterios";
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { and, count, desc, eq } from "drizzle-orm";
 import type {
@@ -16,7 +18,7 @@ import { AtencionesService, Actor } from "./atenciones.service";
 import type { CreateAtencionDto } from "./dto";
 import { filtroAtenciones } from "../../common/acceso/alcance";
 
-export interface FiltroDerivaciones {
+export interface FiltroDerivaciones extends CriteriosBusqueda {
   estado?: EstadoDerivacion;
   consultaId?: string;
   page?: number;
@@ -40,6 +42,7 @@ export class DerivacionesService {
       filtroAtenciones(),
       f.estado ? eq(derivaciones.estado, f.estado) : undefined,
       f.consultaId ? eq(derivaciones.consultaId, f.consultaId) : undefined,
+      condicionAtencion(f, derivaciones.createdAt),
     );
     const [rows, [{ value: total }]] = await Promise.all([
       this.db

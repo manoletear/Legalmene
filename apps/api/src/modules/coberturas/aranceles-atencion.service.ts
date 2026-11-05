@@ -1,3 +1,5 @@
+import type { CriteriosBusqueda } from "@legalmene/shared";
+import { condicionAtencion } from "../../common/busqueda/criterios";
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { and, asc, desc, eq } from "drizzle-orm";
 import {
@@ -150,7 +152,7 @@ export class ArancelesAtencionService {
     });
   }
 
-  async listar(estado?: EstadoArancelAtencion) {
+  async listar(f: CriteriosBusqueda & { estado?: EstadoArancelAtencion } = {}) {
     const q = this.db
       .select({
         arancel: arancelesAtencion,
@@ -163,7 +165,9 @@ export class ArancelesAtencionService {
       .innerJoin(atenciones, eq(atenciones.id, arancelesAtencion.atencionId))
       .orderBy(desc(arancelesAtencion.updatedAt))
       .limit(200);
-    const rows = await q.where(and(filtroAtenciones(), estado ? eq(arancelesAtencion.estado, estado) : undefined));
+    const rows = await q.where(
+      and(filtroAtenciones(), condicionAtencion(f), f.estado ? eq(arancelesAtencion.estado, f.estado) : undefined),
+    );
     return rows.map((r) => ({ ...r.arancel, correlativo: r.correlativo, asunto: r.asunto, tipo: r.tipo, codPlan: r.codPlan }));
   }
 

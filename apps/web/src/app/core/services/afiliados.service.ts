@@ -14,12 +14,14 @@ export class AfiliadosApiService {
     pageSize?: number;
     q?: string;
     codPlan?: string;
+    canalId?: string;
+    rut?: string;
+    vigencia?: string;
   }): Observable<PaginatedResult<AfiliadoConPlanes>> {
     let params = new HttpParams();
-    if (opts.page) params = params.set("page", opts.page);
-    if (opts.pageSize) params = params.set("pageSize", opts.pageSize);
-    if (opts.q) params = params.set("q", opts.q);
-    if (opts.codPlan) params = params.set("codPlan", opts.codPlan);
+    Object.entries(opts).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") params = params.set(k, String(v));
+    });
     return this.http.get<PaginatedResult<AfiliadoConPlanes>>(this.base, { params });
   }
 
