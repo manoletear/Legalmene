@@ -147,7 +147,7 @@ interface NavItem {
         </p-popover>
       </ng-container>
       <ng-template #loggingIn>
-        <span class="lm-muted">Cargando…</span>
+        <span class="lm-muted">{{ me.error() ? "Sin sesión" : "Cargando…" }}</span>
       </ng-template>
     </header>
 
@@ -202,7 +202,13 @@ interface NavItem {
 
       <main style="flex:1; overflow:auto;">
         <div class="page">
-          <router-outlet />
+          <div *ngIf="me.error() as err; else contenido" class="lm-error-sesion" role="alert">
+            <i class="pi {{ err.tipo === 'sin_conexion' ? 'pi-wifi' : 'pi-lock' }}"></i>
+            <h2>{{ err.tipo === "sin_conexion" ? "No se pudo conectar con el servidor" : "Acceso no habilitado" }}</h2>
+            <p>{{ err.mensaje }}</p>
+            <button pButton type="button" icon="pi pi-refresh" label="Reintentar" (click)="reintentar()"></button>
+          </div>
+          <ng-template #contenido><router-outlet /></ng-template>
         </div>
       </main>
     </div>
@@ -246,6 +252,10 @@ export class AppComponent implements OnInit {
     { label: "Maestros", icon: "pi-list", route: "/admin/maestros", permisos: ["maestros.administrar"] },
     { label: "Webhooks", icon: "pi-link", route: "/admin/webhooks", permisos: ["webhooks.ver"] },
   ]);
+
+  protected reintentar() {
+    window.location.reload();
+  }
 
   ngOnInit() {
     this.me.load();
