@@ -181,6 +181,7 @@ interface PipelineStep {
                 <div class="lm-info-row"><span>Provisionado (pagado)</span><strong>$ {{ r.provisionado | number }}</strong></div>
                 <div class="lm-info-row"><span>Entregado al abogado</span><strong>$ {{ r.entregado | number }}</strong></div>
                 <div class="lm-info-row"><span>Gastado</span><strong>$ {{ r.utilizado | number }}</strong></div>
+                <div *ngIf="r.reintegrado > 0" class="lm-info-row"><span>Devuelto</span><strong>$ {{ r.reintegrado | number }}</strong></div>
                 <div class="lm-info-row"><span>Saldo por rendir</span><strong [style.color]="r.saldoPorRendir > 0 ? '#b45309' : '#16a34a'">$ {{ r.saldoPorRendir | number }}</strong></div>
                 <div *ngIf="r.pendientePago > 0" class="lm-info-row"><span>Pendiente de pago</span><strong style="color:#b45309;">$ {{ r.pendientePago | number }}</strong></div>
               </ng-container>
