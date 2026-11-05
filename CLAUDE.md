@@ -5,6 +5,17 @@ Sistema de gestión legal SaaS para LegalChile. Reemplaza el sistema legado en S
 La arquitectura completa, plan de migración y justificación están en
 [`docs/propuesta-arquitectura-legalchile.md`](./docs/propuesta-arquitectura-legalchile.md).
 
+Los requerimientos funcionales del cliente (Anexo PSL), las brechas contra este código y
+el plan de trabajo están en [`docs/requerimientos-anexo-psl.md`](./docs/requerimientos-anexo-psl.md).
+**Ante cualquier duda de negocio, ese documento manda.** Los mockups de la propuesta Tooxs
+(Dashboard, Ficha de Caso, Búsqueda y Reportes) guían el diseño visual; sus cifras son de
+ejemplo y nunca deben quedar fijas en el código.
+
+### Decisiones vigentes
+- Stack: **NestJS + AWS** (no Azure/FastAPI como dice la propuesta Tooxs).
+- Documentos: **Amazon S3** con URLs firmadas (el cliente descartó SharePoint).
+- El plan es un **producto**, no un tenant (corrección en curso, ver plan de trabajo §5).
+
 ## Estado del proyecto
 
 | Componente | Estado |
@@ -13,7 +24,8 @@ La arquitectura completa, plan de migración y justificación están en
 | Backend NestJS — auth + módulos core | ✅ Esqueleto funcional |
 | Módulos Afiliados / Atenciones / Gestiones / Comités / Pagos | ✅ CRUD base + flujos clave |
 | Cargas masivas FLUJO/STOCK | ✅ Implementado |
-| Frontend Angular 19 | ✅ Shell + Dashboard + Afiliados |
+| Frontend Angular 19 | ✅ Shell + Dashboard + Afiliados + Atenciones + Aranceles + Provisiones |
+| Alineación con Anexo PSL | ⏳ Modelo núcleo en corrección (ver `docs/requerimientos-anexo-psl.md`) |
 | Infraestructura AWS (CDK) | ⏳ Pendiente |
 | Migración SQL Server → Postgres | ⏳ Pendiente |
 | WebPay producción | ⏳ Stub (esperar SDK Transbank) |
@@ -22,9 +34,11 @@ La arquitectura completa, plan de migración y justificación están en
 ## Stack
 
 - **Backend**: NestJS 10 · TypeScript estricto · Drizzle ORM · PostgreSQL 16
-- **Frontend**: Angular 19 (standalone components) · Angular Material · MSAL.js para Entra ID
+- **Frontend**: Angular 19 (standalone components) · PrimeNG (Aura) · MSAL.js para Entra ID · locale es-CL
 - **Auth**: Microsoft Entra ID (OIDC) — JWT verificado vía JWKS
-- **Multi-tenancy**: columna `cod_plan` en cada tabla operacional. Header `X-Cod-Plan` filtra acceso.
+- **Multi-tenancy (legado, en corrección)**: hoy `cod_plan` + header `X-Cod-Plan` actúan como
+  tenant. Según el Anexo, el acceso se define por perfil y por propiedad de la atención, y un
+  RUT puede tener varios planes (`planes_afiliado` con vigencias).
 - **Compute** (objetivo): ECS Fargate (monolito modular) + Lambda para tareas event-driven
 - **Storage** (objetivo): Aurora PostgreSQL Multi-AZ + S3 + OpenSearch
 - **Local**: Docker Compose (Postgres + Adminer)
@@ -91,8 +105,16 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   con el lenguaje del Anexo del cliente.
 - **Tipos compartidos** entre API y web viven en `packages/shared` (Zod schemas + types
   inferidos). Nunca duplicar tipos entre apps.
-- **Multi-tenancy**: TODO endpoint que toque datos de un plan debe usar el decorator
-  `@CodPlan()` y verificar que el usuario tiene acceso a ese plan.
+- **Multi-tenancy**: mientras exista el modelo legado, todo endpoint que toque datos de un
+  plan usa `@CodPlan()`. No crear nuevas tablas que dependan de `cod_plan` como tenant;
+  seguir el modelo objetivo de `docs/requerimientos-anexo-psl.md`.
+- **Reglas de negocio clave (Anexo)**: solo planes vigentes permiten nuevas atenciones;
+  aranceles son por materia y la cobertura por plan define el copago; una atención con
+  arancel impago queda detenida; no se cierra una asesoría/juicio con gestiones o comité
+  pendientes; no se pide nueva entrega de provisión con rendiciones pendientes; las
+  búsquedas no precargan datos.
+- **Sin datos de mockup en el código**: si un valor no existe en la API, mostrar vacío o
+  "sin datos", nunca una cifra inventada.
 - **RUTs**: siempre normalizar con `formatearRut()` antes de comparar/insertar.
 - **Soft-delete**: marcar `vigencia: "Eliminado"` en vez de `DELETE` (Ley 19.628 exige
   trazabilidad).
@@ -110,11 +132,10 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
 
 ## TODOs prioritarios
 
-1. Generar primera migración Drizzle (`pnpm db:generate`) y commitear.
-2. Implementar interceptor de auditoría que escriba `auditoria` automáticamente.
-3. Resolver `usuarios.id` real al validar JWT (upsert por `entraOid` en login).
-4. Integración real Transbank WebPay (reemplazar stub en `pagos.service.ts`).
-5. Upload presigned URL para S3 en módulo de documentos.
-6. Notificaciones de vencimiento de gestiones/comités (EventBridge + SES).
-7. AWS CDK en `infra/` para Aurora + ECS + ALB + S3 + OpenSearch.
-8. Migración SQL Server 2008 → Aurora (AWS DMS + SCT) — ver plan en `docs/`.
+El orden funcional está en `docs/requerimientos-anexo-psl.md` §5 (primero el modelo núcleo:
+afiliado único + `planes_afiliado`). Pendientes técnicos:
+
+1. Integración real Transbank WebPay (reemplazar stub en `pagos.service.ts`).
+2. Notificaciones por correo de vencimientos y flujos (SES).
+3. AWS CDK en `infra/` para Aurora + ECS + ALB + S3 (corregir `apps/api/Dockerfile`, que no copia `pnpm-lock.yaml`).
+4. Migración SQL Server 2008 → Aurora (AWS DMS + SCT) — ver plan en `docs/`.
