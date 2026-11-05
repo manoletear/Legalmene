@@ -5,20 +5,14 @@ import { UsuariosService, UsuarioNoHabilitadoError, type ClaimsDev } from "../us
 import { AuditService } from "../audit/audit.service";
 import { fijarAcceso } from "../../common/acceso/contexto";
 import type { AuthenticatedUser } from "../../common/decorators/current-user.decorator";
+import { dominioPermitido } from "./dominio";
+import { tokenBearer, verificarSesion } from "./sesion";
 
-// Anexo §IV: solo usuarios del dominio LegalChile ingresan.
-export function dominioPermitido(email: string, config = process.env.ALLOWED_EMAIL_DOMAIN): boolean {
-  const dominios = (config ?? "legalchile.cl")
-    .split(",")
-    .map((d) => d.trim().toLowerCase())
-    .filter(Boolean);
-  const dominio = email.split("@")[1]?.toLowerCase() ?? "";
-  return dominios.includes(dominio);
-}
+export { dominioPermitido };
 
 type RequestConUsuario = Request & { user?: AuthenticatedUser | { id: string } };
 
-// Valida el JWT de Entra ID y resuelve el usuario con su perfil y permisos. En modo DEV
+// Valida la sesión propia (enlace de acceso) o el JWT de Entra ID y resuelve el usuario con su perfil y permisos. En modo DEV
 // (AUTH_DISABLED=true) acepta X-Dev-User=<base64-json> con {entraOid,email,nombre,perfil}.
 // El bloqueo por intentos fallidos de login lo aplica Entra ID (Smart Lockout); aquí se
 // rechazan usuarios desactivados o bloqueados por el administrador.
@@ -34,7 +28,12 @@ export class JwtAuthGuard extends AuthGuard("jwt-entra") {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<RequestConUsuario>();
     let usuarioId: string;
-    if (process.env.AUTH_DISABLED === "true") {
+    // Sesión propia (login con enlace de acceso): se acepta también en modo demo.
+    const bearer = tokenBearer(req.header("authorization"));
+    const sesion = bearer ? verificarSesion(bearer) : null;
+    if (sesion) {
+      usuarioId = sesion;
+    } else if (process.env.AUTH_DISABLED === "true") {
       usuarioId = (await this.usuariosService.resolveDev(this.claimsDev(req))).id;
     } else {
       await (super.canActivate(context) as Promise<boolean>);

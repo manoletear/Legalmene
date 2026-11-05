@@ -68,3 +68,24 @@ export const usuarios = pgTable(
 
 export type Usuario = typeof usuarios.$inferSelect;
 export type NuevoUsuario = typeof usuarios.$inferInsert;
+
+// Enlaces de acceso ("magic link"): solo se guarda el hash SHA-256 del token, que es de un
+// solo uso y vence a los pocos minutos. La fila queda como registro del intento de ingreso.
+export const enlacesAcceso = pgTable(
+  "enlaces_acceso",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    usuarioId: uuid("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull().unique(),
+    expiraEn: timestamp("expira_en", { withTimezone: true }).notNull(),
+    usadoEn: timestamp("usado_en", { withTimezone: true }),
+    ip: varchar("ip", { length: 64 }),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    usuarioIdx: index("enlaces_acceso_usuario_idx").on(t.usuarioId, t.createdAt),
+  }),
+);

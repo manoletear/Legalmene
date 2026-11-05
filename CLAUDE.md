@@ -35,7 +35,7 @@ ejemplo y nunca deben quedar fijas en el código.
 
 - **Backend**: NestJS 10 · TypeScript estricto · Drizzle ORM · PostgreSQL 16
 - **Frontend**: Angular 19 (standalone components) · PrimeNG (Aura) · MSAL.js para Entra ID · locale es-CL
-- **Auth**: Microsoft Entra ID (OIDC) — JWT verificado vía JWKS
+- **Auth**: login con enlace de acceso (magic link, `/login`) + Microsoft Entra ID (OIDC, JWT vía JWKS)
 - **Planes (no hay tenant)**: `afiliados` es la persona (RUT único) y `planes_afiliado` guarda
   cada relación RUT–Plan con su vigencia. `atenciones.cod_plan` es el plan bajo el cual se
   atendió. No existe header `X-Cod-Plan`; los listados aceptan `?codPlan=` como filtro opcional.
@@ -136,6 +136,13 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   cambio escribe su fila de eventos. Aprobar exige `aranceles_atencion.aprobar` / `provisiones.autorizar`
   (jefaturas); registrar pagos `*.registrar_pago` (Contador); disponer y entregar fondos
   `provisiones.disponer_entregar` (Finanzas). El CLP de un arancel usa la UF de la fecha de pago.
+- **Login con enlace de acceso**: `POST /auth/enlace` siempre responde 202 (no revela si el correo
+  existe); solo usuarios activos, no bloqueados y del dominio permitido reciben enlace (máx. 3 cada
+  15 min). El token es de un solo uso, vence en 15 min y se guarda solo su hash (`enlaces_acceso`).
+  `POST /auth/enlace/verificar` lo canjea por una sesión propia (JWT HS256, 8 h, `SESSION_JWT_SECRET`)
+  que `JwtAuthGuard` acepta antes que Entra ID. Con `AUTH_DISABLED=true` el enlace se devuelve en la
+  respuesta (demo sin correo); nunca en producción. Altas de usuario: pendiente (hoy entran los ya
+  existentes y `BOOTSTRAP_ADMIN_EMAILS`).
 - **Permisos**: no existen roles fijos. Todo endpoint que modifique datos (o exponga un módulo
   restringido) lleva `@UseGuards(JwtAuthGuard, PermisosGuard)` + `@Permiso("clave")` con una
   clave del catálogo `PERMISOS` (`packages/shared/src/types/permisos.ts`); si falta una clave,

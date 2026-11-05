@@ -4,7 +4,7 @@ import { MessageService } from "primeng/api";
 import { etiquetaPermiso, type Permiso } from "@legalmene/shared";
 import { MeService } from "./services/me.service";
 
-// Guard de ruta: sin el permiso vuelve al dashboard con un aviso.
+// Guard de ruta: sin sesión va al login; sin el permiso vuelve al dashboard con un aviso.
 export function permisoGuard(...permisos: Permiso[]): CanActivateFn {
   return async () => {
     const me = inject(MeService);
@@ -12,6 +12,7 @@ export function permisoGuard(...permisos: Permiso[]): CanActivateFn {
     const msg = inject(MessageService);
     await me.asegurar();
     if (me.algunoDe(permisos)) return true;
+    if (me.error()?.tipo === "sin_sesion") return router.parseUrl("/login");
     msg.add({
       severity: "warn",
       summary: "Sin acceso",

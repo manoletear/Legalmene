@@ -7,7 +7,8 @@ import { environment } from "../../../environments/environment";
 export type CurrentUser = UsuarioActual;
 
 export interface ErrorSesion {
-  tipo: "sin_conexion" | "sin_acceso";
+  // sin_sesion: la API respondió 401 (no hay sesión o venció); el interceptor lleva al login.
+  tipo: "sin_conexion" | "sin_acceso" | "sin_sesion";
   mensaje: string;
 }
 
@@ -29,6 +30,13 @@ export class MeService {
 
   algunoDe(ps: readonly Permiso[]): boolean {
     return ps.some((p) => this.permisos().has(p));
+  }
+
+  // Tras iniciar o cerrar sesión: olvida el usuario cargado.
+  reiniciar(): void {
+    this._user.set(null);
+    this._error.set(null);
+    this.cargando = null;
   }
 
   load(): void {
@@ -60,7 +68,10 @@ export class MeService {
 
 function describirError(err: unknown): ErrorSesion {
   const http = err instanceof HttpErrorResponse ? err : null;
-  if (http && (http.status === 401 || http.status === 403)) {
+  if (http && http.status === 401) {
+    return { tipo: "sin_sesion", mensaje: "Su sesión no está iniciada o venció. Ingrese nuevamente." };
+  }
+  if (http && http.status === 403) {
     const mensaje = typeof http.error?.message === "string" ? http.error.message : "Su usuario no tiene acceso a la plataforma.";
     return { tipo: "sin_acceso", mensaje };
   }

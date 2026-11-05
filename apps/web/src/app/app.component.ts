@@ -1,7 +1,8 @@
 import { Component, OnInit, ViewChild, inject, signal, computed } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
-import { RouterLink, RouterLinkActive, RouterOutlet, Router } from "@angular/router";
+import { NavigationEnd, RouterLink, RouterLinkActive, RouterOutlet, Router } from "@angular/router";
+import { filter } from "rxjs";
 import { BreakpointObserver, Breakpoints } from "@angular/cdk/layout";
 import { ButtonModule } from "primeng/button";
 import { DrawerModule } from "primeng/drawer";
@@ -13,6 +14,7 @@ import { ConfirmDialogModule } from "primeng/confirmdialog";
 import { ToastModule } from "primeng/toast";
 import type { Permiso } from "@legalmene/shared";
 import { MeService } from "./core/services/me.service";
+import { SesionService } from "./core/services/sesion.service";
 import { MaintenanceService } from "./core/services/maintenance.service";
 import { NotifInboxApiService, NotifItem } from "./core/services/notif-inbox.service";
 
@@ -52,7 +54,9 @@ const CLAVE_MENU_EXPANDIDO = "lm.menuExpandido";
     <p-toast></p-toast>
     <p-confirmDialog></p-confirmDialog>
 
-    <div class="lm-shell">
+    <ng-template #soloLogin><router-outlet /></ng-template>
+
+    <div class="lm-shell" *ngIf="!enLogin(); else soloLogin">
       <aside class="lm-sidebar" [class.colapsado]="!menuExpandido()" *ngIf="!isMobile()">
         <div class="lm-sidebar-top">
           <ng-container *ngIf="menuExpandido(); else soloHamburguesa">
@@ -183,6 +187,10 @@ const CLAVE_MENU_EXPANDIDO = "lm.menuExpandido";
             <div class="lm-small" style="padding:8px 4px;">
               Perfil: <strong style="color:#2563eb;">{{ user.perfil.nombre }}</strong>
             </div>
+            <button
+              pButton type="button" icon="pi pi-sign-out" label="Cerrar sesión" [text]="true" size="small"
+              *ngIf="sesionActiva()" (click)="cerrarSesion()"
+            ></button>
           </div>
         </p-popover>
       </ng-container>
@@ -248,9 +256,12 @@ const CLAVE_MENU_EXPANDIDO = "lm.menuExpandido";
         <div class="page">
           <div *ngIf="me.error() as err; else contenido" class="lm-error-sesion" role="alert">
             <i class="pi {{ err.tipo === 'sin_conexion' ? 'pi-wifi' : 'pi-lock' }}"></i>
-            <h2>{{ err.tipo === "sin_conexion" ? "No se pudo conectar con el servidor" : "Acceso no habilitado" }}</h2>
+            <h2>{{ err.tipo === "sin_conexion" ? "No se pudo conectar con el servidor" : err.tipo === "sin_sesion" ? "Sesión no iniciada" : "Acceso no habilitado" }}</h2>
             <p>{{ err.mensaje }}</p>
-            <button pButton type="button" icon="pi pi-refresh" label="Reintentar" (click)="reintentar()"></button>
+            <a pButton *ngIf="err.tipo === 'sin_sesion'; else botonReintentar" routerLink="/login" icon="pi pi-sign-in" label="Ingresar"></a>
+            <ng-template #botonReintentar>
+              <button pButton type="button" icon="pi pi-refresh" label="Reintentar" (click)="reintentar()"></button>
+            </ng-template>
           </div>
           <ng-template #contenido><router-outlet /></ng-template>
         </div>
@@ -265,6 +276,11 @@ export class AppComponent implements OnInit {
   private notif = inject(NotifInboxApiService);
   private router = inject(Router);
   private breakpoints = inject(BreakpointObserver);
+  private sesion = inject(SesionService);
+
+  // La pantalla de login se muestra sin el menú ni el header.
+  protected enLogin = signal(esRutaLogin(location.pathname));
+  protected sesionActiva = signal(this.sesion.activa);
 
   @ViewChild("notifPopover") private notifPopover!: Popover;
   @ViewChild("userPopover") private userPopover!: Popover;
@@ -364,8 +380,20 @@ export class AppComponent implements OnInit {
     window.location.reload();
   }
 
+  protected cerrarSesion() {
+    this.userPopover?.hide();
+    this.sesion.cerrar();
+    this.sesionActiva.set(false);
+    this.me.reiniciar();
+    void this.router.navigate(["/login"]);
+  }
+
   ngOnInit() {
-    this.me.load();
+    this.router.events.pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd)).subscribe((e) => {
+      this.enLogin.set(esRutaLogin(e.urlAfterRedirects));
+      this.sesionActiva.set(this.sesion.activa);
+    });
+    if (!this.enLogin()) this.me.load();
     this.cargarInbox();
     this.breakpoints
       .observe([Breakpoints.Handset, Breakpoints.Small])
@@ -390,6 +418,7 @@ export class AppComponent implements OnInit {
   }
 
   cargarInbox() {
+    if (this.enLogin()) return;
     this.notif.inbox({ pageSize: 10 }).subscribe({
       next: (r) => {
         this.unseenCount.set(r.unseen);
@@ -415,4 +444,8 @@ function leerMenuExpandido(): boolean {
   } catch {
     return false;
   }
+}
+
+function esRutaLogin(url: string): boolean {
+  return url === "/login" || url.startsWith("/login/") || url.startsWith("/login?");
 }

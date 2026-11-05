@@ -510,3 +510,51 @@ body {
   > i { font-size: 28px; color: #94a3b8; }
   p { margin: 8px 0 0; }
 }
+
+// Login con enlace de acceso: panel de marca a la izquierda (mismo azul del menú) y tarjeta.
+.lm-login { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); background: #f5f7fa; }
+.lm-login-panel {
+  background: linear-gradient(180deg, #3d64a8 0%, #2c4a7f 45%, #22385f 100%);
+  border-radius: 0 28px 28px 0;
+  color: #fff;
+  padding: 48px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+}
+.lm-login-marca { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.lm-login-marca .lm-brand-mark { width: 48px; height: 48px; font-size: 22px; background: rgba(255, 255, 255, 0.16); box-shadow: none; }
+.lm-login-marca strong { display: block; font-size: 20px; letter-spacing: 1px; }
+.lm-login-marca small { display: block; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: rgba(255, 255, 255, 0.65); }
+.lm-login-panel h1 { margin: 0; font-size: 32px; line-height: 1.2; max-width: 440px; }
+.lm-login-panel p { margin: 0; color: rgba(255, 255, 255, 0.75); font-size: 16px; max-width: 420px; }
+.lm-login-card {
+  align-self: center;
+  justify-self: center;
+  width: min(420px, calc(100% - 32px));
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  padding: 32px;
+}
+.lm-login-card form, .lm-login-estado { display: flex; flex-direction: column; gap: 12px; }
+.lm-login-card h2 { margin: 0 0 8px; font-size: 22px; }
+.lm-login-card label { font-size: 13px; font-weight: 600; color: #334155; }
+.lm-login-card input { width: 100%; }
+.lm-login-card .p-button { justify-content: center; }
+.lm-login-error { color: #dc2626; }
+.lm-login-estado { align-items: center; text-align: center; }
+.lm-login-estado > i { font-size: 40px; color: #2563eb; }
+.lm-login-estado p { margin: 0; color: #475569; }
+.lm-login-icono-error { color: #dc2626 !important; }
+.lm-login-demo { width: 100%; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.lm-login-demo p { font-size: 13px; color: #9a3412; }
+@media (max-width: 860px) {
+  .lm-login { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .lm-login-panel { border-radius: 0 0 24px 24px; padding: 28px 16px; }
+  .lm-login-panel h1 { font-size: 22px; }
+  .lm-login-marca { margin-bottom: 8px; }
+  .lm-login-card { align-self: start; margin-top: 24px; padding: 24px; }
+}

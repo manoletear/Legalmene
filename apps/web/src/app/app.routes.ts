@@ -6,11 +6,15 @@ const atencionesList = () =>
     (m) => m.AtencionesListComponent,
   );
 
+const loginPage = () => import("./features/auth/login.component").then((m) => m.LoginComponent);
+
 const stubPage = () =>
   import("./features/stub/stub-page.component").then((m) => m.StubPageComponent);
 
 export const routes: Routes = [
   { path: "", redirectTo: "dashboard", pathMatch: "full" },
+  { path: "login", loadComponent: loginPage },
+  { path: "login/verificar", loadComponent: loginPage },
   {
     path: "dashboard",
     loadComponent: () =>
