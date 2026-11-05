@@ -177,25 +177,42 @@ body {
 
 // Sidebar
 .lm-sidebar {
-  width: 232px;
+  width: 240px;
+  flex-shrink: 0;
   background: #ffffff;
   border-right: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
-  padding-top: 12px;
+  padding-top: 8px;
+  transition: width 160ms ease;
 }
 
-.lm-sidebar nav { flex: 1; display: flex; flex-direction: column; }
+.lm-sidebar nav { flex: 1; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; }
+
+.lm-nav-grupo { display: flex; flex-direction: column; padding-bottom: 6px; }
+
+.lm-nav-titulo {
+  padding: 12px 18px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.lm-nav-separador { border: none; border-top: 1px solid #e2e8f0; margin: 4px 14px 8px; }
 
 .lm-sidebar nav a {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 11px 18px;
+  padding: 9px 18px;
   color: #475569;
   text-decoration: none;
   font-size: 14px;
   font-weight: 500;
+  white-space: nowrap;
   transition: background 120ms ease, color 120ms ease;
   border-left: 3px solid transparent;
 }
@@ -213,17 +230,28 @@ body {
 
 .lm-sidebar nav a.active i { color: #2563eb; }
 
+.lm-sidebar.colapsado { width: 64px; }
+.lm-sidebar.colapsado nav a { justify-content: center; padding: 7px 0; gap: 0; }
+.lm-sidebar.colapsado .lm-nav-grupo { padding-bottom: 2px; }
+.lm-sidebar.colapsado .lm-nav-separador { margin: 2px 14px 4px; }
+
 .lm-sidebar-footer {
   padding: 12px 18px;
+  border: none;
   border-top: 1px solid #e2e8f0;
+  background: none;
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
+  font: inherit;
   font-size: 13px;
   color: #64748b;
   cursor: pointer;
+  white-space: nowrap;
 }
 
+.lm-sidebar.colapsado .lm-sidebar-footer { justify-content: center; padding: 12px 0; }
 .lm-sidebar-footer:hover { color: #2563eb; }
 
 // PrimeNG card override — softer shadow, larger radius.

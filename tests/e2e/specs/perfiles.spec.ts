@@ -28,10 +28,16 @@ test.describe("Perfiles y permisos", () => {
     const { ctx, page } = await paginaComo(browser, "ABOGADO");
     await page.goto("/dashboard");
     const nav = page.locator("aside.lm-sidebar nav");
+    await expect(nav.getByRole("link", { name: "Juicios", exact: true })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Usuarios", exact: true })).toHaveCount(0);
+    await expect(nav.getByRole("link", { name: "Perfiles", exact: true })).toHaveCount(0);
+    await expect(nav.getByRole("link", { name: "Auditoría", exact: true })).toHaveCount(0);
+    // El menú parte colapsado (solo íconos) y se expande con el botón inferior.
+    await expect(nav.getByText("Juicios", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Expandir menú" }).click();
     await expect(nav.getByText("Juicios", { exact: true })).toBeVisible();
-    await expect(nav.getByText("Usuarios", { exact: true })).toHaveCount(0);
-    await expect(nav.getByText("Perfiles", { exact: true })).toHaveCount(0);
-    await expect(nav.getByText("Auditoría", { exact: true })).toHaveCount(0);
+    await expect(nav.getByText("Atenciones", { exact: true })).toBeVisible();
+    await expect(nav.getByText("Administración", { exact: true })).toHaveCount(0);
     await page.goto("/admin/usuarios");
     await expect(page).toHaveURL(/\/dashboard$/);
     await expect(page.getByText("Sin acceso").first()).toBeVisible();

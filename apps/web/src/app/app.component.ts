@@ -24,6 +24,13 @@ interface NavItem {
   permisos?: Permiso[];
 }
 
+interface NavGrupo {
+  titulo: string;
+  items: NavItem[];
+}
+
+const CLAVE_MENU_EXPANDIDO = "lm.menuExpandido";
+
 @Component({
   selector: "lm-root",
   standalone: true,
@@ -162,23 +169,42 @@ interface NavItem {
 
     <!-- Body: sidebar + content -->
     <div style="display:flex; height:calc(100vh - 64px); overflow:hidden;">
-      <aside class="lm-sidebar" *ngIf="!isMobile()">
+      <aside class="lm-sidebar" [class.colapsado]="!menuExpandido()" *ngIf="!isMobile()">
+        <ng-container *ngTemplateOutlet="navegacion; context: { compacto: !menuExpandido() }"></ng-container>
+        <button
+          type="button"
+          class="lm-sidebar-footer"
+          (click)="alternarMenu()"
+          [attr.aria-expanded]="menuExpandido()"
+          [attr.aria-label]="menuExpandido() ? 'Colapsar menú' : 'Expandir menú'"
+          [pTooltip]="menuExpandido() ? '' : 'Expandir menú'"
+          tooltipPosition="right"
+        >
+          <i class="pi" [class.pi-angle-double-left]="menuExpandido()" [class.pi-angle-double-right]="!menuExpandido()"></i>
+          <span *ngIf="menuExpandido()">Colapsar menú</span>
+        </button>
+      </aside>
+
+      <ng-template #navegacion let-compacto="compacto">
         <nav>
-          <ng-container *ngFor="let item of menu()">
+          <div class="lm-nav-grupo" *ngFor="let grupo of gruposVisibles(); let primero = first">
+            <div class="lm-nav-titulo" *ngIf="!compacto && grupo.titulo">{{ grupo.titulo }}</div>
+            <hr class="lm-nav-separador" *ngIf="compacto && !primero" />
             <a
+              *ngFor="let item of grupo.items"
               [routerLink]="item.route"
               routerLinkActive="active"
               [routerLinkActiveOptions]="{ exact: item.route === '/dashboard' }"
-              *ngIf="!item.permisos || me.algunoDe(item.permisos)"
+              [pTooltip]="compacto ? item.label : ''"
+              tooltipPosition="right"
+              [attr.aria-label]="item.label"
             >
-              <i class="pi {{ item.icon }}"></i> {{ item.label }}
+              <i class="pi {{ item.icon }}"></i>
+              <span *ngIf="!compacto">{{ item.label }}</span>
             </a>
-          </ng-container>
+          </div>
         </nav>
-        <div class="lm-sidebar-footer">
-          <i class="pi pi-angle-double-left"></i> Colapsar menú
-        </div>
-      </aside>
+      </ng-template>
 
       <p-drawer
         [(visible)]="mobileDrawerVisible"
@@ -186,18 +212,9 @@ interface NavItem {
         [style]="{ width: '260px' }"
         *ngIf="isMobile()"
       >
-        <nav class="lm-sidebar" style="border:none; width:auto;" (click)="mobileDrawerVisible = false">
-          <ng-container *ngFor="let item of menu()">
-            <a
-              [routerLink]="item.route"
-              routerLinkActive="active"
-              [routerLinkActiveOptions]="{ exact: item.route === '/dashboard' }"
-              *ngIf="!item.permisos || me.algunoDe(item.permisos)"
-            >
-              <i class="pi {{ item.icon }}"></i> {{ item.label }}
-            </a>
-          </ng-container>
-        </nav>
+        <div class="lm-sidebar" style="border:none; width:auto;" (click)="mobileDrawerVisible = false">
+          <ng-container *ngTemplateOutlet="navegacion; context: { compacto: false }"></ng-container>
+        </div>
       </p-drawer>
 
       <main style="flex:1; overflow:auto;">
@@ -230,29 +247,74 @@ export class AppComponent implements OnInit {
   protected mobileDrawerVisible = false;
   protected searchTerm = "";
 
-  protected menu = computed<NavItem[]>(() => [
-    { label: "Dashboard", icon: "pi-home", route: "/dashboard" },
-    { label: "Afiliados", icon: "pi-users", route: "/afiliados", permisos: ["afiliados.ver"] },
-    { label: "Consultas", icon: "pi-comment", route: "/consultas" },
-    { label: "Asesorías", icon: "pi-id-card", route: "/asesorias" },
-    { label: "Juicios", icon: "pi-briefcase", route: "/juicios" },
-    { label: "Posesiones efectivas", icon: "pi-book", route: "/posesiones" },
-    { label: "Derivaciones", icon: "pi-share-alt", route: "/derivaciones", permisos: ["derivaciones.solicitar", "derivaciones.aprobar"] },
-    { label: "Aranceles", icon: "pi-dollar", route: "/aranceles" },
-    { label: "Coberturas", icon: "pi-percentage", route: "/admin/coberturas" },
-    { label: "Provisiones", icon: "pi-wallet", route: "/provisiones" },
-    { label: "Finanzas", icon: "pi-money-bill", route: "/finanzas", permisos: ["finanzas.ver"] },
-    { label: "Documentos", icon: "pi-folder", route: "/documentos" },
-    { label: "Reportes", icon: "pi-chart-bar", route: "/reportes", permisos: ["reportes.ver"] },
-    { label: "Gestiones", icon: "pi-check-square", route: "/gestiones" },
-    { label: "Cargas masivas", icon: "pi-cloud-upload", route: "/cargas-masivas", permisos: ["cargas.ejecutar"] },
-    { label: "Pagos", icon: "pi-credit-card", route: "/pagos", permisos: ["pagos.ver"] },
-    { label: "Auditoría", icon: "pi-history", route: "/auditoria", permisos: ["auditoria.ver"] },
-    { label: "Usuarios", icon: "pi-shield", route: "/admin/usuarios", permisos: ["usuarios.administrar"] },
-    { label: "Perfiles", icon: "pi-key", route: "/admin/perfiles", permisos: ["perfiles.administrar"] },
-    { label: "Maestros", icon: "pi-list", route: "/admin/maestros", permisos: ["maestros.administrar"] },
-    { label: "Webhooks", icon: "pi-link", route: "/admin/webhooks", permisos: ["webhooks.ver"] },
-  ]);
+  protected menuExpandido = signal(leerMenuExpandido());
+
+  private readonly grupos: NavGrupo[] = [
+    { titulo: "", items: [{ label: "Dashboard", icon: "pi-home", route: "/dashboard" }] },
+    {
+      titulo: "Atenciones",
+      items: [
+        { label: "Consultas", icon: "pi-comment", route: "/consultas" },
+        { label: "Asesorías", icon: "pi-id-card", route: "/asesorias" },
+        { label: "Juicios", icon: "pi-briefcase", route: "/juicios" },
+        { label: "Posesiones efectivas", icon: "pi-book", route: "/posesiones" },
+        { label: "Derivaciones", icon: "pi-share-alt", route: "/derivaciones", permisos: ["derivaciones.solicitar", "derivaciones.aprobar"] },
+        { label: "Gestiones", icon: "pi-check-square", route: "/gestiones" },
+        { label: "Documentos", icon: "pi-folder", route: "/documentos" },
+      ],
+    },
+    {
+      titulo: "Afiliados",
+      items: [
+        { label: "Afiliados", icon: "pi-users", route: "/afiliados", permisos: ["afiliados.ver"] },
+        { label: "Cargas masivas", icon: "pi-cloud-upload", route: "/cargas-masivas", permisos: ["cargas.ejecutar"] },
+      ],
+    },
+    {
+      titulo: "Finanzas",
+      items: [
+        { label: "Aranceles", icon: "pi-dollar", route: "/aranceles" },
+        { label: "Coberturas", icon: "pi-percentage", route: "/admin/coberturas" },
+        { label: "Provisiones", icon: "pi-wallet", route: "/provisiones" },
+        { label: "Pagos", icon: "pi-credit-card", route: "/pagos", permisos: ["pagos.ver"] },
+        { label: "Bandeja de finanzas", icon: "pi-money-bill", route: "/finanzas", permisos: ["finanzas.ver"] },
+      ],
+    },
+    {
+      titulo: "Control",
+      items: [
+        { label: "Reportes", icon: "pi-chart-bar", route: "/reportes", permisos: ["reportes.ver"] },
+        { label: "Auditoría", icon: "pi-history", route: "/auditoria", permisos: ["auditoria.ver"] },
+      ],
+    },
+    {
+      titulo: "Administración",
+      items: [
+        { label: "Usuarios", icon: "pi-shield", route: "/admin/usuarios", permisos: ["usuarios.administrar"] },
+        { label: "Perfiles", icon: "pi-key", route: "/admin/perfiles", permisos: ["perfiles.administrar"] },
+        { label: "Maestros", icon: "pi-list", route: "/admin/maestros", permisos: ["maestros.administrar"] },
+        { label: "Webhooks", icon: "pi-link", route: "/admin/webhooks", permisos: ["webhooks.ver"] },
+      ],
+    },
+  ];
+
+  // Solo las opciones que el perfil puede ver; un grupo sin opciones no se muestra.
+  protected gruposVisibles = computed<NavGrupo[]>(() => {
+    this.me.permisos();
+    return this.grupos
+      .map((g) => ({ ...g, items: g.items.filter((i) => !i.permisos || this.me.algunoDe(i.permisos)) }))
+      .filter((g) => g.items.length > 0);
+  });
+
+  protected alternarMenu() {
+    const valor = !this.menuExpandido();
+    this.menuExpandido.set(valor);
+    try {
+      localStorage.setItem(CLAVE_MENU_EXPANDIDO, valor ? "1" : "0");
+    } catch {
+      // Sin almacenamiento local el menú vuelve a su estado por defecto al recargar.
+    }
+  }
 
   protected reintentar() {
     window.location.reload();
@@ -300,5 +362,13 @@ export class AppComponent implements OnInit {
     if (n.accionUrl) void this.router.navigateByUrl(n.accionUrl);
     this.notifPopover.hide();
     setTimeout(() => this.cargarInbox(), 500);
+  }
+}
+
+function leerMenuExpandido(): boolean {
+  try {
+    return localStorage.getItem(CLAVE_MENU_EXPANDIDO) === "1";
+  } catch {
+    return false;
   }
 }
