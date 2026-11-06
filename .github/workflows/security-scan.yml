@@ -1,0 +1,83 @@
+name: Security scan
+
+# OWASP ZAP baseline + dependency review.
+# Ejecutar manualmente o tras merge a main.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * 1" # Lunes 05:00 UTC
+
+jobs:
+  zap-baseline:
+    name: OWASP ZAP baseline
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: legalmene
+          POSTGRES_PASSWORD: legalmene
+          POSTGRES_DB: legalmene
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://legalmene:legalmene@localhost:5432/legalmene
+      AUTH_DISABLED: "true"
+      STORAGE_BACKEND: local
+      DOCUMENTS_LOCAL_DIR: ./data/docs
+      DOCUMENTS_LOCAL_SECRET: zap-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "9.15.0"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @legalmene/shared build
+      - run: cd apps/api && pnpm db:migrate && pnpm db:seed
+
+      - name: Start API in background
+        run: |
+          pnpm api:dev > api.log 2>&1 &
+          sleep 30
+          curl -sf http://localhost:3001/api/v1/health || (cat api.log && exit 1)
+
+      - name: Run OWASP ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.13.0
+        with:
+          target: "http://localhost:3001"
+          rules_file_name: ".github/zap-rules.tsv"
+          cmd_options: "-a -j -m 5 -T 10"
+          allow_issue_writing: false
+          fail_action: false # avisamos pero no rompemos PR; release gate manual
+
+      - name: Upload ZAP report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-baseline-report
+          path: |
+            report_html.html
+            report_md.md
+            report_json.json
+          retention-days: 90
+
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: always

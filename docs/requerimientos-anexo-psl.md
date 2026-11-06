@@ -1,0 +1,154 @@
+# Requerimientos PSL (Anexo LegalChile) y brechas
+
+Fuentes:
+- **Anexo "Definición Requerimiento PSL"** (59 págs.) — procesos BPMN del cliente.
+- **Propuesta Tooxs** "Plataforma Integral de Gestión Legal y Operación de Servicios" — alcance cerrado v1.0, UF 480 + soporte 30 UF/mes, 28–32 semanas en 8 fases. Su Anexo 1 contiene los mockups (Dashboard, Ficha de Caso, Búsqueda y Reportes) que sigue el frontend.
+
+> **Decisión de stack (2026-11):** se mantiene **NestJS + AWS** (este repo). La propuesta
+> Tooxs ofrece Azure App Service + Python/FastAPI + SharePoint + Key Vault; la propuesta
+> comercial debe ajustarse al stack real antes de firmarse. Coinciden: Angular, PostgreSQL,
+> Microsoft Entra ID.
+
+## 1. Conceptos de negocio que mandan sobre el modelo
+
+| Concepto | Definición en el Anexo |
+|---|---|
+| **Afiliado** | Persona identificada por RUT (único). Datos: nombre, dirección, correo, fono, región, ciudad, comuna. |
+| **Plan** | Producto contratado (no es un tenant). Pertenece a un **canal**. Plan no vigente no aparece en la lista del RUT ni permite atenciones. |
+| **PlanesAfiliado** | Relación RUT–Plan con `FechaInicio`/`FechaTermino`. Un RUT puede tener varios planes. |
+| **Cobertura** | Por plan: precio en UF o % de cobertura sobre el arancel de cada materia. Se asigna al crear el plan. |
+| **Arancel** | Valor (UF) por materia. El copago = arancel no cubierto por el plan. |
+| **Cargas / Bienes** | Algunos planes cubren familiares (cargas) o bienes del afiliado, por relación RUT–Plan. |
+| **Rezagado / MetLife** | Planes especiales para RUT sin plan vigente (o con seguro MetLife). |
+| **Correlativo** | Identificador visible de cada atención; varias consultas en una llamada generan varios correlativos. |
+
+## 2. Perfiles (Anexo §IV)
+
+Admin de sistema → Gerencia Servicios (Jefatura Consultas / Judicial / Fraude → Abogado → Asistente / Procurador / Tramitador), Gerencia Finanzas (Contador → Asistente Contable), Comercial, Administrativo.
+
+- **Jefaturas** aprueban aranceles, provisiones y derivaciones de sus colaboradores; ven informes y agendas.
+- **Abogado** ve solo sus atenciones; gestiona su agenda.
+- **Tramitador/Procurador/Asistente** registran gestiones en asesorías/juicios, dejan notas, crean atenciones y las asignan (correo al abogado).
+- **Contador / Asistente contable** operan flujos de aranceles y provisiones.
+- **Comercial / Administrativo**: lectura de vigencias y atenciones por RUT (Comercial además Reportes).
+- El Admin debe poder **crear perfiles y definir accesos por módulo y por acción**. Perfiles desactivados no aparecen en listas, sí en históricos.
+- Login: dominio LegalChile (Entra ID) + **anexo telefónico** (llave para buscar grabaciones del día). Bloqueo tras 3 intentos fallidos con aviso al admin.
+
+## 3. Procesos
+
+### Consultas (§VI)
+Canales: telefónico, entrevista personal, e-mail, chat, videoconferencia. Al ingresar RUT se muestran **solo planes vigentes** (prioridad al de mayor cobertura); si no hay, Rezagado/MetLife. Campos: competencia, materia, tipo de consulta, nota/respuesta; fecha y hora de inicio automáticas al pulsar "Ir", hora de término al guardar. "Nuevo correlativo" para consultas adicionales en la misma llamada. Código de grabación asociado. Puede solicitar **derivación**.
+
+### Derivación
+Consulta → asesoría o juicio, con aprobación de jefatura; crea el nuevo correlativo vinculado al original. Estados: solicitada, en revisión, aprobada, rechazada, derivada, cerrada.
+
+### Asesorías (§VII) y Juicios (§VIII)
+- Revisión de cobertura → presentación al cliente (≤24 h hábiles) → **arancel** (si hay copago, la atención queda detenida hasta el pago) → **provisión de fondos** (según competencia/materia) → gestiones → comité → V°B° jefatura → informe al cliente → término.
+- Gestiones **predefinidas por materia/procedimiento, con orden y plazo estándar**. Inicio y término se informan al cliente por correo. Aviso al abogado el día anterior al vencimiento.
+- **No se puede terminar** una asesoría/juicio con gestiones o comité pendientes.
+- Juicio: estados Asignado → Pendiente (al presentar el primer escrito: tribunal, causa ROL/RIT, RUC, cuantía con moneda) → … → Terminado (fecha y causa de término) / Abandonado. Calidad procesal, procedimiento, contraparte (razón social, RUT, representante, abogado). **Riesgo** = materia + cuantía + cliente; riesgo ≥ 20 requiere "Revisado por Comité" antes de cerrar o abandonar.
+- Comité: actividades con fecha de registro, plazo, instructor y responsable; consultable en reportes.
+- Recursos/Incidentes **no** se consideran en la nueva versión.
+
+### Arancel (§IX) — por atención
+Estados: requerido (rojo) → enviado a aprobación (naranjo) → aprobado por jefatura (amarillo, correo a aprueba.arancel@) → pagado (verde). Pago en casa central o WebPay; monto en UF calculado con la **UF del día de pago**. Rechazo vuelve a rojo con motivo. Finanzas registra pagos y emite comprobante.
+
+### Provisión de fondos (§X)
+Solicitada → Pagada (EC registra el pago del cliente) → En aprobación (AR pide entrega) → Autorizada (AJ) / Rechazada (vuelve a Pagada) → Disponible (EF; retiro desde 15:00 del día hábil siguiente) → Entregada → Gasto real con comprobante (≤ 8 días hábiles) → Reingreso de saldo → Rendición al cliente / Devolución (cheque) → Rendida.
+- Sin retiro en 48 h hábiles: aviso y luego vuelve a Pagada.
+- **Mientras haya montos por rendir no se puede pedir nueva entrega ni nuevas provisiones.**
+- Saldos tipo cuenta corriente por abogado y por causa. Cada cambio registra usuario y fecha.
+
+### Carga masiva (§III)
+Afiliados por **flujo** (agrega RUT y actualiza FechaTermino) o **stock** (reemplaza la nómina del plan: los RUT ausentes reciben FechaTermino = hoy y quedan "Eliminado"). Primeros 5 campos obligatorios. También **cargas** y **bienes** por RUT–Plan. Al terminar, resumen (planes, RUT nuevos, eliminados, con error en xlsx) por correo a operaciones@.
+
+### Búsquedas (§XI) y Reportes (§XII–XIII)
+- Búsquedas **sin precarga**: no se muestran datos hasta aplicar filtros. Exportación a Excel según perfil.
+- Familias: Afiliados (RUT, plan, canal), Atenciones (consultas, asesorías, juicios, estado de derivación), Finanzas (aranceles, provisiones, WebPay).
+- Reportes por plan y canal cruzando PlanesAfiliado con atenciones dentro de la vigencia RUT–Plan; **tasa de uso** = atenciones / afiliados del periodo; informes con selección de campos, XLS con hoja resumen.
+- **Controller de usuarios**: carga por usuario/perfil/área (asignadas, pendientes, terminadas, comités).
+
+### Administración (§II)
+Mantenedores: competencias, materias y gestiones por materia, tipos de consulta, causas de término, calidad procesal, procedimientos, tribunales, tipos de acción, regiones/ciudades/comunas, canales, organismos, horarios por perfil, planes y coberturas. Herramientas para retroceder flujos (p. ej. reiniciar derivaciones).
+
+### Generales
+Logs (accesos, acciones, errores con aviso al admin), alta disponibilidad, documentación y capacitación. **Posesión efectiva**: módulo con formularios imprimibles (a definir en discovery).
+
+## 4. Brechas contra el código actual
+
+| Área | Estado actual | Brecha |
+|---|---|---|
+| Plan / multi-tenancy | ✅ Paso 1: plan como producto, sin header `X-Cod-Plan`; filtro opcional `?codPlan=`. ✅ Paso 4: acceso por perfil y por propiedad de la atención; `usuarios.cod_planes` eliminado | — |
+| Afiliados | ✅ Paso 1: persona única por RUT + `planes_afiliado` con vigencias, consulta `GET /afiliados/rut/:rut`. ✅ Paso 5b: cargas y bienes por RUT–Plan, ficha `/afiliados/:id` | Mantención manual (alta/edición) de cargas y bienes fuera de la carga masiva |
+| Coberturas | ✅ Paso 2: reglas por plan (materia/tipo opcionales; % del arancel, precio fijo UF o sin cobertura) y `GET /copago` | — |
+| Aranceles | ✅ Paso 2: por materia (y tipo opcional), comunes a todos los planes. ✅ Paso 3b: estado por atención (rojo → naranjo → amarillo → verde), aprobación de jefatura, pago con UF del día (Contador) y bloqueo de la atención mientras esté impago | Correo a aprueba.arancel@; comprobante de pago; WebPay real |
+| Maestros | ✅ Paso 2: competencias, materias, procedimientos, tribunales, organismos, tipos de consulta, causas de término, calidades procesales (`/maestros/:tipo`, pantalla Admin › Maestros) | Regiones/ciudades/comunas, tipos de acción, gestiones por materia (paso 3), horarios por perfil |
+| Perfiles | ✅ Paso 4: perfiles del organigrama como datos (`perfiles` + `perfil_permisos`), permisos por módulo y acción editables en Admin › Perfiles; jefatura directa y anexo por usuario; bloqueo/desbloqueo por el administrador; el abogado ve solo lo suyo y la jefatura lo de su equipo | Bloqueo tras 3 intentos fallidos delegado a Entra ID (Smart Lockout); horarios por perfil |
+| Estados de atención | ✅ Paso 3a: estados del Anexo por tipo, mapa de transiciones y requisitos por etapa (`POST /atenciones/:id/estado`) | Retroceso de flujos por el Admin |
+| Consultas | ✅ Paso 3a: canal, tipo de consulta, código de grabación, hora de inicio/término automáticas, respuesta, nuevo correlativo | Búsqueda de grabaciones por anexo telefónico (requiere API del call center) |
+| Derivación | ✅ Paso 3a: solicitud del abogado → aprobación/rechazo de jefatura (bandeja Derivaciones); crea la asesoría/juicio en Asignada | — |
+| Juicios | ✅ Paso 3a: tribunal, ROL/RIT, RUC, cuantía con moneda, procedimiento, calidad procesal, riesgo (materia+cuantía+cliente), contraparte | Audiencias en agenda |
+| Gestiones | ✅ Paso 3a: plantillas por materia/procedimiento con orden y plazo en días hábiles; no se cierra con gestiones o comité pendientes | Feriados chilenos en el cálculo de plazos; correo al cliente al iniciar/terminar gestiones |
+| Provisiones | ✅ Paso 3b: Solicitada → Pagada → En aprobación → Autorizada/Rechazada → Disponible → Entregada → Rendida → Cerrada, con roles Contador/Finanzas, bitácora de eventos, rendición con gastos/reintegros y bloqueo de nuevas entregas con montos por rendir; vuelve de Disponible a Pagada si no se retira en 2 días hábiles | Rendición ligada a "Rendido a cliente"; comprobantes de gasto obligatorios |
+| Carga masiva | ✅ Paso 1: flujo/stock sobre `planes_afiliado`. ✅ Paso 5b: cargas y bienes (flujo/stock), reporte XLSX y aviso en la aplicación | Correo de resumen a operaciones@ (SES) |
+| Búsquedas y reportes | ✅ Paso 5a: búsquedas sin precarga con exportación XLSX (tope 50.000 filas, permiso `exportar.datos`), reportes por plan/canal, afiliados activos por mes, informe con selección de campos y controller de usuarios | Validar con LegalChile la fórmula de tasa de uso; envío programado de informes por correo |
+| Posesión efectiva | ✅ Paso 5b: tipo de atención con causante, herederos, estados propios y ficha PDF interna | Formularios oficiales del Registro Civil (a definir en discovery) |
+
+## 5. Plan de trabajo
+
+1. ✅ **Modelo núcleo** — afiliado único + `planes_afiliado`, canales, plan como producto, fin del tenant por `X-Cod-Plan`; consulta por RUT con planes vigentes; carga flujo/stock sobre `planes_afiliado`.
+   - La atención exige un plan vigente del RUT, o `REZAGADO`/`METLIFE` si no tiene ninguno.
+   - Correlativos globales por tipo/año (la migración 0007 renumeró duplicados entre planes).
+   - Pendiente para pasos siguientes: aranceles siguen por plan (paso 2); `usuarios.cod_planes` no se aplica (paso 4); el filtro "Canal" de Reportes aún no consulta `canales`.
+2. ✅ **Maestros y finanzas base** — competencias/materias/procedimientos/tribunales, aranceles por materia, coberturas por plan, cálculo de copago.
+   - La atención guarda `competencia_id` + `materia_id` (maestros) y `asunto` (texto libre, ex columna `materia`).
+   - Migración 0008: una competencia por valor del enum legado; las atenciones sin arancel de su competencia quedan en la materia "General"; cada descripción de arancel pasó a ser una materia y los aranceles duplicados entre planes se colapsaron (gana el más antiguo).
+   - Copago: regla más específica del plan (materia+tipo → materia → tipo → general); sin regla, el afiliado paga el arancel completo.
+   - Pendiente: tribunal/procedimiento/calidad procesal aún no se registran en la atención (paso 3, juicios); tope anual de cobertura no está modelado.
+3. ✅ **Flujos** — consulta → derivación aprobada → asesoría/juicio; arancel por atención; provisiones completas; plantillas de gestiones y reglas de cierre.
+   - 3a ✅ Atenciones: un enum `estado_atencion` con subconjunto por tipo (consulta: Iniciada → Respondida/Derivada → Terminada; asesoría/juicio: Asignada → Pendiente → En gestión/Esperas/En comité → Terminada o Abandonada). El mapa vive en `packages/shared/src/types/estados-atencion.ts` y los requisitos por etapa en `modules/atenciones/estados.ts`.
+   - Requisitos: juicio a Pendiente exige tribunal, ROL y cuantía; Terminada exige causa de término y ni gestiones pendientes ni comité abierto; Abandonada exige causa y, con riesgo ≥ 20, "Revisado por comité" (solo perfiles con el permiso `atenciones.revisar_comite`).
+   - Migración 0009: Abierta → Iniciada (consulta) / Pendiente (asesoría y juicio); Suspendida → EnEsperaAntecedentes; Cerrada/Archivada → Terminada, o Derivada si la consulta originó otra atención. Las derivaciones antiguas no generan filas en `derivaciones` (no guardaban quién las pidió).
+   - Las gestiones predefinidas se crean al abrir/derivar la asesoría o juicio y al definir el procedimiento del juicio; plazo = hoy + N días hábiles (lunes a viernes, sin feriados).
+   - 3b ✅ Arancel por atención (`aranceles_atencion` + eventos): se calcula al crear la atención; Requerido/En aprobación/Aprobado/Rechazado bloquean los estados de trabajo; el pago lo registra Contador y el monto en pesos usa la UF de la fecha de pago. Bandeja `/finanzas` para Contador/Finanzas.
+   - Migración 0010: provisiones Aprobada → Entregada (monto entregado = monto); Solicitada y Rechazada se mantienen. Las asesorías y juicios existentes reciben arancel NoRequerido para no detenerlas retroactivamente.
+   - Una atención no pasa a Terminada con provisiones abiertas; al terminar, las Rendidas se cierran.
+4. ✅ **Perfiles configurables** y control por propiedad de la atención.
+   - Permisos: claves del código (`packages/shared/src/types/permisos.ts`, agrupadas por módulo); cada endpoint protegido exige una con `@Permiso()`. Los perfiles y sus permisos son datos que edita el administrador; el perfil ADMIN siempre tiene todos (no puede quedar el sistema sin quien administre usuarios y perfiles).
+   - Perfiles iniciales (migración 0011): Administrador del sistema, Gerencia de Servicios, Jefaturas Consultas/Judicial/Fraude, Abogado, Procurador/Tramitador/Asistente, Gerencia de Finanzas, Contador, Asistente Contable, Comercial, Administrativo y Auditor.
+   - Rol legado → perfil: Administrador → ADMIN, Supervisor → Gerencia de Servicios (conserva ver y aprobar todo; las jefaturas por área se asignan a mano), Abogado → Abogado, Operador → Tramitador, Auditor → Auditor, Contador → Contador, Finanzas → Gerencia de Finanzas. El creador de las atenciones existentes se tomó de la auditoría.
+   - Alcance de atenciones (`common/acceso/alcance.ts`): `atenciones.ver_todas` ve todo; `atenciones.ver_equipo` ve lo propio y lo asignado a quienes lo tienen de jefe directo; el resto ve lo asignado a él, lo que creó o donde tiene una gestión a su cargo. Lo ajeno responde 404 en la atención y en todo lo que cuelga de ella (gestiones, comités, documentos, provisiones, arancel, derivaciones, exportaciones, dashboard). Las aprobaciones de jefatura quedan limitadas a lo que ve.
+   - Ingreso: solo correos de `ALLOWED_EMAIL_DOMAIN` (por defecto legalchile.cl). Un usuario nuevo de Entra ID entra con el perfil Administrativo hasta que el administrador le asigne otro; el perfil nunca se toma del token. Usuarios inactivos o bloqueados reciben 403 y queda un registro `ACCESO_DENEGADO` en auditoría. El bloqueo por intentos fallidos lo hace Entra ID Smart Lockout (configuración del tenant).
+   - Pendiente: jerarquía de jefaturas de más de un nivel (hoy solo reportes directos); horarios de disponibilidad por perfil.
+5. **Búsquedas sin precarga, reportes, controller**, cargas y bienes, posesión efectiva.
+   - 5a ✅ Búsquedas (§XI): Afiliados, Consultas/Asesorías/Juicios, Derivaciones, Aranceles por atención (en `/finanzas`), Provisiones y Pagos WebPay usan el formulario común `lm-criterios-busqueda` (correlativo, RUT, abogado, plan, canal, competencia, materia, fechas y estado según la pantalla). No piden datos hasta "Buscar"; las bandejas (derivaciones, provisiones) vienen con su estado pendiente prellenado pero también esperan a "Buscar". Un enlace con `?rut=`, `?estado=` o `?q=` cuenta como búsqueda explícita. La API no rechaza listados sin filtro (los usan los selectores de otros formularios); la regla "sin precarga" vive en la pantalla.
+   - Exportación: `GET /exports/busquedas/:tipo.xlsx` (afiliados, consultas, asesorías, juicios, derivaciones, aranceles, provisiones, pagos) con los mismos criterios y alcance que la pantalla, permiso `exportar.datos` (más `afiliados.ver`, `finanzas.ver` o `pagos.ver` según la búsqueda) y tope de 50.000 filas con mensaje para acotar. Reemplaza las exportaciones CSV.
+   - Reportes (`/reportes`, permiso `reportes.ver`), todos con período y descarga XLSX:
+     - **Afiliados vigentes** del plan = RUT distintos con una relación RUT–Plan que toca el período (inicio ≤ hasta y sin término o término ≥ desde).
+     - **Consultas** del plan = consultas abiertas en el período por RUT de la nómina del plan, dentro de la vigencia de esa relación RUT–Plan (sin importar el plan con que se registró). **Asesorías, juicios y posesiones** = las registradas bajo el plan en el período.
+     - **Tasa de uso** = total de atenciones ÷ afiliados vigentes, con 4 decimales; "sin afiliados" si no hay (fórmula a validar con LegalChile).
+     - Por canal: mismas reglas sobre los planes del canal (RUT y atenciones distintos), con el detalle por plan.
+     - Afiliados activos por mes: misma regla de vigencia mes a mes, máximo 36 meses.
+     - Informe de atenciones (`POST /reportes/informe.xlsx`): tipos y campos elegidos; hoja "Resumen" (plan × tipo) y una hoja por tipo.
+     - Todo acotado al alcance de atenciones del usuario.
+   - Controller de usuarios (`/reportes?vista=controller`, permiso nuevo `controller.ver` para jefaturas y Gerencia de Servicios, migración 0013): por abogado asignado, atenciones asignadas, pendientes (no terminales), terminadas, por estado, gestiones pendientes y vencidas, y comités abiertos donde participa; filtros período, plan, canal, perfil y jefatura; dentro del alcance del usuario.
+   - Dashboard y ficha del caso sin cifras de maqueta: consultas de hoy vs. ayer, SLA = gestiones pendientes que vencen en 3 días, escritos judiciales por vencer en 5 días hábiles, consultas sin asignar; la ficha muestra afiliado, plan, responsable, próxima audiencia, alertas y vencimientos reales (se ocultan si no hay).
+   - La búsqueda global del encabezado lleva un RUT a Afiliados y el resto a Atenciones.
+   - 5b ✅ Cargas y bienes (migración 0014): `cargas_afiliado` (RUT, nombre, parentesco, vigencia propia) y `bienes_afiliado` (tipo Inmueble/Vehículo/Otro, identificador en mayúsculas), ambas colgando de la relación titular–plan. Una carga o bien está vigente si su vigencia y fechas lo están **y** el plan del titular está vigente.
+     - Carga masiva `POST /cargas-masivas/:entidad` (`afiliados`, `cargas`, `bienes`) con FLUJO/STOCK: el titular debe estar en la nómina del plan; STOCK termina (fecha de término hoy, Eliminado) lo del plan que no viene en el archivo. Al terminar se notifica en la aplicación a los usuarios con `cargas.ejecutar`, y `POST /cargas-masivas/resumen.xlsx` entrega el reporte (Resumen + Errores). El correo a operaciones@ queda pendiente (SES).
+     - Ficha del afiliado `/afiliados/:id` con planes, cargas y bienes. La atención acepta `cargaId` opcional (carga del mismo titular y plan, vigente hoy); la ficha del caso muestra para quién es.
+     - Criterio de búsqueda "Bien cubierto" (identificador o descripción) en Afiliados y Atenciones, también en la exportación.
+   - 5b ✅ Posesión efectiva: tipo `PosesionEfectiva`, correlativo `POSE-AÑO-NNNNNN`, estados Ingresada → En preparación → Documentos pendientes ↔ Lista para emisión → Terminada, o Abandonada.
+     - Requisitos: "En preparación" y siguientes exigen RUT, nombre, fecha de defunción y último domicilio del causante; "Lista para emisión" y "Terminada" exigen al menos un heredero; Terminada/Abandonada usan las reglas generales (causa de término, sin gestiones ni comité pendientes). El arancel impago detiene los estados de trabajo.
+     - Tablas `posesiones_efectivas` (causante, 1:1 con la atención) y `herederos_posesion` (se desactivan, no se borran). Usa las materias marcadas para asesoría.
+     - Permiso nuevo `posesiones.crear` (crear y editar causante/herederos), otorgado por la migración a los perfiles que ya creaban asesorías y juicios. Menú "Posesiones efectivas" (`/posesiones`), búsqueda sin precarga con exportación XLSX y conteo en los reportes.
+     - `GET /atenciones/:id/posesion.pdf`: "Ficha de antecedentes para posesión efectiva", rotulada como resumen interno; **no** es el formulario oficial del Registro Civil.
+
+### Pendiente fuera de estos pasos
+- Correos (SES): resumen de cargas a operaciones@, aprobación de aranceles, avisos de vencimiento y al cliente.
+- Feriados chilenos en el cálculo de días hábiles.
+- WebPay real (Transbank) en lugar del stub.
+- Despliegue AWS (CDK: Aurora, ECS, ALB, S3).
+- Migración SQL Server 2008 → Aurora.
+- Formularios oficiales de posesión efectiva del Registro Civil (definir en discovery).
+- Validar con LegalChile la fórmula de tasa de uso.

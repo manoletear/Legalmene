@@ -1,0 +1,81 @@
+import { Injectable, inject } from "@angular/core";
+import { HttpClient, HttpParams } from "@angular/common/http";
+import { Observable } from "rxjs";
+import { environment } from "../../../environments/environment";
+
+export interface DashboardKpis {
+  codPlan: string | null;
+  afiliados: { total: number; activos: number; eliminados: number };
+  atenciones: {
+    total: number;
+    abiertas: number;
+    enGestion: number;
+    enComite: number;
+    enEspera: number;
+    cerradas: number;
+    porEstado: Record<string, number>;
+    porTipo: { Consulta: number; Asesoria: number; Juicio: number };
+    creadasHoy: number;
+    creadasUltimos30Dias: number;
+    consultasHoy: number;
+    consultasAyer: number;
+    consultasSinAsignar: number;
+  };
+  gestiones: { pendientes: number; vencidas: number; porVencer: number; escritosPorVencer: number };
+  comites: { abiertos: number };
+  provisiones: { pendientes: number; montoPendiente: number };
+}
+
+export interface TimelinePoint {
+  fecha: string;
+  total: number;
+}
+
+export interface PorCompetencia {
+  competencia: string;
+  total: number;
+}
+
+export interface CargaAbogado {
+  abogadoId: string;
+  email: string;
+  activas: number;
+  total: number;
+}
+
+export interface PorMes {
+  mes: string;
+  total: number;
+}
+
+@Injectable({ providedIn: "root" })
+export class DashboardApiService {
+  private http = inject(HttpClient);
+  private base = `${environment.apiBaseUrl}/dashboard`;
+
+  kpis(): Observable<DashboardKpis> {
+    return this.http.get<DashboardKpis>(`${this.base}/kpis`);
+  }
+
+  timeline(dias = 30): Observable<TimelinePoint[]> {
+    return this.http.get<TimelinePoint[]>(`${this.base}/timeline-atenciones`, {
+      params: new HttpParams().set("dias", String(dias)),
+    });
+  }
+
+  porCompetencia(): Observable<PorCompetencia[]> {
+    return this.http.get<PorCompetencia[]>(`${this.base}/por-competencia`);
+  }
+
+  cargaAbogados(limit = 10): Observable<CargaAbogado[]> {
+    return this.http.get<CargaAbogado[]>(`${this.base}/carga-abogados`, {
+      params: new HttpParams().set("limit", String(limit)),
+    });
+  }
+
+  porMes(meses = 12): Observable<PorMes[]> {
+    return this.http.get<PorMes[]>(`${this.base}/por-mes`, {
+      params: new HttpParams().set("meses", String(meses)),
+    });
+  }
+}
