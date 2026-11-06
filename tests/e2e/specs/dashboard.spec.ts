@@ -25,6 +25,6 @@ test.describe("Health + Swagger", () => {
 
   test("api/docs sirve Swagger UI", async ({ page }) => {
     await page.goto("http://localhost:3001/api/docs");
-    await expect(page.locator("text=LegalChile PSL API")).toBeVisible();
+    await expect(page.locator("text=NEXUS API (Legal Chile)")).toBeVisible();
   });
 });
