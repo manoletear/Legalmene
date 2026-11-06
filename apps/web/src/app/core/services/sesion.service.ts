@@ -1,6 +1,6 @@
 import { Injectable, inject } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
-import { Observable, tap } from "rxjs";
+import { Observable, catchError, finalize, map, of, tap } from "rxjs";
 import type { SesionIniciada, SolicitudEnlaceResultado } from "@legalmene/shared";
 import { environment } from "../../../environments/environment";
 
@@ -45,6 +45,20 @@ export class SesionService {
           // Sin almacenamiento local la sesión dura solo hasta recargar.
         }
       }),
+    );
+  }
+
+  // Cierra la sesión en el servidor (invalida el token aunque alguien lo haya copiado) y
+  // luego borra la copia local, aunque la llamada falle.
+  cerrarEnServidor(): Observable<void> {
+    if (!this.activa) {
+      this.cerrar();
+      return of(undefined);
+    }
+    return this.http.post<void>(`${this.base}/logout`, {}).pipe(
+      map(() => undefined),
+      catchError(() => of(undefined)),
+      finalize(() => this.cerrar()),
     );
   }
 

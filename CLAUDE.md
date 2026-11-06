@@ -181,7 +181,19 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
 - **Correlativos**: generar con `siguienteCorrelativo()` — usa UPSERT atómico en
   `correlativos` para evitar duplicados bajo concurrencia.
 - **Auditoría**: cualquier mutación importante debe escribir un registro en `auditoria`
-  (interceptor por implementar).
+  (`AuditInterceptor`, global). El interceptor redacta credenciales (`token`, `secret`, `headers`,
+  `password`…) con `redactar()` y no audita `/auth/*` ni health; las exenciones se comparan por ruta
+  exacta, nunca con `includes()` sobre la URL (la query string no debe poder activarlas). Lo mismo
+  vale para `MaintenanceInterceptor`.
+- **Seguridad transversal (auditoría run-1)**: el límite de tasa y las métricas nunca usan cabeceras
+  que elige el cliente (`X-Cod-Plan`, primera entrada de `X-Forwarded-For`); la IP sale de `req.ip`
+  con `trust proxy = TRUSTED_PROXY_HOPS`. Los secretos (webhooks) se devuelven solo al crear/rotar.
+  Las URLs de webhooks se validan (`CrearWebhookSchema`) y el dispatcher solo llama a destinos
+  públicos (`asegurarDestinoPublico`), sin seguir redirecciones. Un documento se registra solo con
+  la clave emitida para su atención (`claveCorrespondeAAtencion`). Cerrar sesión llama a
+  `POST /auth/logout`, que sube `usuarios.sesion_version` e invalida las sesiones anteriores. Nadie
+  cambia su propio perfil ni otorga permisos que no tiene. Entra ID exige `ENTRA_AUDIENCE` y
+  `ENTRA_ISSUER`. Todo dato de usuario en correos HTML pasa por `escaparHtml()`.
 - **Montos**: enteros (centavos para USD/EUR; pesos chilenos son enteros nativos).
 - **Drizzle**: no usar `db.execute(raw)` salvo para casos atómicos (correlativo, upsert
   con xmax). Preferir el query builder tipado.

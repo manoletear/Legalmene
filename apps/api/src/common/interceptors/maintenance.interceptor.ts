@@ -30,9 +30,9 @@ export class MaintenanceInterceptor implements NestInterceptor {
     const req = ctx.switchToHttp().getRequest<Request>();
     if (SAFE_METHODS.has(req.method)) return next.handle();
 
-    // Excepciones críticas que sí dejamos pasar (callback de pago, health).
-    const url = req.originalUrl ?? req.url ?? "";
-    if (url.includes("/pagos/confirmar")) return next.handle();
+    // Única excepción: el callback de pago, comparado por ruta exacta (sin query string).
+    const path = (req.originalUrl ?? req.url ?? "").split("?")[0];
+    if (req.method === "POST" && path === "/api/v1/pagos/confirmar") return next.handle();
 
     const retryAfterSec = Number(this.config.get<string>("MAINTENANCE_RETRY_AFTER") ?? "300");
     const res = ctx.switchToHttp().getResponse<{ setHeader: (n: string, v: string) => void }>();

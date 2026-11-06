@@ -9,7 +9,6 @@ export interface WebhookSus {
   nombre: string;
   url: string;
   eventos: string[];
-  secret: string;
   activo: boolean;
   headers: Record<string, string> | null;
   createdAt: string;
@@ -68,8 +67,13 @@ export class WebhooksApiService {
   crear(
     codPlan: string,
     body: { nombre: string; url: string; eventos: string[]; headers?: Record<string, string> },
-  ): Observable<WebhookSus> {
-    return this.http.post<WebhookSus>(this.base, body, { params: this.plan(codPlan) });
+  ): Observable<WebhookSus & { secret: string }> {
+    // La API devuelve el secreto solo aquí y al rotarlo; el listado nunca lo incluye.
+    return this.http.post<WebhookSus & { secret: string }>(this.base, body, { params: this.plan(codPlan) });
+  }
+
+  rotarSecreto(codPlan: string, id: string): Observable<{ id: string; secret: string }> {
+    return this.http.post<{ id: string; secret: string }>(`${this.base}/${id}/secret`, {}, { params: this.plan(codPlan) });
   }
 
   actualizar(codPlan: string, id: string, patch: Partial<WebhookSus>): Observable<WebhookSus> {

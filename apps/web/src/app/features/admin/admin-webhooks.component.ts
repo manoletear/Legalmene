@@ -114,7 +114,7 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
                     <p-toggleSwitch [ngModel]="s.activo" (onChange)="toggleActivo(s, $event.checked)"></p-toggleSwitch>
                   </td>
                   <td>
-                    <button pButton icon="pi pi-key" [text]="true" severity="secondary" (click)="copiarSecret(s)" pTooltip="Copiar secret"></button>
+                    <button pButton icon="pi pi-key" [text]="true" severity="secondary" (click)="rotarSecreto(s)" pTooltip="Generar nuevo secret"></button>
                     <button pButton icon="pi pi-trash" [text]="true" severity="danger" (click)="eliminar(s)" pTooltip="Eliminar"></button>
                   </td>
                 </tr>
@@ -236,9 +236,9 @@ export class AdminWebhooksComponent implements OnInit {
     this.api
       .crear(cp, { nombre: v.nombre!, url: v.url!, eventos: (v.eventos as string[]) ?? [] })
       .subscribe({
-        next: () => {
+        next: (creada) => {
           this.form.reset({ nombre: "", url: "", eventos: [] as string[] });
-          this.msg.add({ severity: "success", summary: "Suscripción creada", life: 2000 });
+          this.mostrarSecreto(creada.secret, "Suscripción creada");
           this.recargar();
         },
         error: (err) =>
@@ -267,9 +267,32 @@ export class AdminWebhooksComponent implements OnInit {
     });
   }
 
-  copiarSecret(s: WebhookSus) {
-    void navigator.clipboard.writeText(s.secret);
-    this.msg.add({ severity: "success", summary: "Secret copiado", life: 1500 });
+  // Genera un secret nuevo (el anterior deja de validar) y lo muestra una sola vez.
+  rotarSecreto(s: WebhookSus) {
+    this.confirm.confirm({
+      header: "Generar nuevo secret",
+      message: `El receptor de "${s.nombre}" dejará de validar las firmas hasta que configure el nuevo secret. ¿Continuar?`,
+      icon: "pi pi-key",
+      acceptLabel: "Generar",
+      rejectLabel: "Cancelar",
+      accept: () => {
+        this.api.rotarSecreto(s.codPlan, s.id).subscribe({
+          next: (r) => this.mostrarSecreto(r.secret, "Secret nuevo generado"),
+          error: (err) =>
+            this.msg.add({ severity: "error", summary: "Error", detail: err.error?.message ?? err.message, life: 4000 }),
+        });
+      },
+    });
+  }
+
+  private mostrarSecreto(secret: string, titulo: string) {
+    void navigator.clipboard?.writeText(secret).catch(() => undefined);
+    this.msg.add({
+      severity: "success",
+      summary: titulo,
+      detail: `Secret (copiado al portapapeles; no se volverá a mostrar): ${secret}`,
+      sticky: true,
+    });
   }
 
   reintentar(e: WebhookEntrega) {

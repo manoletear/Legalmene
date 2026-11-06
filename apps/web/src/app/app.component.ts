@@ -382,10 +382,11 @@ export class AppComponent implements OnInit {
 
   protected cerrarSesion() {
     this.userPopover?.hide();
-    this.sesion.cerrar();
-    this.sesionActiva.set(false);
-    this.me.reiniciar();
-    void this.router.navigate(["/login"]);
+    this.sesion.cerrarEnServidor().subscribe(() => {
+      this.sesionActiva.set(false);
+      this.me.reiniciar();
+      void this.router.navigate(["/login"]);
+    });
   }
 
   ngOnInit() {

@@ -9,7 +9,9 @@ describe("sesión con enlace de acceso", () => {
     const ahora = Date.UTC(2026, 10, 5, 12);
     const { token, expiraEn } = firmarSesion("u-1", 8, SECRETO, ahora);
     expect(expiraEn.getTime()).toBe(ahora + 8 * 3_600_000);
-    expect(verificarSesion(token, SECRETO, ahora + 1000)).toBe("u-1");
+    expect(verificarSesion(token, SECRETO, ahora + 1000)).toEqual({ usuarioId: "u-1", version: 0 });
+    const v3 = firmarSesion("u-1", 8, SECRETO, ahora, 3).token;
+    expect(verificarSesion(v3, SECRETO, ahora + 1000)?.version).toBe(3);
     expect(verificarSesion(token, SECRETO, ahora + 8 * 3_600_000)).toBeNull();
     expect(verificarSesion(token, "x".repeat(40), ahora)).toBeNull();
     const [h, , f] = token.split(".");

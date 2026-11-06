@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import helmet from "helmet";
 import { NestFactory } from "@nestjs/core";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import { Logger } from "@nestjs/common";
 import { ZodValidationPipe } from "nestjs-zod";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
@@ -9,8 +10,13 @@ import { I18nExceptionFilter } from "./common/filters/i18n-exception.filter";
 import { contextoMiddleware } from "./common/acceso/contexto";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
   const logger = new Logger("Bootstrap");
+
+  // IP real del cliente: confiar solo en los N proxies propios (ALB, Render). Express toma
+  // la entrada de X-Forwarded-For que agregó el proxy más cercano, no la que manda el
+  // cliente. La usan el límite de tasa y la auditoría.
+  app.set("trust proxy", Number(process.env.TRUSTED_PROXY_HOPS ?? "1"));
 
   app.setGlobalPrefix("api/v1");
 

@@ -36,3 +36,11 @@ export const IniciarPagoSchema = z.object({
   returnUrl: z.string().url(),
 });
 export type IniciarPago = z.infer<typeof IniciarPagoSchema>;
+
+// Confirmación manual (stub WebPay): solo resuelve un pago que sigue Iniciado.
+export const ConfirmarPagoSchema = z.object({
+  ordenCompra: z.string().trim().min(1).max(64),
+  authCode: z.string().trim().min(1).max(64),
+  exitoso: z.boolean(),
+});
+export type ConfirmarPago = z.infer<typeof ConfirmarPagoSchema>;

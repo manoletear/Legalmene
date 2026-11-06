@@ -1,3 +1,4 @@
+import { escaparHtml, textoLinea } from "../../common/utils/html";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { and, between, eq, isNotNull, lt } from "drizzle-orm";
@@ -52,11 +53,11 @@ export class VencimientosScheduler {
     for (const row of porVencer) {
       await this.notificaciones.enviarEmail({
         to: [row.responsableEmail],
-        subject: `Gestión por vencer: ${row.titulo} (${row.correlativo})`,
+        subject: textoLinea(`Gestión por vencer: ${row.titulo} (${row.correlativo})`),
         bodyHtml: `
-          <p>Recordatorio: la gestión "<strong>${row.titulo}</strong>" de la atención
-          <strong>${row.correlativo}</strong> tiene compromiso para
-          ${row.fechaCompromiso?.toISOString()}.</p>
+          <p>Recordatorio: la gestión "<strong>${escaparHtml(row.titulo)}</strong>" de la atención
+          <strong>${escaparHtml(row.correlativo)}</strong> tiene compromiso para
+          ${escaparHtml(row.fechaCompromiso?.toISOString() ?? "")}.</p>
           <p>Ingresa al sistema para completarla.</p>
         `,
         bodyText: `Gestión ${row.titulo} (${row.correlativo}) vence ${row.fechaCompromiso?.toISOString()}`,

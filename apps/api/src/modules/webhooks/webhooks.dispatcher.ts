@@ -4,6 +4,7 @@ import { and, asc, eq, lte, or } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { webhookEntregas, webhooksSuscripciones } from "../../db/schema/webhooks";
 import { firmarWebhook } from "../../common/utils/webhook-signature";
+import { asegurarDestinoPublico } from "../../common/utils/destino-publico";
 
 // Reintentos con backoff exponencial: 1m, 5m, 15m, 60m, 4h, 16h. 6 intentos.
 const BACKOFF_MS = [60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000, 4 * 3_600_000, 16 * 3_600_000];
@@ -72,11 +73,13 @@ export class WebhooksDispatcher {
     const body = JSON.stringify({ evento: p.evento, payload: p.payload, deliveredAt: new Date().toISOString() });
     const signature = firmarWebhook(p.secret, body);
 
+    // Las cabeceras del sistema van al final: una cabecera configurada no puede reemplazarlas.
     const headers: Record<string, string> = {
+      ...(p.headers ?? {}),
       "Content-Type": "application/json",
       "X-Legalmene-Signature": signature,
       "X-Legalmene-Event": p.evento,
-      ...(p.headers ?? {}),
+      "X-Legalmene-Delivery": p.id,
     };
 
     let httpStatus = 0;
@@ -85,10 +88,13 @@ export class WebhooksDispatcher {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10_000);
-      const res = await fetch(p.url, { method: "POST", headers, body, signal: controller.signal });
+      // Solo destinos públicos y sin seguir redirecciones: el servidor no debe poder
+      // usarse para leer servicios internos (metadata de la nube, red privada).
+      await asegurarDestinoPublico(p.url);
+      const res = await fetch(p.url, { method: "POST", headers, body, signal: controller.signal, redirect: "manual" });
       clearTimeout(timeout);
       httpStatus = res.status;
-      respuesta = (await res.text()).slice(0, 2000);
+      respuesta = (await res.text()).slice(0, 500);
       if (res.ok) {
         await this.marcarEnviada(p.id, httpStatus, respuesta);
         return;

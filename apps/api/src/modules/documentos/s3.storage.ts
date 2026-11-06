@@ -1,3 +1,4 @@
+import { contentDisposition } from "./local.storage";
 import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
@@ -48,7 +49,7 @@ export class S3Storage implements DocumentStorage {
     const cmd = new GetObjectCommand({
       Bucket: this.bucketName,
       Key: input.key,
-      ResponseContentDisposition: `attachment; filename="${input.filename}"`,
+      ResponseContentDisposition: contentDisposition(input.filename),
     });
     return getSignedUrl(this.s3, cmd, { expiresIn: input.expiresInSec });
   }

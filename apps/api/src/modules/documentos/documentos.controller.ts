@@ -65,8 +65,8 @@ export class DocumentosController {
     return this.service.listarPorAtencion(atencionId);
   }
 
-  // Endpoints internos del LocalStorage backend (HMAC-firmados, no JWT).
-  // En producción no se exponen porque STORAGE_BACKEND != local.
+  // Endpoints internos del LocalStorage backend (HMAC-firmados, no JWT). Responden 404
+  // salvo que STORAGE_BACKEND=local (ver LocalStorage.activo).
   @Put("documentos/local/:key")
   @ApiExcludeEndpoint()
   async localPut(@Param("key") key: string, @Req() req: Request, @Res() res: Response) {

@@ -1,3 +1,4 @@
+import { escaparHtml } from "../../common/utils/html";
 import { ForbiddenException, Inject, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { createHash, randomBytes } from "node:crypto";
 import { and, count, eq, gt, gte, isNull, sql } from "drizzle-orm";
@@ -119,7 +120,7 @@ export class EnlacesAccesoService {
 
     await this.db.update(usuarios).set({ ultimoLogin: ahora }).where(eq(usuarios.id, user.id));
     await this.registrar(user, "LOGIN_ENLACE", req);
-    const sesion = firmarSesion(user.id, HORAS_VALIDEZ_SESION);
+    const sesion = firmarSesion(user.id, HORAS_VALIDEZ_SESION, undefined, undefined, user.sesionVersion);
     return { token: sesion.token, expiraEn: sesion.expiraEn.toISOString() };
   }
 
@@ -155,7 +156,7 @@ export class EnlacesAccesoService {
   }
 }
 
-const escapar = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const escapar = escaparHtml;
 
 function correoHtml(nombre: string, enlace: string): string {
   return `<div style="font-family:Arial,sans-serif;color:#0f172a;max-width:480px">

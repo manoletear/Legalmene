@@ -4,11 +4,12 @@ import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { PagosService } from "./pagos.service";
 import { Permiso } from "../../common/decorators/permiso.decorator";
 import { PermisosGuard } from "../../common/guards/permisos.guard";
-import { CriteriosBusquedaSchema, IniciarPagoSchema } from "@legalmene/shared";
+import { ConfirmarPagoSchema, CriteriosBusquedaSchema, IniciarPagoSchema } from "@legalmene/shared";
 import { z } from "zod";
 import { createZodDto } from "nestjs-zod";
 
 class IniciarPagoDto extends createZodDto(IniciarPagoSchema) {}
+class ConfirmarPagoDto extends createZodDto(ConfirmarPagoSchema) {}
 class FiltroPagosDto extends createZodDto(
   CriteriosBusquedaSchema.pick({ rut: true, codPlan: true, fechaDesde: true, fechaHasta: true }).extend({
     page: z.coerce.number().int().min(1).default(1),
@@ -41,7 +42,7 @@ export class PagosController {
   // permiso explícito. El callback real de Transbank se validará con HMAC, no con JWT.
   @Post("confirmar")
   @Permiso("pagos.confirmar")
-  confirmar(@Body() body: { ordenCompra: string; authCode: string; exitoso: boolean }) {
+  confirmar(@Body() body: ConfirmarPagoDto) {
     return this.service.confirmar(body.ordenCompra, body.authCode, body.exitoso);
   }
 }

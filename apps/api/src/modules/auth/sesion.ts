@@ -10,6 +10,7 @@ export interface ClaimsSesion {
   iss: string;
   iat: number;
   exp: number;
+  ver?: number;
 }
 
 let secretoGenerado: string | null = null;
@@ -36,15 +37,27 @@ function firma(datos: string, secreto: string): Buffer {
   return createHmac("sha256", secreto).update(datos).digest();
 }
 
-export function firmarSesion(usuarioId: string, horas: number, secreto = secretoSesion(), ahora = Date.now()) {
+export function firmarSesion(
+  usuarioId: string,
+  horas: number,
+  secreto = secretoSesion(),
+  ahora = Date.now(),
+  version = 0,
+) {
   const iat = Math.floor(ahora / 1000);
-  const claims: ClaimsSesion = { sub: usuarioId, iss: EMISOR_SESION, iat, exp: iat + horas * 3600 };
+  const claims: ClaimsSesion = { sub: usuarioId, iss: EMISOR_SESION, iat, exp: iat + horas * 3600, ver: version };
   const cuerpo = `${CABECERA}.${b64(JSON.stringify(claims))}`;
   return { token: `${cuerpo}.${b64(firma(cuerpo, secreto))}`, expiraEn: new Date(claims.exp * 1000) };
 }
 
-// Devuelve el id de usuario si el token es una sesión válida y vigente; null en cualquier otro caso.
-export function verificarSesion(token: string, secreto = secretoSesion(), ahora = Date.now()): string | null {
+export interface SesionValida {
+  usuarioId: string;
+  // Versión de sesión del usuario al emitir el token; el guard la compara con la actual.
+  version: number;
+}
+
+// Devuelve el usuario y la versión si el token es una sesión válida y vigente; null en cualquier otro caso.
+export function verificarSesion(token: string, secreto = secretoSesion(), ahora = Date.now()): SesionValida | null {
   const partes = token.split(".");
   if (partes.length !== 3 || partes[0] !== CABECERA) return null;
   const esperada = firma(`${partes[0]}.${partes[1]}`, secreto);
@@ -54,7 +67,7 @@ export function verificarSesion(token: string, secreto = secretoSesion(), ahora 
     const c = JSON.parse(Buffer.from(partes[1], "base64url").toString("utf8")) as Partial<ClaimsSesion>;
     if (c.iss !== EMISOR_SESION || typeof c.sub !== "string" || typeof c.exp !== "number") return null;
     if (c.exp * 1000 <= ahora) return null;
-    return c.sub;
+    return { usuarioId: c.sub, version: typeof c.ver === "number" ? c.ver : 0 };
   } catch {
     return null;
   }

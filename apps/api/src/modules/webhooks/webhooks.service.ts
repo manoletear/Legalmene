@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, getTableColumns } from "drizzle-orm";
+import type { ActualizarWebhook, CrearWebhook } from "@legalmene/shared";
 import { randomBytes } from "crypto";
 import { DRIZZLE, Database } from "../../db/database.module";
 import {
@@ -9,11 +10,19 @@ import {
   WebhookSuscripcion,
 } from "../../db/schema/webhooks";
 
-export interface CrearWebhook {
-  nombre: string;
-  url: string;
-  eventos: string[];
-  headers?: Record<string, string>;
+// Vista pública de una suscripción: sin el secreto de firma y con los valores de las
+// cabeceras enmascarados (suelen ser credenciales del receptor). El secreto solo se
+// entrega al crear o rotar, a quien tiene webhooks.administrar.
+const { secret: _secret, ...COLUMNAS_PUBLICAS } = getTableColumns(webhooksSuscripciones);
+
+export type WebhookPublico = Omit<WebhookSuscripcion, "secret">;
+
+export function publico(row: WebhookSuscripcion | WebhookPublico): WebhookPublico {
+  const { secret: _s, ...resto } = row as WebhookSuscripcion;
+  return {
+    ...resto,
+    headers: resto.headers ? Object.fromEntries(Object.keys(resto.headers).map((k) => [k, "********"])) : null,
+  };
 }
 
 @Injectable()
@@ -22,15 +31,17 @@ export class WebhooksService {
 
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  async listar(codPlan: string) {
-    return this.db
-      .select()
+  async listar(codPlan: string): Promise<WebhookPublico[]> {
+    const rows = await this.db
+      .select(COLUMNAS_PUBLICAS)
       .from(webhooksSuscripciones)
       .where(eq(webhooksSuscripciones.codPlan, codPlan))
       .orderBy(desc(webhooksSuscripciones.createdAt));
+    return rows.map(publico);
   }
 
-  async crear(codPlan: string, input: CrearWebhook): Promise<WebhookSuscripcion> {
+  // Devuelve el secreto una sola vez (para configurarlo en el receptor).
+  async crear(codPlan: string, input: CrearWebhook): Promise<WebhookPublico & { secret: string }> {
     const secret = randomBytes(32).toString("hex");
     const payload: NuevoWebhookSuscripcion = {
       codPlan,
@@ -41,21 +52,36 @@ export class WebhooksService {
       secret,
     };
     const [row] = await this.db.insert(webhooksSuscripciones).values(payload).returning();
-    return row;
+    return { ...publico(row), secret };
   }
 
-  async actualizar(
-    codPlan: string,
-    id: string,
-    patch: Partial<CrearWebhook> & { activo?: boolean },
-  ): Promise<WebhookSuscripcion> {
+  // Solo los campos editables: el secreto, el plan y los metadatos no se tocan por aquí.
+  async actualizar(codPlan: string, id: string, patch: ActualizarWebhook): Promise<WebhookPublico> {
+    const cambios: Partial<NuevoWebhookSuscripcion> = { updatedAt: new Date() };
+    if (patch.nombre !== undefined) cambios.nombre = patch.nombre;
+    if (patch.url !== undefined) cambios.url = patch.url;
+    if (patch.eventos !== undefined) cambios.eventos = patch.eventos;
+    if (patch.headers !== undefined) cambios.headers = patch.headers;
+    if (patch.activo !== undefined) cambios.activo = patch.activo;
     const [row] = await this.db
       .update(webhooksSuscripciones)
-      .set({ ...patch, updatedAt: new Date() })
+      .set(cambios)
       .where(and(eq(webhooksSuscripciones.id, id), eq(webhooksSuscripciones.codPlan, codPlan)))
       .returning();
     if (!row) throw new NotFoundException(`Webhook ${id} no existe`);
-    return row;
+    return publico(row);
+  }
+
+  // Genera un secreto nuevo y lo devuelve una sola vez.
+  async rotarSecreto(codPlan: string, id: string): Promise<{ id: string; secret: string }> {
+    const secret = randomBytes(32).toString("hex");
+    const [row] = await this.db
+      .update(webhooksSuscripciones)
+      .set({ secret, updatedAt: new Date() })
+      .where(and(eq(webhooksSuscripciones.id, id), eq(webhooksSuscripciones.codPlan, codPlan)))
+      .returning({ id: webhooksSuscripciones.id });
+    if (!row) throw new NotFoundException(`Webhook ${id} no existe`);
+    return { id: row.id, secret };
   }
 
   async eliminar(codPlan: string, id: string): Promise<void> {

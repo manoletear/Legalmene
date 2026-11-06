@@ -3,8 +3,9 @@ import { Observable, tap } from "rxjs";
 import type { Request, Response } from "express";
 import { MetricsService } from "./metrics.service";
 
-// Captura cada request HTTP: cuenta + mide latencia, etiquetando con
-// método, route, status y codPlan (cuando el tenant header está presente).
+// Captura cada request HTTP: cuenta + mide latencia, etiquetando con método, patrón de
+// ruta y status. Ninguna etiqueta viene del request (cabeceras, URL cruda): cada valor
+// distinto crea una serie permanente en memoria.
 @Injectable()
 export class MetricsInterceptor implements NestInterceptor {
   constructor(private readonly metrics: MetricsService) {}
@@ -24,16 +25,11 @@ export class MetricsInterceptor implements NestInterceptor {
 
   private record(req: Request, res: Response, start: bigint) {
     const ms = Number(process.hrtime.bigint() - start) / 1_000_000;
-    // route puede no estar disponible en todos los handlers; usar path crudo.
-    const route =
-      (req.route as { path?: string } | undefined)?.path ??
-      req.baseUrl + (req.url?.split("?")[0] ?? "");
+    const route = (req.route as { path?: string } | undefined)?.path ?? "sin_ruta";
     const method = req.method;
     const status = String(res.statusCode);
-    const codPlanHeader = req.headers["x-cod-plan"];
-    const codPlan = Array.isArray(codPlanHeader) ? codPlanHeader[0] : codPlanHeader ?? "none";
 
-    this.metrics.httpRequestsTotal.labels(method, route, status, codPlan).inc();
+    this.metrics.httpRequestsTotal.labels(method, route, status).inc();
     this.metrics.httpRequestDurationMs.labels(method, route, status).observe(ms);
   }
 }

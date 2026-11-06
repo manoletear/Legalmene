@@ -11,6 +11,7 @@ export interface AuthenticatedUser {
   perfilCodigo: string;
   perfilNombre: string;
   permisos: Permiso[];
+  sesionVersion: number;
 }
 
 export const CurrentUser = createParamDecorator((_: unknown, ctx: ExecutionContext) => {

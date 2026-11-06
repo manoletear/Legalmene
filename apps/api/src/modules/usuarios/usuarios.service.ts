@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -106,7 +107,16 @@ export class UsuariosService {
       perfilCodigo: row.perfilCodigo,
       perfilNombre: row.perfilNombre,
       permisos: permisosDePerfil(row.perfilCodigo, asignados.map((a) => a.permiso)),
+      sesionVersion: u.sesionVersion,
     };
+  }
+
+  // Cierra todas las sesiones del usuario (logout): las emitidas antes dejan de valer.
+  async revocarSesiones(id: string): Promise<void> {
+    await this.db
+      .update(usuarios)
+      .set({ sesionVersion: sql`${usuarios.sesionVersion} + 1`, updatedAt: new Date() })
+      .where(eq(usuarios.id, id));
   }
 
   async actual(user: AuthenticatedUser): Promise<UsuarioActual> {
@@ -214,6 +224,23 @@ export class UsuariosService {
       await this.asegurarOtroAdmin(id);
     }
     if (patch.activo === false && id === actorId) throw new ConflictException("No puede desactivar su propio usuario");
+    if (patch.perfilId && patch.perfilId !== actual.perfilId) {
+      // Delegación acotada: nadie cambia su propio perfil ni asigna permisos que no tiene
+      // (si no, usuarios.administrar bastaría para asignarse ADMIN).
+      if (id === actorId) throw new ForbiddenException("No puede cambiar su propio perfil");
+      const actor = await this.contextoAcceso(actorId);
+      if (actor.perfilCodigo !== PERFIL_ADMIN) {
+        const [destino] = await this.db.select({ codigo: perfiles.codigo }).from(perfiles).where(eq(perfiles.id, patch.perfilId));
+        const asignados = await this.db
+          .select({ permiso: perfilPermisos.permiso })
+          .from(perfilPermisos)
+          .where(eq(perfilPermisos.perfilId, patch.perfilId));
+        const otorga = permisosDePerfil(destino.codigo, asignados.map((a) => a.permiso));
+        if (otorga.some((x) => !actor.permisos.includes(x))) {
+          throw new ForbiddenException("No puede asignar un perfil con permisos que usted no tiene");
+        }
+      }
+    }
 
     const [row] = await this.db
       .update(usuarios)

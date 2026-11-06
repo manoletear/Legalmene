@@ -10,11 +10,11 @@ import {
 export class MetricsService implements OnModuleInit {
   readonly registry = new Registry();
 
-  // HTTP request counter (labels: method, route, status, codPlan).
+  // HTTP request counter (labels: method, route, status).
   readonly httpRequestsTotal = new Counter({
     name: "legalmene_http_requests_total",
     help: "Total HTTP requests served",
-    labelNames: ["method", "route", "status", "cod_plan"],
+    labelNames: ["method", "route", "status"],
     registers: [this.registry],
   });
 

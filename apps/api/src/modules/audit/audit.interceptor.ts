@@ -11,6 +11,30 @@ const METHOD_TO_ACCION: Record<string, string> = {
   DELETE: "DELETE",
 };
 
+// Campos que nunca se guardan en la auditoría (credenciales y secretos).
+const CLAVES_SENSIBLES = new Set(["token", "secret", "password", "enlacedemo", "headers", "authorization", "sig"]);
+
+export function redactar(valor: unknown, profundidad = 0): unknown {
+  if (profundidad > 20) return "[...]";
+  if (Array.isArray(valor)) return valor.map((v) => redactar(v, profundidad + 1));
+  if (valor && typeof valor === "object" && !(valor instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(valor as Record<string, unknown>).map(([k, v]) => [
+        k,
+        CLAVES_SENSIBLES.has(k.toLowerCase()) ? "[REDACTADO]" : redactar(v, profundidad + 1),
+      ]),
+    );
+  }
+  return valor;
+}
+
+// Rutas que no se auditan: login (sus respuestas son credenciales; el ingreso se audita
+// aparte en EnlacesAccesoService) y health. Se comparan por ruta exacta, sin query string.
+// La confirmación manual de pagos sí se audita.
+export function rutaSinAuditoria(path: string): boolean {
+  return path.startsWith("/api/v1/auth/") || path === "/api/v1/health" || path.startsWith("/api/v1/health/");
+}
+
 // Captura mutaciones y las graba en tabla auditoria.
 // Entidad = primer segmento de la URL después de /api/v1/.
 // EntidadId = id devuelto en response, o :id de URL si lo hay.
@@ -27,18 +51,15 @@ export class AuditInterceptor implements NestInterceptor {
     // Solo loguear mutaciones. Skip GET/HEAD/OPTIONS.
     if (!accion) return next.handle();
 
-    // Skip endpoints sin auth contexto (callbacks WebPay, health).
-    const url = req.originalUrl ?? req.url;
-    if (url.includes("/pagos/confirmar") || url.includes("/health")) {
-      return next.handle();
-    }
+    // Ruta sin query string: un parámetro inventado no puede activar una exención.
+    const path = (req.originalUrl ?? req.url ?? "").split("?")[0];
+    if (rutaSinAuditoria(path)) return next.handle();
 
-    const segments = url.replace(/^\/api\/v1\//, "").split(/[/?]/);
+    const segments = path.replace(/^\/api\/v1\//, "").split("/");
     const entidad = segments[0] ?? "unknown";
     const urlIdParam = segments.find((s) => /^[0-9a-f-]{8,}/i.test(s)) ?? null;
     const user = req.user;
-    const codPlanHeader = req.headers["x-cod-plan"];
-    const codPlan = Array.isArray(codPlanHeader) ? codPlanHeader[0] : codPlanHeader ?? null;
+    const codPlan = null;
     const ip = req.ip ?? req.socket?.remoteAddress ?? null;
     const userAgent = req.get("user-agent") ?? null;
 
@@ -57,7 +78,7 @@ export class AuditInterceptor implements NestInterceptor {
           entidad,
           entidadId,
           codPlan,
-          cambios: { after: response, requestBody: beforeBody } as {
+          cambios: { after: redactar(response), requestBody: redactar(beforeBody) } as {
             after: unknown;
             requestBody: unknown;
           },

@@ -1,4 +1,4 @@
-import { ExecutionContext, ForbiddenException, Inject, Injectable } from "@nestjs/common";
+import { ExecutionContext, ForbiddenException, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
 import type { Request } from "express";
 import { UsuariosService, UsuarioNoHabilitadoError, type ClaimsDev } from "../usuarios/usuarios.service";
@@ -9,6 +9,10 @@ import { dominioPermitido } from "./dominio";
 import { tokenBearer, verificarSesion } from "./sesion";
 
 export { dominioPermitido };
+
+export function entraConfigurado(env = process.env): boolean {
+  return !!env.ENTRA_AUDIENCE?.trim() && !!env.ENTRA_ISSUER?.trim();
+}
 
 type RequestConUsuario = Request & { user?: AuthenticatedUser | { id: string } };
 
@@ -32,10 +36,13 @@ export class JwtAuthGuard extends AuthGuard("jwt-entra") {
     const bearer = tokenBearer(req.header("authorization"));
     const sesion = bearer ? verificarSesion(bearer) : null;
     if (sesion) {
-      usuarioId = sesion;
+      usuarioId = sesion.usuarioId;
     } else if (process.env.AUTH_DISABLED === "true") {
       usuarioId = (await this.usuariosService.resolveDev(this.claimsDev(req))).id;
     } else {
+      // Entra ID solo con audience e issuer fijados: sin ellos passport-jwt no los valida y
+      // aceptaría tokens de cualquier tenant y aplicación (falla cerrado).
+      if (!entraConfigurado()) throw new UnauthorizedException("Sesión no válida. Ingrese nuevamente.");
       await (super.canActivate(context) as Promise<boolean>);
       usuarioId = (req.user as { id: string }).id;
     }
@@ -49,6 +56,10 @@ export class JwtAuthGuard extends AuthGuard("jwt-entra") {
         throw new ForbiddenException(err.message);
       }
       throw err;
+    }
+    // Una sesión emitida antes del último "cerrar sesión" ya no vale.
+    if (sesion && sesion.version !== user.sesionVersion) {
+      throw new UnauthorizedException("La sesión fue cerrada. Ingrese nuevamente.");
     }
     if (process.env.AUTH_DISABLED !== "true" && !dominioPermitido(user.email)) {
       const msg = "Su cuenta no pertenece a un dominio autorizado de LegalChile";

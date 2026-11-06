@@ -74,7 +74,7 @@ const RUN = !!process.env.DATABASE_URL;
     expect(filas.some((f) => f.tokenHash === token)).toBe(false);
 
     const sesion = await srv.verificar(token);
-    expect(verificarSesion(sesion.token)).toBe(usuarioId);
+    expect(verificarSesion(sesion.token)?.usuarioId).toBe(usuarioId);
     await expect(srv.verificar(token)).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
@@ -114,7 +114,7 @@ const RUN = !!process.env.DATABASE_URL;
     await srv.solicitar(bootstrap);
     expect(enviados).toHaveLength(1);
     const sesion = await srv.verificar(tokenDe(enviados[0]));
-    const id = verificarSesion(sesion.token)!;
+    const id = verificarSesion(sesion.token)!.usuarioId;
     const ctx = await moduleRef.get(UsuariosService).contextoAcceso(id);
     expect(ctx.perfilCodigo).toBe("ADMIN");
   });

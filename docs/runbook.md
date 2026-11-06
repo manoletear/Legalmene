@@ -27,7 +27,10 @@ pnpm db:studio  # Drizzle Studio UI sobre el schema
 | `S3_DOCUMENTS_BUCKET` | — | Requerido si backend=s3 |
 | `SES_ENABLED` | `false` | `true` activa envío real |
 | `WEBPAY_ENV` | `integration` | `production` para WebPay real |
-| `ENTRA_TENANT_ID` | — | Requerido si AUTH_DISABLED=false |
+| `ENTRA_TENANT_ID` | — | Referencia; la API no lo lee |
+| `ENTRA_AUDIENCE` / `ENTRA_ISSUER` | — | Requeridos para aceptar tokens de Entra ID (sin ellos se rechazan) |
+| `SESSION_JWT_SECRET` | — | Requerido en producción (≥ 32 caracteres) para el login con enlace |
+| `TRUSTED_PROXY_HOPS` | `1` | Proxies propios delante de la API (ALB, Render); define la IP real del cliente |
 
 ## Migraciones
 

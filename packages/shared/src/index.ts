@@ -17,3 +17,4 @@ export * from "./types/arancel-atencion";
 export * from "./types/busqueda";
 export * from "./types/posesion";
 export * from "./types/auth";
+export * from "./types/webhook";

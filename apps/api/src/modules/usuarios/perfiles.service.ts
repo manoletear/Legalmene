@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { accesoActual } from "../../common/acceso/contexto";
 import { asc, count, eq, inArray } from "drizzle-orm";
 import {
   PERFIL_ADMIN,
@@ -52,7 +53,25 @@ export class PerfilesService {
     return this.aDto(row, (await this.permisosDe([id])).get(id) ?? []);
   }
 
+  // Quien administra perfiles no puede otorgar permisos que no tiene: si no, podría
+  // agregarse cualquier permiso (p. ej. usuarios.administrar) y escalar a ADMIN.
+  private async asegurarPuedeOtorgar(perfilId: string, permisos: readonly Permiso[]): Promise<void> {
+    const acceso = accesoActual();
+    if (!acceso) return; // proceso del sistema (seed, migraciones)
+    const actuales = new Set(
+      (await this.db.select({ permiso: perfilPermisos.permiso }).from(perfilPermisos).where(eq(perfilPermisos.perfilId, perfilId))).map(
+        (r) => r.permiso,
+      ),
+    );
+    // Solo cuentan los permisos que se agregan; quitar o mantener los existentes siempre se puede.
+    const faltan = permisos.filter((p) => !actuales.has(p) && !acceso.permisos.has(p));
+    if (faltan.length > 0) {
+      throw new ForbiddenException(`No puede otorgar permisos que usted no tiene: ${faltan.join(", ")}`);
+    }
+  }
+
   private async guardarPermisos(perfilId: string, permisos: readonly Permiso[]): Promise<void> {
+    await this.asegurarPuedeOtorgar(perfilId, permisos);
     await this.db.transaction(async (tx) => {
       await tx.delete(perfilPermisos).where(eq(perfilPermisos.perfilId, perfilId));
       const unicos = [...new Set(permisos)];

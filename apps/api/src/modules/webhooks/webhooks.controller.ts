@@ -15,7 +15,12 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { PlanRequerido } from "../../common/decorators/plan-requerido.decorator";
 import { Permiso } from "../../common/decorators/permiso.decorator";
 import { PermisosGuard } from "../../common/guards/permisos.guard";
-import { WebhooksService, CrearWebhook } from "./webhooks.service";
+import { createZodDto } from "nestjs-zod";
+import { ActualizarWebhookSchema, CrearWebhookSchema } from "@legalmene/shared";
+import { WebhooksService } from "./webhooks.service";
+
+class CrearWebhookDto extends createZodDto(CrearWebhookSchema) {}
+class ActualizarWebhookDto extends createZodDto(ActualizarWebhookSchema) {}
 
 @ApiTags("webhooks")
 @ApiBearerAuth("EntraID")
@@ -33,7 +38,7 @@ export class WebhooksController {
 
   @Post()
   @Permiso("webhooks.administrar")
-  crear(@PlanRequerido() codPlan: string, @Body() body: CrearWebhook) {
+  crear(@PlanRequerido() codPlan: string, @Body() body: CrearWebhookDto) {
     return this.service.crear(codPlan, body);
   }
 
@@ -42,9 +47,15 @@ export class WebhooksController {
   actualizar(
     @PlanRequerido() codPlan: string,
     @Param("id") id: string,
-    @Body() body: Partial<CrearWebhook> & { activo?: boolean },
+    @Body() body: ActualizarWebhookDto,
   ) {
     return this.service.actualizar(codPlan, id, body);
+  }
+
+  @Post(":id/secret")
+  @Permiso("webhooks.administrar")
+  rotarSecreto(@PlanRequerido() codPlan: string, @Param("id") id: string) {
+    return this.service.rotarSecreto(codPlan, id);
   }
 
   @Delete(":id")

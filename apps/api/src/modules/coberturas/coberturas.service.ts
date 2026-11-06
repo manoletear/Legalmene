@@ -6,6 +6,7 @@ import { coberturas, CoberturaRow } from "../../db/schema/aranceles";
 import { competencias, materias } from "../../db/schema/maestros";
 import { planes } from "../../db/schema/planes";
 import { atenciones } from "../../db/schema/atenciones";
+import { filtroAtenciones } from "../../common/acceso/alcance";
 import { esViolacionUnica } from "../../common/utils/pg-errors";
 import { ArancelesService } from "../aranceles/aranceles.service";
 import { calcularCopago } from "./copago";
@@ -79,7 +80,7 @@ export class CoberturasService {
     const [a] = await this.db
       .select({ codPlan: atenciones.codPlan, materiaId: atenciones.materiaId, tipo: atenciones.tipo })
       .from(atenciones)
-      .where(eq(atenciones.id, atencionId));
+      .where(and(eq(atenciones.id, atencionId), filtroAtenciones()));
     if (!a) throw new NotFoundException(`Atención ${atencionId} no existe`);
     return { codPlan: a.codPlan, ...(await this.copago(a.codPlan, a.materiaId, a.tipo)) };
   }
