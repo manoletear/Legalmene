@@ -194,6 +194,12 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   `POST /auth/logout`, que sube `usuarios.sesion_version` e invalida las sesiones anteriores. Nadie
   cambia su propio perfil ni otorga permisos que no tiene. Entra ID exige `ENTRA_AUDIENCE` y
   `ENTRA_ISSUER`. Todo dato de usuario en correos HTML pasa por `escaparHtml()`.
+- **Aprobaciones y transiciones (auditoría run-2)**: cuatro ojos en provisiones, aranceles por
+  atención y derivaciones: quien solicita (o envía a aprobación) no aprueba ni rechaza. Toda escritura
+  de estado es condicional al estado leído (`UPDATE … WHERE estado = <actual>` o `FOR UPDATE`) y
+  responde 409 si otro la resolvió antes; un comité solo se cierra una vez. Afiliados: `Eliminado` solo
+  lo fija `DELETE` y solo lo revierte `POST /afiliados/:id/restaurar` (ambos `afiliados.eliminar`);
+  editar un afiliado eliminado responde 409.
 - **Montos**: enteros (centavos para USD/EUR; pesos chilenos son enteros nativos).
 - **Drizzle**: no usar `db.execute(raw)` salvo para casos atómicos (correlativo, upsert
   con xmax). Preferir el query builder tipado.

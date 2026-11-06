@@ -81,6 +81,12 @@ export class AfiliadosController {
     return this.service.eliminar(id);
   }
 
+  @Post(":id/restaurar")
+  @Permiso("afiliados.eliminar")
+  restaurar(@Param("id") id: string) {
+    return this.service.restaurar(id);
+  }
+
   @Post(":id/planes")
   @Permiso("afiliados.asignar_planes")
   asignarPlan(@Param("id") id: string, @Body() body: AsignarPlanDto) {

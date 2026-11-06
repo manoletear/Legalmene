@@ -1,6 +1,6 @@
 import type { CriteriosBusqueda } from "@legalmene/shared";
 import { condicionAtencion } from "../../common/busqueda/criterios";
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { and, asc, desc, eq } from "drizzle-orm";
 import {
   ESTADO_ARANCEL_LABEL,
@@ -110,11 +110,13 @@ export class ArancelesAtencionService {
       );
     }
     return this.db.transaction(async (tx) => {
+      // Solo desde el estado leído: si otro usuario lo cambió entretanto, 409 (sin doble pago).
       const [row] = await tx
         .update(arancelesAtencion)
         .set({ ...extra, estado: hasta, updatedAt: new Date() })
-        .where(eq(arancelesAtencion.id, actual.id))
+        .where(and(eq(arancelesAtencion.id, actual.id), eq(arancelesAtencion.estado, actual.estado)))
         .returning();
+      if (!row) throw new ConflictException("El arancel cambió mientras se procesaba; actualice y reintente");
       await this.evento(tx, actual.id, actual.estado, eventoEstado, usuarioId, observacion);
       return row;
     });
@@ -124,12 +126,29 @@ export class ArancelesAtencionService {
     return this.transicionar(atencionId, "EnAprobacion", usuarioId);
   }
 
-  aprobar(atencionId: string, usuarioId: string, observacion?: string) {
+  // Cuatro ojos: quien envió el arancel a aprobación no lo aprueba ni lo rechaza.
+  private async asegurarOtroAprobador(atencionId: string, usuarioId: string): Promise<void> {
+    const actual = await this.obtener(atencionId);
+    if (!actual) return;
+    const [envio] = await this.db
+      .select({ usuarioId: arancelesAtencionEventos.usuarioId })
+      .from(arancelesAtencionEventos)
+      .where(and(eq(arancelesAtencionEventos.arancelAtencionId, actual.id), eq(arancelesAtencionEventos.estadoHasta, "EnAprobacion")))
+      .orderBy(desc(arancelesAtencionEventos.fecha))
+      .limit(1);
+    if (envio?.usuarioId === usuarioId) {
+      throw new ForbiddenException("Quien envió el arancel a aprobación no puede resolverlo");
+    }
+  }
+
+  async aprobar(atencionId: string, usuarioId: string, observacion?: string) {
+    await this.asegurarOtroAprobador(atencionId, usuarioId);
     return this.transicionar(atencionId, "Aprobado", usuarioId, { motivoRechazo: null }, observacion ?? null);
   }
 
   // El rechazo devuelve el arancel a Requerido (rojo) con el motivo para corregirlo.
-  rechazar(atencionId: string, usuarioId: string, motivo: string) {
+  async rechazar(atencionId: string, usuarioId: string, motivo: string) {
+    await this.asegurarOtroAprobador(atencionId, usuarioId);
     return this.transicionar(atencionId, "Requerido", usuarioId, { motivoRechazo: motivo }, motivo, "Rechazado");
   }
 

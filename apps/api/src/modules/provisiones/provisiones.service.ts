@@ -3,6 +3,7 @@ import { condicionAtencion } from "../../common/busqueda/criterios";
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -215,6 +216,23 @@ export class ProvisionesService {
     return this.transicionar(id, "EnAprobacion", usuarioId);
   }
 
+  // Cuatro ojos (Anexo: la jefatura aprueba lo que piden sus colaboradores): quien pidió la
+  // provisión o su entrega no puede resolverla.
+  private async asegurarOtroAprobador(p: Provision, usuarioId: string, tx: Tx): Promise<void> {
+    if (p.solicitadaPorId === usuarioId) {
+      throw new ForbiddenException("Quien solicitó la provisión no puede autorizar ni rechazar su entrega");
+    }
+    const [pedido] = await tx
+      .select({ usuarioId: provisionesEventos.usuarioId })
+      .from(provisionesEventos)
+      .where(and(eq(provisionesEventos.provisionId, p.id), eq(provisionesEventos.estadoHasta, "EnAprobacion")))
+      .orderBy(desc(provisionesEventos.fecha))
+      .limit(1);
+    if (pedido?.usuarioId === usuarioId) {
+      throw new ForbiddenException("Quien pidió la entrega no puede autorizarla ni rechazarla");
+    }
+  }
+
   autorizar(id: string, usuarioId: string, observacion?: string) {
     return this.transicionar(
       id,
@@ -222,6 +240,7 @@ export class ProvisionesService {
       usuarioId,
       { resueltaPorId: usuarioId, observacionResolucion: observacion ?? null, fechaResolucion: new Date() },
       observacion ?? null,
+      (p, tx) => this.asegurarOtroAprobador(p, usuarioId, tx),
     );
   }
 
@@ -233,6 +252,7 @@ export class ProvisionesService {
       usuarioId,
       { resueltaPorId: usuarioId, observacionResolucion: observacion, fechaResolucion: new Date() },
       `Entrega rechazada: ${observacion}`,
+      (p, tx) => this.asegurarOtroAprobador(p, usuarioId, tx),
     );
   }
 
@@ -244,6 +264,14 @@ export class ProvisionesService {
     return this.transicionar(id, "Entregada", usuarioId, {}, null, async (p, tx) => {
       const monto = montoEntregado ?? p.monto;
       if (monto > p.monto) throw new BadRequestException(`No se puede entregar más de lo provisionado (${clp(p.monto)})`);
+      // Dentro de la transacción: dos entregas pedidas antes no pueden quedar ambas entregadas.
+      const [pendientes] = await tx
+        .select({ n: count() })
+        .from(provisiones)
+        .where(and(eq(provisiones.atencionId, p.atencionId), eq(provisiones.estado, "Entregada")));
+      if (Number(pendientes?.n ?? 0) > 0) {
+        throw new ConflictException("Hay fondos entregados sin rendir en esta atención; rinda la provisión antes de entregar más");
+      }
       await tx.update(provisiones).set({ montoEntregado: monto, fechaEntrega: new Date() }).where(eq(provisiones.id, p.id));
     });
   }
@@ -278,10 +306,18 @@ export class ProvisionesService {
     for (const p of disponibles) {
       if (!p.fechaDisponible) continue;
       if (diasHabilesEntre(hoyChileISO(p.fechaDisponible), hoy) <= DIAS_HABILES_RETIRO) continue;
-      await this.db.transaction(async (tx) => {
-        await tx.update(provisiones).set({ estado: "Pagada", fechaDisponible: null }).where(eq(provisiones.id, p.id));
+      // Solo si sigue Disponible con la misma fecha: una entrega hecha mientras corre el job gana.
+      const revertida = await this.db.transaction(async (tx) => {
+        const [u] = await tx
+          .update(provisiones)
+          .set({ estado: "Pagada", fechaDisponible: null })
+          .where(and(eq(provisiones.id, p.id), eq(provisiones.estado, "Disponible"), eq(provisiones.fechaDisponible, p.fechaDisponible!)))
+          .returning({ id: provisiones.id });
+        if (!u) return false;
         await this.evento(tx, p.id, "Disponible", "Pagada", null, "Fondos no retirados en el plazo; vuelven a la compañía");
+        return true;
       });
+      if (!revertida) continue;
       await this.notificar({ ...p, estado: "Pagada" }, "Pagada", "Fondos no retirados en el plazo de 2 días hábiles", true);
       n++;
     }

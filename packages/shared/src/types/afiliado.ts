@@ -23,12 +23,16 @@ export const AfiliadoSchema = z.object({
 });
 export type Afiliado = z.infer<typeof AfiliadoSchema>;
 
+// "Eliminado" no se fija por crear/editar: solo DELETE (afiliados.eliminar) lo marca y solo
+// POST /afiliados/:id/restaurar (mismo permiso) lo revierte.
+export const VigenciaEditableEnum = z.enum(["Activo", "Inactivo"]);
+
 export const CreateAfiliadoSchema = AfiliadoSchema.omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 }).extend({
-  vigencia: VigenciaAfiliadoEnum.optional(),
+  vigencia: VigenciaEditableEnum.optional(),
 });
 export type CreateAfiliado = z.infer<typeof CreateAfiliadoSchema>;
 

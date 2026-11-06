@@ -190,7 +190,10 @@ export class AfiliadosService {
   }
 
   async actualizar(id: string, patch: UpdateAfiliadoDto): Promise<Afiliado> {
-    await this.obtener(id);
+    const actual = await this.obtener(id);
+    if (actual.vigencia === "Eliminado") {
+      throw new ConflictException("El afiliado está eliminado; restáurelo antes de editarlo");
+    }
     if (patch.rut && !rutValido(patch.rut)) {
       throw new BadRequestException(`RUT inválido: ${patch.rut}`);
     }
@@ -206,9 +209,23 @@ export class AfiliadosService {
     return row;
   }
 
-  // Soft-delete: marca como Eliminado en vez de borrar (cumplimiento normativo).
+  // Soft-delete: marca como Eliminado en vez de borrar (cumplimiento normativo). Es el único
+  // camino a "Eliminado" (afiliados.eliminar); editar no puede fijar ni quitar ese estado.
   async eliminar(id: string): Promise<Afiliado> {
-    return this.actualizar(id, { vigencia: "Eliminado" });
+    await this.obtener(id);
+    return this.fijarVigencia(id, "Eliminado");
+  }
+
+  // Revierte un soft-delete (mismo permiso que eliminar).
+  async restaurar(id: string): Promise<Afiliado> {
+    const actual = await this.obtener(id);
+    if (actual.vigencia !== "Eliminado") throw new ConflictException("El afiliado no está eliminado");
+    return this.fijarVigencia(id, "Activo");
+  }
+
+  private async fijarVigencia(id: string, vigencia: Afiliado["vigencia"]): Promise<Afiliado> {
+    const [row] = await this.db.update(afiliados).set({ vigencia, updatedAt: new Date() }).where(eq(afiliados.id, id)).returning();
+    return row;
   }
 
   async asignarPlan(afiliadoId: string, input: AsignarPlan): Promise<PlanAfiliado> {

@@ -1,6 +1,6 @@
 import type { CriteriosBusqueda } from "@legalmene/shared";
 import { condicionAtencion } from "../../common/busqueda/criterios";
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { and, count, desc, eq } from "drizzle-orm";
 import type {
   AprobarDerivacion,
@@ -112,6 +112,7 @@ export class DerivacionesService {
   // y deja la consulta en Derivada.
   async aprobar(id: string, actor: Actor, input: AprobarDerivacion): Promise<{ derivacion: Derivacion; atencion: Atencion }> {
     const d = await this.pendiente(id);
+    if (d.solicitadaPorId === actor.id) throw new ForbiddenException("Quien solicitó la derivación no puede resolverla");
     const consulta = await this.atencionesSrv.obtener(d.consultaId);
     const competenciaId = input.competenciaId ?? consulta.competenciaId;
     const materiaId = input.materiaId ?? consulta.materiaId;
@@ -126,7 +127,18 @@ export class DerivacionesService {
       throw err;
     }
 
-    const nueva = await this.atencionesSrv.crear(
+    // Reclamo atómico: solo una aprobación pasa de Solicitada; la otra recibe 409 y no crea nada.
+    const ahora = new Date();
+    const [reclamada] = await this.db
+      .update(derivaciones)
+      .set({ estado: "Aprobada", resueltaPorId: actor.id, observacion: input.observacion ?? null, resueltaAt: ahora })
+      .where(and(eq(derivaciones.id, id), eq(derivaciones.estado, "Solicitada")))
+      .returning();
+    if (!reclamada) throw new ConflictException("La derivación ya fue resuelta");
+
+    let nueva: Atencion;
+    try {
+      nueva = await this.atencionesSrv.crear(
       {
         codPlan: consulta.codPlan,
         afiliadoId: consulta.afiliadoId,
@@ -141,18 +153,19 @@ export class DerivacionesService {
       actor,
       // Quien pidió la derivación sigue viendo el caso aunque no quede como abogado asignado.
       { metadata: { derivadaDe: consulta.id, motivoDerivacion: d.motivo }, creadoPorId: d.solicitadaPorId },
-    );
+      );
+    } catch (err) {
+      // Si no se pudo crear el caso, la derivación vuelve a quedar pendiente.
+      await this.db
+        .update(derivaciones)
+        .set({ estado: "Solicitada", resueltaPorId: null, observacion: null, resueltaAt: null })
+        .where(and(eq(derivaciones.id, id), eq(derivaciones.estado, "Aprobada")));
+      throw err;
+    }
 
-    const ahora = new Date();
     const [derivacion] = await this.db
       .update(derivaciones)
-      .set({
-        estado: "Aprobada",
-        resueltaPorId: actor.id,
-        observacion: input.observacion ?? null,
-        atencionDerivadaId: nueva.id,
-        resueltaAt: ahora,
-      })
+      .set({ atencionDerivadaId: nueva.id })
       .where(eq(derivaciones.id, id))
       .returning();
     await this.db
@@ -182,12 +195,14 @@ export class DerivacionesService {
 
   async rechazar(id: string, actor: Actor, input: RechazarDerivacion): Promise<Derivacion> {
     const d = await this.pendiente(id);
+    if (d.solicitadaPorId === actor.id) throw new ForbiddenException("Quien solicitó la derivación no puede resolverla");
     const consulta = await this.atencionesSrv.obtener(d.consultaId);
     const [row] = await this.db
       .update(derivaciones)
       .set({ estado: "Rechazada", resueltaPorId: actor.id, observacion: input.observacion, resueltaAt: new Date() })
-      .where(eq(derivaciones.id, id))
+      .where(and(eq(derivaciones.id, id), eq(derivaciones.estado, "Solicitada")))
       .returning();
+    if (!row) throw new ConflictException("La derivación ya fue resuelta");
     await this.notif.crear({
       codPlan: consulta.codPlan,
       usuarioId: d.solicitadaPorId,

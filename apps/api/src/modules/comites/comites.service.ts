@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
+import { Inject, Injectable, NotFoundException, BadRequestException, ConflictException } from "@nestjs/common";
 import { and, eq, inArray } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { filtroAtenciones } from "../../common/acceso/alcance";
@@ -110,8 +110,9 @@ export class ComitesService {
         fechaCierre: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(comites.id, comiteId))
+      .where(and(eq(comites.id, comiteId), inArray(comites.estado, ["Convocado", "EnSesion"])))
       .returning();
+    if (!updated) throw new ConflictException(`El comité ya está ${comite.estado.toLowerCase()}; su decisión no se puede cambiar`);
     await this.db
       .update(atenciones)
       .set({ estado: "EnGestion", updatedAt: new Date() })
