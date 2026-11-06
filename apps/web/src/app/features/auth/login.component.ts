@@ -20,10 +20,10 @@ type Paso = "correo" | "enviado" | "verificando" | "error";
     <div class="lm-login">
       <section class="lm-login-panel">
         <div class="lm-login-marca">
-          <div class="lm-brand-mark">LC</div>
+          <img class="lm-brand-mark" src="assets/nexus-logo.png" alt="" />
           <div>
-            <strong>LEGAL CHILE</strong>
-            <small>tu abogado siempre</small>
+            <strong>NEXUS</strong>
+            <small>Legal Chile</small>
           </div>
         </div>
         <h1>Plataforma Integral de Gestión Legal</h1>

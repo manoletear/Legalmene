@@ -61,10 +61,10 @@ const CLAVE_MENU_EXPANDIDO = "lm.menuExpandido";
         <div class="lm-sidebar-top">
           <ng-container *ngIf="menuExpandido(); else soloHamburguesa">
             <div class="lm-brand lm-brand-claro">
-              <div class="lm-brand-mark">LC</div>
+              <img class="lm-brand-mark" src="assets/nexus-logo.png" alt="" />
               <div class="lm-brand-text">
-                <strong>LEGAL CHILE</strong>
-                <small>tu abogado siempre</small>
+                <strong>NEXUS</strong>
+                <small>Legal Chile</small>
               </div>
             </div>
             <button type="button" class="lm-sidebar-toggle" (click)="alternarMenu()" aria-label="Colapsar menú" aria-expanded="true">
@@ -103,10 +103,10 @@ const CLAVE_MENU_EXPANDIDO = "lm.menuExpandido";
       ></button>
 
       <div class="lm-brand" *ngIf="isMobile() || !menuExpandido()">
-        <div class="lm-brand-mark">LC</div>
+        <img class="lm-brand-mark" src="assets/nexus-logo.png" alt="" />
         <div class="lm-brand-text">
-          <strong>LEGAL CHILE</strong>
-          <small>tu abogado siempre</small>
+          <strong>NEXUS</strong>
+          <small>Legal Chile</small>
         </div>
       </div>
 

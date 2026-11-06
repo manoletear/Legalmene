@@ -87,7 +87,7 @@ export class EnlacesAccesoService {
     if (modoDemo()) return { ok: true, enlaceDemo: enlace };
     await this.notificaciones.enviarEmail({
       to: [usuario.email],
-      subject: "Tu enlace de acceso a Legal Chile",
+      subject: "Tu enlace de acceso a NEXUS",
       bodyHtml: correoHtml(usuario.nombre, enlace),
       bodyText: correoTexto(usuario.nombre, enlace),
     });
@@ -160,14 +160,14 @@ const escapar = escaparHtml;
 
 function correoHtml(nombre: string, enlace: string): string {
   return `<div style="font-family:Arial,sans-serif;color:#0f172a;max-width:480px">
-  <h2 style="color:#2c4a7f">Legal Chile</h2>
+  <h2 style="color:#2c4a7f">NEXUS · Legal Chile</h2>
   <p>Hola ${escapar(nombre)}:</p>
   <p>Para ingresar a la plataforma, haz clic en el siguiente botón. El enlace vence en ${MINUTOS_VALIDEZ_ENLACE} minutos y sirve una sola vez.</p>
-  <p><a href="${escapar(enlace)}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none">Ingresar a Legal Chile</a></p>
+  <p><a href="${escapar(enlace)}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none">Ingresar a NEXUS</a></p>
   <p style="color:#64748b;font-size:13px">Si no solicitaste este acceso, ignora este correo.</p>
 </div>`;
 }
 
 function correoTexto(nombre: string, enlace: string): string {
-  return `Hola ${nombre}:\n\nPara ingresar a Legal Chile abre este enlace (vence en ${MINUTOS_VALIDEZ_ENLACE} minutos y sirve una sola vez):\n${enlace}\n\nSi no solicitaste este acceso, ignora este correo.`;
+  return `Hola ${nombre}:\n\nPara ingresar a NEXUS abre este enlace (vence en ${MINUTOS_VALIDEZ_ENLACE} minutos y sirve una sola vez):\n${enlace}\n\nSi no solicitaste este acceso, ignora este correo.`;
 }

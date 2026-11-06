@@ -56,15 +56,10 @@ body {
 .lm-brand-mark {
   width: 36px;
   height: 36px;
-  border-radius: 6px;
-  background: linear-gradient(160deg, #0c2d54 0%, #2563eb 70%, #60a5fa 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-weight: 800;
-  font-size: 18px;
-  letter-spacing: 0.5px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  display: block;
   box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
 }
 
@@ -81,7 +76,7 @@ body {
   -webkit-text-fill-color: transparent;
   font-weight: 800;
   font-size: 16px;
-  letter-spacing: 1px;
+  letter-spacing: 3px;
 }
 
 .lm-brand-text small {
@@ -229,7 +224,7 @@ body {
 
 .lm-brand-claro { min-width: 0; gap: 8px; }
 .lm-brand-claro .lm-brand-text { white-space: nowrap; }
-.lm-brand-claro .lm-brand-mark { background: rgba(255, 255, 255, 0.16); box-shadow: none; }
+.lm-brand-claro .lm-brand-mark { box-shadow: none; }
 .lm-brand-claro .lm-brand-text strong { background: none; -webkit-text-fill-color: #fff; color: #fff; }
 .lm-brand-claro .lm-brand-text small { color: rgba(255, 255, 255, 0.6); letter-spacing: 1px; font-size: 9px; }
 
@@ -524,7 +519,7 @@ body {
   gap: 16px;
 }
 .lm-login-marca { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
-.lm-login-marca .lm-brand-mark { width: 48px; height: 48px; font-size: 22px; background: rgba(255, 255, 255, 0.16); box-shadow: none; }
+.lm-login-marca .lm-brand-mark { width: 56px; height: 56px; box-shadow: none; }
 .lm-login-marca strong { display: block; font-size: 20px; letter-spacing: 1px; }
 .lm-login-marca small { display: block; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: rgba(255, 255, 255, 0.65); }
 .lm-login-panel h1 { margin: 0; font-size: 32px; line-height: 1.2; max-width: 440px; }

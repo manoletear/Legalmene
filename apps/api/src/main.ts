@@ -56,7 +56,7 @@ async function bootstrap() {
   });
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle("LegalChile PSL API")
+    .setTitle("NEXUS API (Legal Chile)")
     .setDescription("Sistema de gestión legal — Atenciones, Afiliados, Comité, Pagos")
     .setVersion("0.1.0")
     .addBearerAuth(
