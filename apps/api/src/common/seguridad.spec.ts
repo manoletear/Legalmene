@@ -6,6 +6,7 @@ import { claveCorrespondeAAtencion } from "../modules/documentos/documentos.serv
 import { contentDisposition } from "../modules/documentos/local.storage";
 import { entraConfigurado } from "../modules/auth/jwt-auth.guard";
 import { CrearWebhookSchema } from "@legalmene/shared";
+import { esAdminBootstrap } from "../modules/usuarios/usuarios.service";
 
 // Regresiones unitarias de la auditoría de seguridad (run-1).
 describe("auditoría", () => {
@@ -58,5 +59,19 @@ describe("correo y configuración", () => {
     expect(entraConfigurado({})).toBe(false);
     expect(entraConfigurado({ ENTRA_AUDIENCE: "api://x" })).toBe(false);
     expect(entraConfigurado({ ENTRA_AUDIENCE: "api://x", ENTRA_ISSUER: "https://login.microsoftonline.com/t/v2.0" })).toBe(true);
+  });
+});
+
+describe("administradores iniciales", () => {
+  it("acepta correos exactos y dominios completos con @", () => {
+    const cfg = "ana@legalchile.cl, @tooxs.com";
+    expect(esAdminBootstrap("Ana@LegalChile.cl", cfg)).toBe(true);
+    expect(esAdminBootstrap("maravena@tooxs.com", cfg)).toBe(true);
+    expect(esAdminBootstrap("MARAVENA@TOOXS.COM", cfg)).toBe(true);
+    expect(esAdminBootstrap("otro@legalchile.cl", cfg)).toBe(false);
+    expect(esAdminBootstrap("x@tooxs.com.evil.cl", cfg)).toBe(false);
+    expect(esAdminBootstrap("x@sub.tooxs.com", cfg)).toBe(false);
+    expect(esAdminBootstrap("@tooxs.com", cfg)).toBe(false);
+    expect(esAdminBootstrap("x@tooxs.com", undefined)).toBe(false);
   });
 });

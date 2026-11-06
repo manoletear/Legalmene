@@ -142,7 +142,7 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   `POST /auth/enlace/verificar` lo canjea por una sesión propia (JWT HS256, 8 h, `SESSION_JWT_SECRET`)
   que `JwtAuthGuard` acepta antes que Entra ID. Con `AUTH_DISABLED=true` el enlace se devuelve en la
   respuesta (demo sin correo); nunca en producción. Altas de usuario: pendiente (hoy entran los ya
-  existentes y `BOOTSTRAP_ADMIN_EMAILS`).
+  existentes y `BOOTSTRAP_ADMIN_EMAILS`, que acepta correos exactos o dominios con `@` inicial).
 - **Permisos**: no existen roles fijos. Todo endpoint que modifique datos (o exponga un módulo
   restringido) lleva `@UseGuards(JwtAuthGuard, PermisosGuard)` + `@Permiso("clave")` con una
   clave del catálogo `PERMISOS` (`packages/shared/src/types/permisos.ts`); si falta una clave,

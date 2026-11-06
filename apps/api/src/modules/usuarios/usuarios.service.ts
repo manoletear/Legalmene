@@ -18,9 +18,17 @@ import { DRIZZLE, Database } from "../../db/database.module";
 import { perfiles, perfilPermisos, usuarios, Usuario } from "../../db/schema/usuarios";
 import type { AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 
+// BOOTSTRAP_ADMIN_EMAILS: correos exactos o dominios completos con "@" inicial
+// (p. ej. "ana@legalchile.cl,@tooxs.com"). Quien calce entra como Administrador activo en su
+// primer ingreso. Un dominio da ADMIN a cualquier buzón de ese dominio: usarlo solo con
+// dominios de confianza.
 export function esAdminBootstrap(email: string, config = process.env.BOOTSTRAP_ADMIN_EMAILS): boolean {
+  const correo = email.trim().toLowerCase();
+  const arroba = correo.lastIndexOf("@");
+  if (arroba <= 0) return false;
+  const dominio = correo.slice(arroba);
   const lista = (config ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-  return lista.includes(email.trim().toLowerCase());
+  return lista.some((e) => (e.startsWith("@") ? e === dominio : e === correo));
 }
 
 export interface ClaimsSpec {
