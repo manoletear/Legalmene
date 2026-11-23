@@ -132,4 +132,4 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 | 2026-11-23 | 3 | V°B° de jefatura para terminar asesorías y juicios: solicitud, aprobación o rechazo con cuatro ojos (migración 0022, permiso `atenciones.aprobar_termino`) | 705c4be |
 | 2026-11-23 | 3 | Arancel impago: solo gestiones de contacto con el cliente; provisión solicitada e impaga impide iniciar la tramitación del juicio | 4595685 |
 | 2026-11-23 | 3 | Sin cobertura del plan: autorización de Gerencia de Servicios (migración 0023, permiso `atenciones.autorizar_sin_cobertura`); rechazada, solo se abandona | 8586669 |
-| 2026-11-23 | 3 | Bloqueo tras 3 intentos fallidos (enlace ya usado o vencido) con aviso a los administradores; avisos de sistema sin plan (migración 0024) | ver commit |
+| 2026-11-23 | 3 | Bloqueo tras 3 intentos fallidos (enlace ya usado o vencido) con aviso a los administradores; avisos de sistema sin plan (migración 0024) | 6f8910a |

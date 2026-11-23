@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { and, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { DatabaseModule, PG_POOL } from "../../src/db/database.module";
 import { perfiles, usuarios, enlacesAcceso } from "../../src/db/schema/usuarios";
 import { AuditService } from "../../src/modules/audit/audit.service";
@@ -27,6 +27,7 @@ const RUN = !!process.env.DATABASE_URL;
   const email = `enlace-${SUF}@legalchile.cl`;
   const bootstrap = `boot-${SUF}@legalchile.cl`;
   const bloqueable = `bloqueo-${SUF}@legalchile.cl`;
+  const adminPrueba = `admin-${SUF}@legalchile.cl`;
   let usuarioId: string;
   const authPrevio = process.env.AUTH_DISABLED;
 
@@ -60,7 +61,7 @@ const RUN = !!process.env.DATABASE_URL;
 
   afterAll(async () => {
     const db = drizzle(pool);
-    await db.execute(sql`DELETE FROM usuarios WHERE email IN (${email}, ${bootstrap}, ${bloqueable})`);
+    await db.execute(sql`DELETE FROM usuarios WHERE email IN (${email}, ${bootstrap}, ${bloqueable}, ${adminPrueba})`);
     process.env.AUTH_DISABLED = authPrevio;
     delete process.env.BOOTSTRAP_ADMIN_EMAILS;
     await moduleRef.close();
@@ -111,13 +112,9 @@ const RUN = !!process.env.DATABASE_URL;
     const usuariosSrv = moduleRef.get(UsuariosService);
     const [perfil] = await db.select({ id: perfiles.id }).from(perfiles).where(eq(perfiles.codigo, "ABOGADO"));
     const [u] = await db.insert(usuarios).values({ entraOid: `bloq-${SUF}`, email: bloqueable, nombre: "Bea Bloqueo", perfilId: perfil.id }).returning();
-    // Debe existir al menos un administrador activo a quien avisar.
-    const [admin] = await db
-      .select({ id: usuarios.id })
-      .from(usuarios)
-      .innerJoin(perfiles, eq(perfiles.id, usuarios.perfilId))
-      .where(and(eq(perfiles.codigo, "ADMIN"), eq(usuarios.activo, true), eq(usuarios.bloqueado, false)));
-    expect(admin, "el seed debe tener un administrador activo").toBeTruthy();
+    // Un administrador propio de la prueba (CI corre sin seed) a quien avisar y que desbloquea.
+    const [perfilAdmin] = await db.select({ id: perfiles.id }).from(perfiles).where(eq(perfiles.codigo, "ADMIN"));
+    const [admin] = await db.insert(usuarios).values({ entraOid: `adm-${SUF}`, email: adminPrueba, nombre: "Admin Prueba", perfilId: perfilAdmin.id }).returning();
 
     await srv.solicitar(bloqueable);
     const token = tokenDe(enviados[0]);
