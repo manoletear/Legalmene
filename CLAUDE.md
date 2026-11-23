@@ -119,9 +119,11 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   vigente = vigencia Activo, fecha_inicio ≤ hoy (Chile), sin término o término ≥ hoy, y plan
   vigente. Sin planes vigentes, la atención solo puede ir como `REZAGADO` o `METLIFE`.
   Correlativos son globales por tipo/año.
-- **Maestros**: competencias, materias, etc. son tablas con `vigente` (nunca enums ni listas
+- **Maestros**: competencias, materias, canales, regiones, ciudades y comunas, etc. son tablas con `vigente` (nunca enums ni listas
   fijas en el frontend). Leerlos con `GET /maestros/:tipo`; modificarlos exige `maestros.administrar`.
   Desactivar oculta el valor en formularios nuevos sin tocar registros históricos.
+  Ciudades y comunas cuelgan de una región; el afiliado guarda región, ciudad y comuna como texto (listas editables en el
+  formulario) para no depender del maestro en cargas masivas ni en datos históricos.
 - **Aranceles y copago**: el arancel es por materia (+ tipo opcional; el específico gana) y es
   igual para todos los planes. El copago sale de `calcularCopago()`
   (`modules/coberturas/copago.ts`): regla del plan más específica (materia+tipo → materia →

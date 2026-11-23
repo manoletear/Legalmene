@@ -31,6 +31,7 @@ const TIPO_BIEN: Record<string, string> = { Inmueble: "Inmueble", Vehiculo: "Veh
           <small class="lm-muted"><a routerLink="/afiliados">Afiliados</a> / {{ a.rut }}</small>
           <h1 style="margin:4px 0;">{{ a.nombres }} {{ a.apellidoPaterno }} {{ a.apellidoMaterno }}</h1>
           <span class="lm-muted">{{ a.rut }} · {{ a.email || 'sin correo' }} · {{ a.telefono || 'sin teléfono' }}</span>
+          <div class="lm-muted lm-small" *ngIf="direccion(a) as d">{{ d }}</div>
         </div>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           <p-tag [value]="a.vigencia" [severity]="a.vigencia === 'Activo' ? 'success' : a.vigencia === 'Eliminado' ? 'danger' : 'secondary'"></p-tag>
@@ -176,6 +177,10 @@ export class AfiliadoDetailComponent implements OnInit {
   protected editado() {
     this.editando.set(false);
     this.recargar();
+  }
+
+  protected direccion(a: AfiliadoConPlanes): string {
+    return [a.direccion, a.comuna, a.ciudad, a.region].filter(Boolean).join(", ");
   }
 
   protected eliminar(a: AfiliadoConPlanes) {

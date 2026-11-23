@@ -14,6 +14,7 @@ const FiltroMaestroSchema = z.object({
     .optional()
     .transform((v) => (v === undefined ? undefined : v === "true")),
   competenciaId: z.string().uuid().optional(),
+  regionId: z.string().uuid().optional(),
   aplicaA: TipoAtencionEnum.optional(),
 });
 class FiltroMaestroDto extends createZodDto(FiltroMaestroSchema) {}

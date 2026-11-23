@@ -407,6 +407,7 @@ export class ReportesService {
         telefono: afiliados.telefono,
         direccion: afiliados.direccion,
         comuna: afiliados.comuna,
+        ciudad: afiliados.ciudad,
         region: afiliados.region,
         fechaNacimiento: afiliados.fechaNacimiento,
         codPlan: planesAfiliado.codPlan,

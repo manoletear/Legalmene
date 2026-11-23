@@ -73,6 +73,30 @@ function maestroSimple(nombreTabla: string) {
 }
 
 export const organismos = maestroSimple("organismos");
+
+// Territorio (Anexo §II l.150): regiones y, por región, ciudades y comunas. Los afiliados guardan
+// el nombre (texto) para no depender del maestro en cargas masivas ni en datos históricos.
+export const regiones = pgTable(
+  "regiones",
+  { ...comunes(), nombre: varchar("nombre", { length: 80 }).notNull() },
+  (t) => ({ nombreUq: uniqueIndex("regiones_nombre_uq").on(t.nombre) }),
+);
+
+function porRegion(nombreTabla: string) {
+  return pgTable(
+    nombreTabla,
+    {
+      ...comunes(),
+      regionId: uuid("region_id")
+        .notNull()
+        .references(() => regiones.id, { onDelete: "restrict" }),
+      nombre: varchar("nombre", { length: 80 }).notNull(),
+    },
+    (t) => ({ regionNombreUq: uniqueIndex(`${nombreTabla}_region_nombre_uq`).on(t.regionId, t.nombre) }),
+  );
+}
+export const ciudades = porRegion("ciudades");
+export const comunas = porRegion("comunas");
 export const tiposConsulta = maestroSimple("tipos_consulta");
 export const causasTermino = maestroSimple("causas_termino");
 export const calidadesProcesales = maestroSimple("calidades_procesales");

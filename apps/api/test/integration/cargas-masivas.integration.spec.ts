@@ -22,6 +22,7 @@ const RUN = !!process.env.DATABASE_URL;
   const TEST_PLAN = planAleatorio();
   const OTRO_PLAN = planAleatorio("TESTB");
   const [JUAN, MARIA, CARLOS] = [rutAleatorio(), rutAleatorio(), rutAleatorio()];
+  const PEDRO = rutAleatorio();
   const notificadas: unknown[] = [];
 
   beforeAll(async () => {
@@ -48,7 +49,7 @@ const RUN = !!process.env.DATABASE_URL;
     await db.execute(sql`DELETE FROM cargas_afiliado WHERE cod_plan IN (${TEST_PLAN}, ${OTRO_PLAN})`);
     await db.execute(sql`DELETE FROM bienes_afiliado WHERE cod_plan IN (${TEST_PLAN}, ${OTRO_PLAN})`);
     await db.execute(sql`DELETE FROM planes_afiliado WHERE cod_plan IN (${TEST_PLAN}, ${OTRO_PLAN})`);
-    await db.execute(sql`DELETE FROM afiliados WHERE rut IN (${JUAN}, ${MARIA}, ${CARLOS})`);
+    await db.execute(sql`DELETE FROM afiliados WHERE rut IN (${JUAN}, ${MARIA}, ${CARLOS}, ${PEDRO})`);
     await db.execute(sql`DELETE FROM planes WHERE cod_plan IN (${TEST_PLAN}, ${OTRO_PLAN})`);
     await moduleRef.close();
   });
@@ -84,6 +85,19 @@ const RUN = !!process.env.DATABASE_URL;
     expect(res.actualizados).toBe(0);
     expect(res.errores).toHaveLength(1);
     expect(res.errores[0].mensaje).toMatch(/RUT inv/);
+  });
+
+  it("FLUJO registra dirección, comuna, ciudad y región del RUT nuevo", async () => {
+    const buf = Buffer.from(
+      ["rut,nombres,apellido_paterno,direccion,comuna,ciudad,region", `${PEDRO},Pedro,Test,Calle 1,Providencia,Santiago,Metropolitana de Santiago`].join("\n"),
+      "utf-8",
+    );
+    const res = await service.cargarAfiliados(TEST_PLAN, "FLUJO", buf);
+    expect(res.insertados).toBe(1);
+    const [p] = await drizzle(pool).select().from(afiliados).where(eq(afiliados.rut, PEDRO));
+    expect(p).toMatchObject({ direccion: "Calle 1", comuna: "Providencia", ciudad: "Santiago", region: "Metropolitana de Santiago" });
+    // No interfiere con los conteos de las pruebas STOCK del mismo plan.
+    await drizzle(pool).delete(planesAfiliado).where(eq(planesAfiliado.afiliadoId, p.id));
   });
 
   it("FLUJO de nuevo actualiza la fecha de término y NO cambia datos de la persona", async () => {

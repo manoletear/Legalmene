@@ -142,6 +142,7 @@ export const CAMPOS_INFORME_AFILIADOS = {
   telefono: "Teléfono",
   direccion: "Dirección",
   comuna: "Comuna",
+  ciudad: "Ciudad",
   region: "Región",
   fechaNacimiento: "Fecha de nacimiento",
   codPlan: "Cód. plan",

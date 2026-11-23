@@ -28,6 +28,7 @@ interface FilaCSV {
   telefono?: string;
   direccion?: string;
   comuna?: string;
+  ciudad?: string;
   region?: string;
   fecha_nacimiento?: string;
   fecha_inicio?: string;
@@ -153,6 +154,7 @@ export class CargasMasivasService {
           telefono: fila.telefono || null,
           direccion: fila.direccion || null,
           comuna: fila.comuna || null,
+          ciudad: fila.ciudad || null,
           region: fila.region || null,
           fechaNacimiento: fila.fecha_nacimiento || null,
           vigencia: "Activo",

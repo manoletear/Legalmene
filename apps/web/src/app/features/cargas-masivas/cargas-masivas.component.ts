@@ -81,7 +81,7 @@ import type { CargaMasivaResultado, EntidadCargaMasiva, TipoCargaMasiva } from "
         <small *ngIf="entidad !== 'afiliados'" class="lm-muted">
           El titular debe estar en la nómina del plan. Parentesco: Conyuge, ConvivienteCivil, Hijo, Padre, Madre u Otro. Tipo de bien: Inmueble, Vehiculo u Otro.
         </small>
-        <pre *ngIf="entidad === 'afiliados'" style="background:#f5f5f5; padding:8px; border-radius:4px; margin-top:8px;">rut,nombres,apellido_paterno,apellido_materno,email,telefono,comuna,region,fecha_nacimiento,fecha_inicio,fecha_termino
+        <pre *ngIf="entidad === 'afiliados'" style="background:#f5f5f5; padding:8px; border-radius:4px; margin-top:8px;">rut,nombres,apellido_paterno,apellido_materno,email,telefono,direccion,comuna,ciudad,region,fecha_nacimiento,fecha_inicio,fecha_termino
 11111111-1,Juan,Pérez,Soto,juan&#64;ejemplo.cl,+56912345678,Santiago,RM,1985-04-12,2026-01-01,2026-12-31
 22222222-2,María,González,,maria&#64;ejemplo.cl,,,,,,</pre>
         <small *ngIf="entidad === 'afiliados'" class="lm-muted">

@@ -14,6 +14,7 @@ export const AfiliadoSchema = z.object({
   telefono: z.string().max(20).optional().nullable(),
   direccion: z.string().max(250).optional().nullable(),
   comuna: z.string().max(80).optional().nullable(),
+  ciudad: z.string().max(80).optional().nullable(),
   region: z.string().max(80).optional().nullable(),
   fechaNacimiento: z.string().date().optional().nullable(),
   vigencia: VigenciaAfiliadoEnum.default("Activo"),

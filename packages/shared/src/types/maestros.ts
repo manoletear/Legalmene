@@ -81,6 +81,21 @@ export type CreateTribunal = z.infer<typeof CreateTribunalSchema>;
 export type UpdateTribunal = z.infer<typeof UpdateTribunalSchema>;
 
 export const CreateMaestroSimpleSchema = MaestroSimpleSchema.omit(sinId).partial({ vigente: true });
+
+// Canales de venta (Anexo §II l.150): maestro de solo nombre.
+export const CreateCanalSchema = CreateMaestroSimpleSchema.extend({ nombre: z.string().trim().min(1).max(120) });
+export const UpdateCanalSchema = CreateCanalSchema.partial();
+
+// Territorio: regiones y, por región, ciudades y comunas.
+const nombreTerritorio = z.string().trim().min(1).max(80);
+export const RegionSchema = z.object({ id: z.string().uuid(), nombre: nombreTerritorio, vigente: z.boolean() });
+export type Region = z.infer<typeof RegionSchema>;
+export const CreateRegionSchema = RegionSchema.omit(sinId).partial({ vigente: true });
+export const UpdateRegionSchema = CreateRegionSchema.partial();
+export const LugarSchema = z.object({ id: z.string().uuid(), regionId: z.string().uuid(), nombre: nombreTerritorio, vigente: z.boolean() });
+export type Lugar = z.infer<typeof LugarSchema>;
+export const CreateLugarSchema = LugarSchema.omit(sinId).partial({ vigente: true });
+export const UpdateLugarSchema = CreateLugarSchema.partial();
 export const UpdateMaestroSimpleSchema = CreateMaestroSimpleSchema.partial();
 export type CreateMaestroSimple = z.infer<typeof CreateMaestroSimpleSchema>;
 export type UpdateMaestroSimple = z.infer<typeof UpdateMaestroSimpleSchema>;
