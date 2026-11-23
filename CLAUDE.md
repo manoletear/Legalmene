@@ -210,8 +210,9 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
 
 ## TODOs prioritarios
 
-El orden funcional está en `docs/requerimientos-anexo-psl.md` §5 (primero el modelo núcleo:
-afiliado único + `planes_afiliado`). Pendientes técnicos:
+**Seguimiento vigente:** [`docs/plan-cumplimiento-anexo.md`](./docs/plan-cumplimiento-anexo.md) (fases 0–7, con casillas)
+y el detalle requisito por requisito en `docs/cumplimiento-anexo-detalle.md`. El orden histórico está en
+`docs/requerimientos-anexo-psl.md` §5. Pendientes técnicos:
 
 1. Integración real Transbank WebPay (reemplazar stub en `pagos.service.ts`).
 2. Notificaciones por correo de vencimientos y flujos (SES), incluido el resumen de cargas masivas.

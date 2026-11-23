@@ -96,6 +96,8 @@ Logs (accesos, acciones, errores con aviso al admin), alta disponibilidad, docum
 
 ## 5. Plan de trabajo
 
+> Plan vigente y seguimiento: [`plan-cumplimiento-anexo.md`](./plan-cumplimiento-anexo.md) (revisión del 23-11-2026).
+
 1. ✅ **Modelo núcleo** — afiliado único + `planes_afiliado`, canales, plan como producto, fin del tenant por `X-Cod-Plan`; consulta por RUT con planes vigentes; carga flujo/stock sobre `planes_afiliado`.
    - La atención exige un plan vigente del RUT, o `REZAGADO`/`METLIFE` si no tiene ninguno.
    - Correlativos globales por tipo/año (la migración 0007 renumeró duplicados entre planes).
