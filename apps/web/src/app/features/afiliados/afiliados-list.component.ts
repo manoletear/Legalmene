@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
-import { ActivatedRoute, RouterLink } from "@angular/router";
+import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { CardModule } from "primeng/card";
 import { TableModule } from "primeng/table";
 import { ButtonModule } from "primeng/button";
@@ -14,17 +14,20 @@ import type { AfiliadoConPlanes, PlanAfiliadoDetalle } from "@legalmene/shared";
 import { AfiliadosApiService } from "../../core/services/afiliados.service";
 import { CriteriosBusquedaComponent, type Criterios } from "../../shared/criterios-busqueda.component";
 import { descargarArchivo } from "../../shared/descarga";
+import { PermisoDirective } from "../../core/permisos";
+import { AfiliadoFormComponent } from "./afiliado-form.component";
 
 // Búsqueda de afiliados por RUT, plan o canal (Anexo §XI B), sin precarga.
 @Component({
   selector: "lm-afiliados-list",
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, CardModule, TableModule, ButtonModule, SelectModule, TagModule, TooltipModule, CriteriosBusquedaComponent],
+  imports: [CommonModule, FormsModule, RouterLink, CardModule, TableModule, ButtonModule, SelectModule, TagModule, TooltipModule, CriteriosBusquedaComponent, PermisoDirective, AfiliadoFormComponent],
   template: `
     <p-card>
       <ng-template pTemplate="header">
-        <div style="padding:16px 16px 0;">
+        <div style="padding:16px 16px 0; display:flex; align-items:center; justify-content:space-between; gap:8px;">
           <h2 style="margin:0;">Afiliados</h2>
+          <button *lmPermiso="'afiliados.crear'" pButton icon="pi pi-plus" label="Nuevo afiliado" (click)="nuevo.set(true)"></button>
         </div>
       </ng-template>
 
@@ -92,12 +95,15 @@ import { descargarArchivo } from "../../shared/descarga";
         </p-table>
       </ng-template>
     </p-card>
+    <lm-afiliado-form [visible]="nuevo()" [rutInicial]="criterios()?.['rut'] ?? ''" (cerrar)="nuevo.set(false)" (guardado)="creado($event.id)"></lm-afiliado-form>
   `,
 })
 export class AfiliadosListComponent implements OnInit {
   private api = inject(AfiliadosApiService);
   private route = inject(ActivatedRoute);
   private msg = inject(MessageService);
+  private router = inject(Router);
+  protected nuevo = signal(false);
   protected data = signal<AfiliadoConPlanes[]>([]);
   protected total = signal(0);
   protected page = signal(1);
@@ -118,6 +124,11 @@ export class AfiliadosListComponent implements OnInit {
       this.iniciales = { rut };
       this.buscar({ rut });
     }
+  }
+
+  creado(id: string) {
+    this.nuevo.set(false);
+    this.router.navigate(["/afiliados", id]);
   }
 
   detallePlan(p: PlanAfiliadoDetalle): string {

@@ -13,7 +13,6 @@ import { ToggleSwitchModule } from "primeng/toggleswitch";
 import { TabsModule } from "primeng/tabs";
 import { AccordionModule } from "primeng/accordion";
 import { PaginatorModule, PaginatorState } from "primeng/paginator";
-import { ConfirmDialogModule } from "primeng/confirmdialog";
 import { ConfirmationService, MessageService } from "primeng/api";
 import {
   WebhooksApiService,
@@ -42,10 +41,8 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
     TabsModule,
     AccordionModule,
     PaginatorModule,
-    ConfirmDialogModule,
   ],
   template: `
-    <p-confirmDialog></p-confirmDialog>
     <div class="lm-row" style="gap:8px; margin-bottom:8px; align-items:center;">
       <label>Plan</label>
       <p-select
