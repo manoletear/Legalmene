@@ -1,4 +1,15 @@
-// Días hábiles = lunes a viernes. Los feriados chilenos no se consideran todavía.
+// Días hábiles = lunes a viernes que no son feriado. Los feriados vienen de la tabla `feriados`
+// (FeriadosService los carga al iniciar y al editarlos); sin cargar, solo se saltan fines de semana.
+
+let feriados: ReadonlySet<string> = new Set();
+
+export function establecerFeriados(fechas: Iterable<string>): void {
+  feriados = new Set(fechas);
+}
+
+export function esDiaHabil(iso: string): boolean {
+  return ![0, 6].includes(diaSemana(iso)) && !feriados.has(iso);
+}
 
 // Fecha calendario actual en Chile (YYYY-MM-DD).
 export function hoyChileISO(ahora: Date = new Date()): string {
@@ -16,14 +27,14 @@ function sumarDias(iso: string, n: number): string {
 }
 
 // Suma n días hábiles a una fecha ISO. Con n = 0 devuelve la misma fecha si es hábil,
-// o el lunes siguiente si cae en fin de semana.
+// o el siguiente día hábil si no lo es.
 export function sumarDiasHabiles(iso: string, n: number): string {
   let actual = iso;
-  while ([0, 6].includes(diaSemana(actual))) actual = sumarDias(actual, 1);
+  while (!esDiaHabil(actual)) actual = sumarDias(actual, 1);
   let restantes = n;
   while (restantes > 0) {
     actual = sumarDias(actual, 1);
-    if (![0, 6].includes(diaSemana(actual))) restantes--;
+    if (esDiaHabil(actual)) restantes--;
   }
   return actual;
 }
@@ -34,7 +45,7 @@ export function diasHabilesEntre(desde: string, hasta: string): number {
   let actual = desde;
   while (actual < hasta) {
     actual = sumarDias(actual, 1);
-    if (![0, 6].includes(diaSemana(actual))) n++;
+    if (esDiaHabil(actual)) n++;
   }
   return n;
 }

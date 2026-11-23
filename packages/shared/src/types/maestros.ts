@@ -84,3 +84,19 @@ export const CreateMaestroSimpleSchema = MaestroSimpleSchema.omit(sinId).partial
 export const UpdateMaestroSimpleSchema = CreateMaestroSimpleSchema.partial();
 export type CreateMaestroSimple = z.infer<typeof CreateMaestroSimpleSchema>;
 export type UpdateMaestroSimple = z.infer<typeof UpdateMaestroSimpleSchema>;
+
+// Feriados (días hábiles de los plazos del Anexo). "Legal": calculado por ley; "Manual": decreto,
+// elecciones u otro que agrega el administrador.
+const FechaFeriado = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha debe tener formato AAAA-MM-DD");
+export const FeriadoSchema = z.object({
+  id: z.string().uuid(),
+  fecha: FechaFeriado,
+  nombre: z.string().min(1).max(200),
+  origen: z.enum(["Legal", "Manual"]),
+  vigente: z.boolean(),
+});
+export type Feriado = z.infer<typeof FeriadoSchema>;
+export const CreateFeriadoSchema = z.object({ fecha: FechaFeriado, nombre: z.string().trim().min(1).max(200) });
+export type CreateFeriado = z.infer<typeof CreateFeriadoSchema>;
+export const UpdateFeriadoSchema = z.object({ nombre: z.string().trim().min(1).max(200).optional(), vigente: z.boolean().optional() });
+export type UpdateFeriado = z.infer<typeof UpdateFeriadoSchema>;

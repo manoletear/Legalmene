@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, boolean, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, varchar, boolean, timestamp, uniqueIndex, index, date } from "drizzle-orm/pg-core";
 
 // Maestros administrables (Anexo §II.E). vigente=false oculta el registro de los
 // formularios sin borrarlo, para no romper atenciones históricas.
@@ -76,3 +76,17 @@ export const organismos = maestroSimple("organismos");
 export const tiposConsulta = maestroSimple("tipos_consulta");
 export const causasTermino = maestroSimple("causas_termino");
 export const calidadesProcesales = maestroSimple("calidades_procesales");
+
+// Feriados nacionales (días hábiles de los plazos). Los legales los genera FeriadosService por
+// año (origen "Legal"); los de decreto o elecciones los agrega el administrador ("Manual").
+// vigente=false deja de contarlo como feriado.
+export const feriados = pgTable(
+  "feriados",
+  {
+    ...comunes(),
+    fecha: date("fecha", { mode: "string" }).notNull(),
+    nombre: varchar("nombre", { length: 200 }).notNull(),
+    origen: varchar("origen", { length: 10 }).$type<"Legal" | "Manual">().notNull().default("Manual"),
+  },
+  (t) => ({ fechaUq: uniqueIndex("feriados_fecha_uq").on(t.fecha) }),
+);

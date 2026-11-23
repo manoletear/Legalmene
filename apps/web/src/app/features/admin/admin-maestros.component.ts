@@ -13,6 +13,7 @@ import { MessageService } from "primeng/api";
 import { MaestrosApiService, TipoMaestro } from "../../core/services/maestros.service";
 import type { Competencia } from "@legalmene/shared";
 import { AdminPlantillasComponent } from "./admin-plantillas.component";
+import { AdminFeriadosComponent } from "./admin-feriados.component";
 
 interface DefTab {
   tipo: TipoMaestro;
@@ -60,7 +61,7 @@ const vacio = (): Partial<Fila> => ({
   standalone: true,
   imports: [
     CommonModule, FormsModule, CardModule, InputTextModule, SelectModule, CheckboxModule, ButtonModule,
-    TableModule, TagModule, TabsModule, AdminPlantillasComponent,
+    TableModule, TagModule, TabsModule, AdminPlantillasComponent, AdminFeriadosComponent,
   ],
   template: `
     <div style="margin-bottom:16px;">
@@ -68,16 +69,18 @@ const vacio = (): Partial<Fila> => ({
       <small class="lm-muted">Tablas que alimentan los formularios. Desactivar oculta el valor en formularios nuevos sin afectar registros históricos.</small>
     </div>
 
-    <p-tabs [value]="verPlantillas() ? 'plantillas' : tab().tipo" (valueChange)="cambiarTab($event)">
+    <p-tabs [value]="extra() ?? tab().tipo" (valueChange)="cambiarTab($event)">
       <p-tablist>
         <p-tab *ngFor="let t of tabs" [value]="t.tipo">{{ t.titulo }}</p-tab>
         <p-tab value="plantillas">Gestiones predefinidas</p-tab>
+        <p-tab value="feriados">Feriados</p-tab>
       </p-tablist>
     </p-tabs>
 
-    <lm-admin-plantillas *ngIf="verPlantillas()"></lm-admin-plantillas>
+    <lm-admin-plantillas *ngIf="extra() === 'plantillas'"></lm-admin-plantillas>
+    <lm-admin-feriados *ngIf="extra() === 'feriados'"></lm-admin-feriados>
 
-    <p-card *ngIf="!verPlantillas()" [style]="{ display: 'block', 'margin-top': '16px' }">
+    <p-card *ngIf="!extra()" [style]="{ display: 'block', 'margin-top': '16px' }">
       <form (ngSubmit)="guardar()" class="lm-row" style="flex-wrap:wrap; align-items:center; margin-bottom:16px;">
         <p-select *ngIf="tab().porCompetencia" [(ngModel)]="form.competenciaId" name="competenciaId" [options]="competencias()"
           optionLabel="nombre" optionValue="id" placeholder="Competencia" appendTo="body" [style]="{ width: '200px' }"></p-select>
@@ -142,7 +145,8 @@ export class AdminMaestrosComponent implements OnInit {
 
   protected tabs = TABS;
   protected tab = signal<DefTab>(TABS[0]);
-  protected verPlantillas = signal(false);
+  // Pestañas con componente propio (no son maestros simples).
+  protected extra = signal<"plantillas" | "feriados" | null>(null);
   protected filas = signal<Fila[]>([]);
   protected competencias = signal<Competencia[]>([]);
   protected loading = signal(false);
@@ -157,7 +161,7 @@ export class AdminMaestrosComponent implements OnInit {
   }
 
   cambiarTab(tipo: string | number | undefined) {
-    this.verPlantillas.set(tipo === "plantillas");
+    this.extra.set(tipo === "plantillas" || tipo === "feriados" ? tipo : null);
     const t = TABS.find((x) => x.tipo === tipo);
     if (!t) return;
     this.tab.set(t);

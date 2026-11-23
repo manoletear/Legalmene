@@ -204,6 +204,10 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   desde Pendiente/Vencida (`ESTADOS_GESTION_ABIERTA`). Afiliados: `Eliminado` solo
   lo fija `DELETE` y solo lo revierte `POST /afiliados/:id/restaurar` (ambos `afiliados.eliminar`);
   editar un afiliado eliminado responde 409.
+- **Días hábiles y feriados**: todo plazo en días hábiles usa `sumarDiasHabiles()`/`diasHabilesEntre()`
+  (`common/utils/dias-habiles.ts`), que saltan fines de semana y la tabla `feriados`. Los legales los calcula
+  `feriadosLegales()` (`feriados-chile.ts`) y `FeriadosService` los carga para el año en curso y el siguiente;
+  los de decreto o elecciones se agregan en Maestros → Feriados (`maestros.administrar`). Nunca listas fijas.
 - **Montos**: enteros (centavos para USD/EUR; pesos chilenos son enteros nativos).
 - **Drizzle**: no usar `db.execute(raw)` salvo para casos atómicos (correlativo, upsert
   con xmax). Preferir el query builder tipado.
@@ -222,4 +226,4 @@ y el detalle requisito por requisito en `docs/cumplimiento-anexo-detalle.md`. El
 2. Notificaciones por correo de vencimientos y flujos (SES), incluido el resumen de cargas masivas.
 3. AWS CDK en `infra/` para Aurora + ECS + ALB + S3 (corregir `apps/api/Dockerfile`, que no copia `pnpm-lock.yaml`).
 4. Migración SQL Server 2008 → Aurora (AWS DMS + SCT) — ver plan en `docs/`.
-5. Feriados chilenos en `dias-habiles.ts`; formularios oficiales de posesión efectiva (discovery).
+5. Formularios oficiales de posesión efectiva (discovery).
