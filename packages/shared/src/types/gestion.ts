@@ -13,6 +13,18 @@ export const TipoGestionEnum = z.enum([
 ]);
 export type TipoGestion = z.infer<typeof TipoGestionEnum>;
 
+export const TIPO_GESTION_LABEL: Record<TipoGestion, string> = {
+  LlamadaTelefonica: "Llamada telefónica",
+  Email: "Correo electrónico",
+  Reunion: "Reunión / entrevista",
+  EscritoJudicial: "Escrito judicial",
+  Audiencia: "Audiencia",
+  Notificacion: "Notificación",
+  AnalisisDocumental: "Análisis documental",
+  Resolucion: "Resolución",
+  Otra: "Otra",
+};
+
 export const EstadoGestionEnum = z.enum([
   "Pendiente",
   "Completada",
@@ -51,8 +63,13 @@ export const CreateGestionSchema = GestionSchema.omit({
 });
 export type CreateGestion = z.infer<typeof CreateGestionSchema>;
 
+// Estados desde los que una gestión puede completarse.
+export const ESTADOS_GESTION_ABIERTA: EstadoGestion[] = ["Pendiente", "Vencida"];
+
 export const CompletarGestionSchema = z.object({
   resultado: z.string().min(1).max(2000),
   documentosIds: z.array(z.string().uuid()).optional(),
+  // Fecha real de término (Anexo §VII l.860, §VIII l.1122). Sin ella se usa el momento actual.
+  fechaEjecucion: z.string().datetime().optional(),
 });
 export type CompletarGestion = z.infer<typeof CompletarGestionSchema>;

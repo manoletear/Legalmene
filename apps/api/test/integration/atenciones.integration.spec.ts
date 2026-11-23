@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { ConflictException } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
@@ -10,6 +11,7 @@ import { planes } from "../../src/db/schema/planes";
 import { AfiliadosService } from "../../src/modules/afiliados/afiliados.service";
 import { atenciones as atencionesTabla } from "../../src/db/schema/atenciones";
 import { usuarios } from "../../src/db/schema/usuarios";
+import { GestionesService } from "../../src/modules/gestiones/gestiones.service";
 import { AtencionesService } from "../../src/modules/atenciones/atenciones.service";
 import { WebhooksService } from "../../src/modules/webhooks/webhooks.service";
 import { NotifInboxService } from "../../src/modules/notif-inbox/notif-inbox.service";
@@ -63,6 +65,7 @@ const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
         CoberturasService,
         ArancelesService,
         DerivacionesService,
+        GestionesService,
         // Stub: el test no verifica entrega real de webhooks; basta con la
         // promesa resolviendo para no romper la pipeline.
         { provide: WebhooksService, useValue: { emitir: async () => undefined } },
@@ -227,6 +230,34 @@ const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
     await atenciones.actualizar(j.id, { revisadoPorComite: true }, jefe);
     const ab = await atenciones.cambiarEstado(j.id, { estado: "Abandonada", causaTerminoId: causaId });
     expect(ab.estado).toBe("Abandonada");
+  });
+
+  it("gestiones: responsable activo, fechas coherentes y se completan una sola vez con fecha real", async () => {
+    const gestionesSrv = moduleRef.get(GestionesService);
+    const db = drizzle(pool);
+    const a = await atenciones.crear({ ...base(), tipo: "Asesoria", ...cm, asunto: "Gestiones" });
+    const dias = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString();
+    const inactivo = await usuarioDePrueba(db, "ABOGADO");
+    try {
+      await db.update(usuarios).set({ activo: false }).where(eq(usuarios.id, inactivo.id));
+      const base0 = { atencionId: a.id, tipo: "Reunion" as const, titulo: "Entrevista", documentosIds: [] };
+      await expect(gestionesSrv.crear({ ...base0, responsableId: inactivo.id })).rejects.toThrow(/no está activo/);
+      await expect(
+        gestionesSrv.crear({ ...base0, responsableId: abogado.id, fechaProgramada: dias(-2), fechaCompromiso: dias(-5) }),
+      ).rejects.toThrow(/anterior a la de inicio/);
+      const g = await gestionesSrv.crear({ ...base0, responsableId: abogado.id, fechaProgramada: dias(-5), fechaCompromiso: dias(3) });
+
+      await expect(gestionesSrv.completar(g.id, { resultado: "x", fechaEjecucion: dias(2) })).rejects.toThrow(/futura/);
+      await expect(gestionesSrv.completar(g.id, { resultado: "x", fechaEjecucion: dias(-6) })).rejects.toThrow(/anterior a la de inicio/);
+      const real = dias(-1);
+      const c = await gestionesSrv.completar(g.id, { resultado: "Entrevista realizada", fechaEjecucion: real });
+      expect(c).toMatchObject({ estado: "Completada", resultado: "Entrevista realizada" });
+      expect(c.fechaEjecucion?.toISOString()).toBe(real);
+      // Una segunda vez no reescribe el resultado ni la fecha.
+      await expect(gestionesSrv.completar(g.id, { resultado: "Otro" })).rejects.toBeInstanceOf(ConflictException);
+    } finally {
+      await db.execute(sql`DELETE FROM usuarios WHERE id = ${inactivo.id}`);
+    }
   });
 
   it("el abogado asignado al crear o reasignar debe existir y estar activo", async () => {

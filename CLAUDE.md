@@ -25,7 +25,7 @@ ejemplo y nunca deben quedar fijas en el código.
 | Módulos Afiliados / Atenciones / Gestiones / Comités / Pagos | ✅ CRUD base + flujos clave |
 | Cargas masivas FLUJO/STOCK | ✅ Implementado |
 | Frontend Angular 19 | ✅ Shell + Dashboard + Afiliados + Atenciones + Aranceles + Provisiones + Derivaciones + Finanzas |
-| Alineación con Anexo PSL | ✅ Pasos 1–5 (5a búsquedas sin precarga, XLSX, reportes, controller; 5b cargas, bienes, posesión efectiva). Pendientes en `docs/requerimientos-anexo-psl.md` §5 |
+| Alineación con Anexo PSL | ✅ Fase 1 del plan de cumplimiento (operable desde la web). ✅ Pasos 1–5 (5a búsquedas sin precarga, XLSX, reportes, controller; 5b cargas, bienes, posesión efectiva). Pendientes en `docs/requerimientos-anexo-psl.md` §5 |
 | Infraestructura AWS (CDK) | 🟡 Escrita en `infra/cdk` (Aurora, ECS, S3, WAF); no desplegada |
 | Migración SQL Server → Postgres | ⏳ Pendiente |
 | WebPay producción | ⏳ Stub (esperar SDK Transbank) |
@@ -200,7 +200,8 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
 - **Aprobaciones y transiciones (auditoría run-2)**: cuatro ojos en provisiones, aranceles por
   atención y derivaciones: quien solicita (o envía a aprobación) no aprueba ni rechaza. Toda escritura
   de estado es condicional al estado leído (`UPDATE … WHERE estado = <actual>` o `FOR UPDATE`) y
-  responde 409 si otro la resolvió antes; un comité solo se cierra una vez. Afiliados: `Eliminado` solo
+  responde 409 si otro la resolvió antes; un comité solo se cierra una vez y una gestión solo se completa
+  desde Pendiente/Vencida (`ESTADOS_GESTION_ABIERTA`). Afiliados: `Eliminado` solo
   lo fija `DELETE` y solo lo revierte `POST /afiliados/:id/restaurar` (ambos `afiliados.eliminar`);
   editar un afiliado eliminado responde 409.
 - **Montos**: enteros (centavos para USD/EUR; pesos chilenos son enteros nativos).

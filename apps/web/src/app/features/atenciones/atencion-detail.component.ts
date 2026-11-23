@@ -2,7 +2,8 @@ import { PosesionPanelComponent } from "./posesion-panel.component";
 import { Component, DestroyRef, OnInit, inject, signal, computed } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { CommonModule } from "@angular/common";
-import { FormBuilder, ReactiveFormsModule, Validators } from "@angular/forms";
+import { FormsModule } from "@angular/forms";
+import { DialogModule } from "primeng/dialog";
 import { ActivatedRoute, RouterLink } from "@angular/router";
 import { authHeaders } from "../../core/interceptors/auth.interceptor";
 import { environment } from "../../../environments/environment";
@@ -39,6 +40,9 @@ import {
   type EstadoArancelAtencion,
   ESTADO_ARANCEL_COLOR,
   ESTADO_ARANCEL_LABEL,
+  TIPO_GESTION_LABEL,
+  TipoGestionEnum,
+  type TipoGestion,
 } from "@legalmene/shared";
 
 interface AlertaCaso {
@@ -74,7 +78,8 @@ interface PipelineStep {
   imports: [
     PosesionPanelComponent,
     CommonModule,
-    ReactiveFormsModule,
+    FormsModule,
+    DialogModule,
     RouterLink,
     PermisoDirective,
     CardModule,
@@ -260,37 +265,44 @@ interface PipelineStep {
                   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
                     <h3 style="margin:0;">Gestiones del caso</h3>
                     <div class="lm-row">
-                      <button pButton icon="pi pi-filter" [text]="true" severity="secondary"></button>
-                      <button pButton icon="pi pi-plus" label="Nueva gestión" (click)="abrirNuevaGestion(a.id)"></button>
+                      <button *lmPermiso="'gestiones.registrar'" pButton icon="pi pi-plus" label="Nueva gestión" (click)="abrirNuevaGestion(a.id)"></button>
                     </div>
                   </div>
                   <table style="width:100%; border-collapse:collapse;">
                     <thead>
                       <tr style="text-align:left; color:#94a3b8; font-size:11px; text-transform:uppercase; border-bottom:1px solid #e2e8f0;">
-                        <th style="padding:8px 4px;">Fecha</th>
+                        <th style="padding:8px 4px;">Inicio</th>
                         <th style="padding:8px 4px;">Gestión</th>
                         <th style="padding:8px 4px;">Responsable</th>
+                        <th style="padding:8px 4px;">Compromiso</th>
+                        <th style="padding:8px 4px;">Término real</th>
                         <th style="padding:8px 4px;">Estado</th>
-                        <th style="padding:8px 4px; width:32px;"></th>
+                        <th style="padding:8px 4px;"></th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr *ngFor="let g of gestiones()" style="border-bottom:1px solid #f1f5f9; font-size:13px;">
                         <td style="padding:10px 4px;">
                           <span style="display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px;" [style.background]="g.estado === 'Completada' ? '#22c55e' : '#3b82f6'"></span>
-                          {{ g.createdAt | date: 'dd/MM/yyyy HH:mm' }}
+                          {{ (g.fechaProgramada ?? g.createdAt) | date: 'dd/MM/yyyy' }}
                         </td>
-                        <td style="padding:10px 4px;">{{ g.titulo }}</td>
+                        <td style="padding:10px 4px;">
+                          {{ g.titulo }}
+                          <div class="lm-small lm-muted">{{ tipoGestion(g.tipo) }}<ng-container *ngIf="g.resultado"> · {{ g.resultado }}</ng-container></div>
+                        </td>
                         <td style="padding:10px 4px; color:#475569;">{{ nombreUsuario(g.responsableId) }}</td>
-                        <td style="padding:10px 4px;"><p-tag [value]="g.estado === 'Completada' ? 'Realizada' : g.estado === 'Pendiente' ? 'Programada' : g.estado" [severity]="g.estado === 'Completada' ? 'success' : 'info'"></p-tag></td>
-                        <td style="padding:10px 4px;"><button pButton icon="pi pi-ellipsis-v" [text]="true" severity="secondary" size="small"></button></td>
+                        <td style="padding:10px 4px;">{{ g.fechaCompromiso ? (g.fechaCompromiso | date: 'dd/MM/yyyy') : '—' }}</td>
+                        <td style="padding:10px 4px;">{{ g.fechaEjecucion ? (g.fechaEjecucion | date: 'dd/MM/yyyy') : '—' }}</td>
+                        <td style="padding:10px 4px;"><p-tag [value]="g.estado === 'Completada' ? 'Realizada' : g.estado === 'Pendiente' ? 'Programada' : g.estado" [severity]="g.estado === 'Completada' ? 'success' : g.estado === 'Vencida' ? 'danger' : 'info'"></p-tag></td>
+                        <td style="padding:10px 4px; text-align:right;">
+                          <ng-container *ngIf="g.estado === 'Pendiente' || g.estado === 'Vencida'">
+                            <button *lmPermiso="'gestiones.registrar'" pButton icon="pi pi-check" label="Completar" [text]="true" size="small" (click)="abrirCompletar(g)"></button>
+                          </ng-container>
+                        </td>
                       </tr>
-                      <tr *ngIf="!gestiones().length"><td colspan="5" class="lm-muted" style="text-align:center; padding:24px;">Sin gestiones registradas.</td></tr>
+                      <tr *ngIf="!gestiones().length"><td colspan="7" class="lm-muted" style="text-align:center; padding:24px;">Sin gestiones registradas.</td></tr>
                     </tbody>
                   </table>
-                  <div style="text-align:center; padding-top:12px;">
-                    <a style="color:#2563eb; font-size:13px; font-weight:500; cursor:pointer;">Ver todas las gestiones →</a>
-                  </div>
                 </p-tabpanel>
 
                 <p-tabpanel value="documentos">
@@ -406,11 +418,45 @@ interface PipelineStep {
         </div>
       </div>
     </ng-container>
+
+    <p-dialog header="Nueva gestión" [visible]="ngVisible()" (visibleChange)="ngVisible.set($event)" [modal]="true" [style]="{ width: '560px', maxWidth: '95vw' }">
+      <div class="lm-col" style="gap:12px;">
+        <label class="lm-col" style="gap:4px;">Tipo *
+          <p-select name="ngTipo" [(ngModel)]="ng.tipo" [options]="tiposGestion" optionLabel="label" optionValue="value" appendTo="body"></p-select>
+        </label>
+        <label class="lm-col" style="gap:4px;">Título *<input pInputText name="ngTitulo" [(ngModel)]="ng.titulo" maxlength="200" /></label>
+        <label class="lm-col" style="gap:4px;">Detalle<textarea pTextarea name="ngDetalle" [(ngModel)]="ng.detalle" rows="2"></textarea></label>
+        <label class="lm-col" style="gap:4px;">Responsable *
+          <p-select name="ngResponsable" [(ngModel)]="ng.responsableId" [options]="responsableOpts()" optionLabel="label" optionValue="value"
+            [filter]="true" filterBy="label" appendTo="body"></p-select>
+        </label>
+        <div class="lm-row" style="gap:12px; flex-wrap:wrap;">
+          <label class="lm-col" style="gap:4px; flex:1; min-width:160px;">Fecha de inicio *<input pInputText type="date" name="ngInicio" [(ngModel)]="ng.inicio" /></label>
+          <label class="lm-col" style="gap:4px; flex:1; min-width:160px;">Fecha de compromiso<input pInputText type="date" name="ngCompromiso" [(ngModel)]="ng.compromiso" [min]="ng.inicio" /></label>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button pButton label="Cancelar" [text]="true" (click)="ngVisible.set(false)"></button>
+          <button pButton label="Crear gestión" icon="pi pi-check" [disabled]="!ng.titulo.trim() || !ng.responsableId || !ng.inicio" [loading]="ngGuardando()" (click)="crearGestion()"></button>
+        </div>
+      </div>
+    </p-dialog>
+
+    <p-dialog [header]="'Completar: ' + (completando()?.titulo ?? '')" [visible]="!!completando()" (visibleChange)="!$event && completando.set(null)" [modal]="true" [style]="{ width: '480px', maxWidth: '95vw' }">
+      <div class="lm-col" style="gap:12px;">
+        <label class="lm-col" style="gap:4px;">Resultado *<textarea pTextarea name="cgResultado" [(ngModel)]="cg.resultado" rows="3" maxlength="2000"></textarea></label>
+        <label class="lm-col" style="gap:4px;">Fecha real de término *
+          <input pInputText type="date" name="cgFecha" [(ngModel)]="cg.fecha" [max]="hoy" [min]="completando()?.fechaProgramada?.slice(0, 10) ?? ''" />
+        </label>
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button pButton label="Cancelar" [text]="true" (click)="completando.set(null)"></button>
+          <button pButton label="Completar" icon="pi pi-check" [disabled]="!cg.resultado.trim() || !cg.fecha" (click)="completarGestion()"></button>
+        </div>
+      </div>
+    </p-dialog>
   `,
 })
 export class AtencionDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
-  private fb = inject(FormBuilder);
   private api = inject(AtencionesApiService);
   private gestionesApi = inject(GestionesApiService);
   private comitesApi = inject(ComitesApiService);
@@ -442,16 +488,15 @@ export class AtencionDetailComponent implements OnInit {
   protected documentos = signal<DocumentoMeta[]>([]);
   protected uploading = signal(false);
   protected pestana = signal<string>("gestiones");
-  protected tiposGestion = [
-    "LlamadaTelefonica", "Email", "Reunion", "EscritoJudicial", "Audiencia",
-    "Notificacion", "AnalisisDocumental", "Resolucion", "Otra",
-  ];
-
-  protected formGestion = this.fb.group({
-    tipo: ["LlamadaTelefonica", Validators.required],
-    titulo: ["", [Validators.required, Validators.maxLength(200)]],
-    detalle: [""],
-  });
+  protected tiposGestion = TipoGestionEnum.options.map((value) => ({ value, label: TIPO_GESTION_LABEL[value] }));
+  protected hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(new Date());
+  protected ngVisible = signal(false);
+  protected ngGuardando = signal(false);
+  protected ng = { tipo: "Reunion" as TipoGestion, titulo: "", detalle: "", responsableId: "", inicio: "", compromiso: "" };
+  protected responsableOpts = signal<{ label: string; value: string }[]>([]);
+  protected completando = signal<Gestion | null>(null);
+  protected cg = { resultado: "", fecha: "" };
+  private atencionGestion = "";
 
   // Responsable por defecto: el abogado del caso o, si no tiene, el usuario actual.
   private responsableId(): string | undefined {
@@ -535,7 +580,10 @@ export class AtencionDetailComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
 
   ngOnInit() {
-    this.usuariosApi.opciones().subscribe((us) => this.nombres.set(new Map(us.map((u) => [u.id, u.nombre]))));
+    this.usuariosApi.opciones().subscribe((us) => {
+      this.nombres.set(new Map(us.map((u) => [u.id, u.nombre])));
+      this.responsableOpts.set(us.map((u) => ({ label: `${u.nombre} (${u.email})`, value: u.id })));
+    });
     // Se escucha el parámetro (no el snapshot): ir de una atención a otra (nuevo correlativo,
     // atención derivada) reutiliza este componente.
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((pm) => {
@@ -687,24 +735,69 @@ export class AtencionDetailComponent implements OnInit {
     });
   }
 
-  async abrirNuevaGestion(atencionId: string) {
-    const titulo = await this.prompt.open({
-      header: "Nueva gestión",
-      label: "Título",
-      required: true,
-    });
-    if (!titulo) return;
+  // Anexo §VII l.860, §VIII l.1122: responsable, fecha de inicio y compromiso.
+  abrirNuevaGestion(atencionId: string) {
+    this.atencionGestion = atencionId;
+    this.ng = { tipo: "Reunion", titulo: "", detalle: "", responsableId: this.responsableId() ?? "", inicio: this.hoy, compromiso: "" };
+    this.ngVisible.set(true);
+  }
+
+  protected tipoGestion(t: TipoGestion): string {
+    return TIPO_GESTION_LABEL[t] ?? t;
+  }
+
+  // Fecha del formulario (AAAA-MM-DD) como instante: hoy = ahora; otro día = mediodía de ese día.
+  private instante(fecha: string): string {
+    return fecha === this.hoy ? new Date().toISOString() : new Date(`${fecha}T12:00:00`).toISOString();
+  }
+
+  protected crearGestion() {
+    const id = this.atencionGestion;
+    this.ngGuardando.set(true);
     this.gestionesApi
-      .crear(atencionId, {
-        tipo: "LlamadaTelefonica",
-        titulo,
-        responsableId: this.responsableId()!,
+      .crear(id, {
+        tipo: this.ng.tipo,
+        titulo: this.ng.titulo.trim(),
+        detalle: this.ng.detalle.trim() || null,
+        responsableId: this.ng.responsableId,
+        fechaProgramada: this.instante(this.ng.inicio),
+        // El compromiso vence al final del día elegido.
+        fechaCompromiso: this.ng.compromiso ? new Date(`${this.ng.compromiso}T23:59:00`).toISOString() : null,
         documentosIds: [],
       })
-      .subscribe(() => {
-        this.msg.add({ severity: "success", summary: "Gestión creada", life: 2000 });
-        this.cargar(atencionId);
+      .subscribe({
+        next: () => {
+          this.ngGuardando.set(false);
+          this.ngVisible.set(false);
+          this.msg.add({ severity: "success", summary: "Gestión creada", life: 2000 });
+          this.cargar(id);
+        },
+        error: (err) => {
+          this.ngGuardando.set(false);
+          this.msg.add({ severity: "error", summary: "No se pudo crear la gestión", detail: err.error?.message ?? err.message, life: 5000 });
+        },
       });
+  }
+
+  protected abrirCompletar(g: Gestion) {
+    this.cg = { resultado: "", fecha: this.hoy };
+    this.completando.set(g);
+  }
+
+  protected completarGestion() {
+    const g = this.completando();
+    if (!g) return;
+    this.gestionesApi.completar(g.id, { resultado: this.cg.resultado.trim(), fechaEjecucion: this.instante(this.cg.fecha) }).subscribe({
+      next: () => {
+        this.completando.set(null);
+        this.msg.add({ severity: "success", summary: "Gestión completada", life: 2500 });
+        this.cargar(g.atencionId);
+      },
+      error: (err) => {
+        this.msg.add({ severity: "error", summary: "No se pudo completar", detail: err.error?.message ?? err.message, life: 5000 });
+        this.cargar(g.atencionId);
+      },
+    });
   }
 
   async convocarComite(atencionId: string) {

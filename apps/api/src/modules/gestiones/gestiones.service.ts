@@ -1,12 +1,12 @@
-import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { and, count, desc, eq, isNotNull, lt } from "drizzle-orm";
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { and, count, desc, eq, inArray, isNotNull, lt } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { filtroAtenciones } from "../../common/acceso/alcance";
 import { gestiones, NuevaGestion, Gestion } from "../../db/schema/gestiones";
 import { atenciones } from "../../db/schema/atenciones";
 import { usuarios } from "../../db/schema/usuarios";
 import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
-import type { CreateGestion, CompletarGestion } from "@legalmene/shared";
+import { ESTADOS_GESTION_ABIERTA, type CreateGestion, type CompletarGestion } from "@legalmene/shared";
 
 export interface FiltroGestiones {
   page?: number;
@@ -94,6 +94,15 @@ export class GestionesService {
 
   async crear(input: CreateGestion): Promise<Gestion> {
     const codPlan = await this.planDeAtencion(input.atencionId);
+    const [resp] = await this.db
+      .select({ activo: usuarios.activo, bloqueado: usuarios.bloqueado })
+      .from(usuarios)
+      .where(eq(usuarios.id, input.responsableId));
+    if (!resp) throw new BadRequestException("El responsable no existe");
+    if (!resp.activo || resp.bloqueado) throw new BadRequestException("El responsable no está activo");
+    if (input.fechaProgramada && input.fechaCompromiso && new Date(input.fechaCompromiso) < new Date(input.fechaProgramada)) {
+      throw new BadRequestException("La fecha de compromiso no puede ser anterior a la de inicio");
+    }
     const payload: NuevaGestion = {
       atencionId: input.atencionId,
       tipo: input.tipo,
@@ -134,17 +143,27 @@ export class GestionesService {
     const [row] = await this.db.select().from(gestiones).where(eq(gestiones.id, gestionId));
     if (!row) throw new NotFoundException(`Gestión ${gestionId} no existe`);
     await this.planDeAtencion(row.atencionId);
+    const ahora = new Date();
+    const fechaEjecucion = input.fechaEjecucion ? new Date(input.fechaEjecucion) : ahora;
+    if (fechaEjecucion.getTime() > ahora.getTime() + 60_000) {
+      throw new BadRequestException("La fecha de término no puede ser futura");
+    }
+    if (row.fechaProgramada && fechaEjecucion < row.fechaProgramada) {
+      throw new BadRequestException("La fecha de término no puede ser anterior a la de inicio");
+    }
+    // Escritura condicional al estado: una gestión ya completada o cancelada no se reescribe.
     const [updated] = await this.db
       .update(gestiones)
       .set({
         estado: "Completada",
-        fechaEjecucion: new Date(),
+        fechaEjecucion,
         resultado: input.resultado,
         documentosIds: input.documentosIds ?? row.documentosIds,
-        updatedAt: new Date(),
+        updatedAt: ahora,
       })
-      .where(eq(gestiones.id, gestionId))
+      .where(and(eq(gestiones.id, gestionId), inArray(gestiones.estado, ESTADOS_GESTION_ABIERTA)))
       .returning();
+    if (!updated) throw new ConflictException(`La gestión ya está ${row.estado === "Completada" ? "completada" : "cancelada"}`);
     await this.db
       .update(atenciones)
       .set({ fechaUltimaGestion: new Date(), updatedAt: new Date() })

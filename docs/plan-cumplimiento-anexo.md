@@ -50,7 +50,7 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 - [x] Pantalla de planes: alta, término de vigencia (fecha), asignar/copiar coberturas. (§II l.118, §I l.79)
 - [x] Nueva consulta: buscar afiliado por RUT (sin lista precargada), plan preseleccionado por mayor cobertura. (§VI l.504, l.518)
 - [x] "Nuevo correlativo" que permita cambiar competencia y materia (la API ya lo soporta). (§VI l.604)
-- [ ] Gestiones: responsable, fecha de inicio y fecha real de término; botón "Completar" en la ficha. (§VII l.860, §VIII l.1122)
+- [x] Gestiones: responsable, fecha de inicio y fecha real de término; botón "Completar" en la ficha. (§VII l.860, §VIII l.1122)
 - [x] Fecha de término al abandonar o terminar (la API ya la acepta). (§VII l.757, §VIII l.1096)
 - [x] Código de grabación en asesorías y juicios, no solo en consultas. (§VI l.694, §VII l.947, §VIII l.1251)
 - [x] Lectura de aranceles y WebPay para abogados y jefaturas (migración de permisos). (§XI l.1967, l.2001)
@@ -125,4 +125,5 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 | 2026-11-23 | 1 | Nuevo correlativo con competencia/materia/tipo; la ficha recarga al pasar de una atención a otra | 1f0f0c9 |
 | 2026-11-23 | 1 | Fecha real de término al abandonar/terminar (validada); código de grabación en todos los tipos | fb29b5f |
 | 2026-11-23 | 1 | Abogados y jefaturas: lectura de aranceles y pagos WebPay acotada a sus atenciones (migración 0019) | f22ca0a |
-| 2026-11-23 | 1 | Selector de abogado al crear la atención; la API valida que el asignado exista y esté activo | ver commit |
+| 2026-11-23 | 1 | Selector de abogado al crear la atención; la API valida que el asignado exista y esté activo | e4fa43d |
+| 2026-11-23 | 1 | Gestiones: diálogo con tipo, responsable, inicio y compromiso; Completar con fecha real (409 si ya está cerrada). **Fase 1 completa** | ver commit |
