@@ -117,3 +117,16 @@ describe("posesión efectiva", () => {
     expect(validarTransicion(lista, "Terminada", { ...sinPendientes, posesion: { causante, herederos: 1 } })).toEqual(["causa de término"]);
   });
 });
+
+describe("provisión impaga (Anexo §VIII l.1076)", () => {
+  const listo = { ...base, tribunalId: "t", rolCausa: "C-1-2026", cuantiaMonto: 1, cuantiaMoneda: "CLP" as const };
+  it("un juicio no inicia la tramitación con provisiones solicitadas sin pagar", () => {
+    expect(validarTransicion(listo, "Pendiente", { ...sinPendientes, provisionesImpagas: 1 })).toEqual([
+      "pago de 1 provisión(es) solicitada(s) al cliente",
+    ]);
+    expect(validarTransicion(listo, "EnEsperaProvision", { ...sinPendientes, provisionesImpagas: 1 })).toEqual([]);
+    expect(validarTransicion(listo, "Pendiente", { ...sinPendientes, provisionesImpagas: 0 })).toEqual([]);
+    // En asesorías no aplica.
+    expect(validarTransicion({ ...base, tipo: "Asesoria" }, "Pendiente", { ...sinPendientes, provisionesImpagas: 2 })).toEqual([]);
+  });
+});

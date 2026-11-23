@@ -16,6 +16,7 @@ import { PlantillasService } from "../../src/modules/gestiones/plantillas.servic
 import { ArancelesAtencionService } from "../../src/modules/coberturas/aranceles-atencion.service";
 import { CoberturasService } from "../../src/modules/coberturas/coberturas.service";
 import { ArancelesService } from "../../src/modules/aranceles/aranceles.service";
+import { GestionesService } from "../../src/modules/gestiones/gestiones.service";
 import { ProvisionesService } from "../../src/modules/provisiones/provisiones.service";
 import { WebhooksService } from "../../src/modules/webhooks/webhooks.service";
 import { NotifInboxService } from "../../src/modules/notif-inbox/notif-inbox.service";
@@ -57,6 +58,7 @@ const FECHA_PAGO = "2001-03-15";
         CoberturasService,
         ArancelesService,
         ProvisionesService,
+        GestionesService,
         { provide: WebhooksService, useValue: { emitir: async () => undefined } },
         { provide: NotifInboxService, useValue: { crear: async () => null, crearSiNoExisteUnseen: async () => null, crearBulk: async () => [] } },
       ],
@@ -109,6 +111,14 @@ const FECHA_PAGO = "2001-03-15";
     expect(ar?.copagoUfCentesimas).toBe(600);
     expect(ar?.coberturaPorcentaje).toBe(40);
 
+    // Detenida: solo gestiones de contacto con el cliente mientras el arancel esté impago.
+    const gestionesSrv = moduleRef.get(GestionesService);
+    const nueva = (tipo: "EscritoJudicial" | "LlamadaTelefonica") =>
+      gestionesSrv.crear({ atencionId: a.id, tipo, titulo: tipo, responsableId: abogado.id, documentosIds: [] });
+    await expect(nueva("EscritoJudicial")).rejects.toThrow(/detenida hasta el pago del arancel/);
+    const llamada = await nueva("LlamadaTelefonica");
+    await gestionesSrv.completar(llamada.id, { resultado: "Se informa el copago" });
+
     // Detenida: no pasa a Pendiente con el arancel impago, pero sí a "espera de arancel".
     await expect(atencionesSrv.cambiarEstado(a.id, { estado: "Pendiente" })).rejects.toThrow(/pago del arancel/);
     expect((await atencionesSrv.cambiarEstado(a.id, { estado: "EnEsperaArancel" })).estado).toBe("EnEsperaArancel");
@@ -132,6 +142,7 @@ const FECHA_PAGO = "2001-03-15";
     expect(pagado.ufValorCentavos).toBe(1_600_000);
 
     expect((await atencionesSrv.cambiarEstado(a.id, { estado: "Pendiente" })).estado).toBe("Pendiente");
+    expect((await nueva("EscritoJudicial")).estado).toBe("Pendiente");
     const eventos = await arancelSrv.eventos(a.id);
     expect(eventos.map((e) => e.estadoHasta)).toEqual(["Requerido", "EnAprobacion", "Rechazado", "EnAprobacion", "Aprobado", "Pagado"]);
   });

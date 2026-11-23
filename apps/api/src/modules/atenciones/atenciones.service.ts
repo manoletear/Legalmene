@@ -418,7 +418,7 @@ export class AtencionesService {
   // Requisitos de la etapa destino (gestiones, comité, provisiones, arancel, posesión). 400 si falta algo.
   private async asegurarRequisitos(actual: Atencion, destino: EstadoAtencion, causaTerminoId: string | null): Promise<void> {
     const id = actual.id;
-    const [[g], [c], [p], bloqueoArancel] = await Promise.all([
+    const [[g], [c], [p], [impagas], bloqueoArancel] = await Promise.all([
       this.db
         .select({ n: count() })
         .from(gestiones)
@@ -431,6 +431,10 @@ export class AtencionesService {
         .select({ n: count() })
         .from(provisiones)
         .where(and(eq(provisiones.atencionId, id), inArray(provisiones.estado, [...ESTADOS_PROVISION_ABIERTOS]))),
+      this.db
+        .select({ n: count() })
+        .from(provisiones)
+        .where(and(eq(provisiones.atencionId, id), eq(provisiones.estado, "Solicitada"))),
       actual.tipo === "Consulta" ? Promise.resolve(null) : this.arancelesAtencion.bloqueo(id),
     ]);
     let posesion: { causante: Record<string, unknown> | null; herederos: number } | undefined;
@@ -447,6 +451,7 @@ export class AtencionesService {
       gestionesPendientes: Number(g?.n ?? 0),
       comitesAbiertos: Number(c?.n ?? 0),
       provisionesAbiertas: Number(p?.n ?? 0),
+      provisionesImpagas: Number(impagas?.n ?? 0),
       bloqueoArancel,
       posesion,
     });

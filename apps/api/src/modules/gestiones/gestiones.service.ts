@@ -5,8 +5,19 @@ import { filtroAtenciones } from "../../common/acceso/alcance";
 import { gestiones, NuevaGestion, Gestion } from "../../db/schema/gestiones";
 import { atenciones } from "../../db/schema/atenciones";
 import { usuarios } from "../../db/schema/usuarios";
+import { arancelesAtencion } from "../../db/schema/finanzas";
 import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
-import { ESTADOS_GESTION_ABIERTA, type CreateGestion, type CompletarGestion } from "@legalmene/shared";
+import {
+  ESTADOS_ARANCEL_BLOQUEANTES,
+  ESTADO_ARANCEL_LABEL,
+  ESTADOS_GESTION_ABIERTA,
+  type CreateGestion,
+  type CompletarGestion,
+  type TipoGestion,
+} from "@legalmene/shared";
+
+// Gestiones de contacto con el cliente: cuentan como primer contacto y se permiten con el arancel impago.
+const TIPOS_GESTION_CONTACTO: readonly TipoGestion[] = ["LlamadaTelefonica", "Email", "Reunion"];
 
 export interface FiltroGestiones {
   page?: number;
@@ -94,6 +105,7 @@ export class GestionesService {
 
   async crear(input: CreateGestion): Promise<Gestion> {
     const codPlan = await this.planDeAtencion(input.atencionId);
+    await this.asegurarArancelRegularizado(input.atencionId, input.tipo);
     const [resp] = await this.db
       .select({ activo: usuarios.activo, bloqueado: usuarios.bloqueado })
       .from(usuarios)
@@ -143,6 +155,7 @@ export class GestionesService {
     const [row] = await this.db.select().from(gestiones).where(eq(gestiones.id, gestionId));
     if (!row) throw new NotFoundException(`Gestión ${gestionId} no existe`);
     await this.planDeAtencion(row.atencionId);
+    await this.asegurarArancelRegularizado(row.atencionId, row.tipo);
     const ahora = new Date();
     const fechaEjecucion = input.fechaEjecucion ? new Date(input.fechaEjecucion) : ahora;
     if (fechaEjecucion.getTime() > ahora.getTime() + 60_000) {
@@ -166,7 +179,7 @@ export class GestionesService {
     if (!updated) throw new ConflictException(`La gestión ya está ${row.estado === "Completada" ? "completada" : "cancelada"}`);
     // Una llamada, correo o reunión realizada cuenta como contacto con el cliente (plazo de 24 h
     // hábiles); se conserva el contacto más temprano.
-    if (["LlamadaTelefonica", "Email", "Reunion"].includes(row.tipo)) {
+    if (TIPOS_GESTION_CONTACTO.includes(row.tipo)) {
       await this.db
         .update(atenciones)
         .set({ fechaPrimerContacto: fechaEjecucion })
@@ -182,6 +195,21 @@ export class GestionesService {
       .set({ fechaUltimaGestion: new Date(), updatedAt: new Date() })
       .where(eq(atenciones.id, row.atencionId));
     return updated;
+  }
+
+  // Anexo §VII l.797: con el arancel impago la atención queda detenida. Solo se permiten las
+  // gestiones de contacto con el cliente (necesarias para gestionar el pago y el plazo de 24 h).
+  private async asegurarArancelRegularizado(atencionId: string, tipo: TipoGestion): Promise<void> {
+    if (TIPOS_GESTION_CONTACTO.includes(tipo)) return;
+    const [ar] = await this.db
+      .select({ estado: arancelesAtencion.estado })
+      .from(arancelesAtencion)
+      .where(eq(arancelesAtencion.atencionId, atencionId));
+    if (ar && ESTADOS_ARANCEL_BLOQUEANTES.includes(ar.estado)) {
+      throw new BadRequestException(
+        `La atención está detenida hasta el pago del arancel (${ESTADO_ARANCEL_LABEL[ar.estado].toLowerCase()}); solo se registran llamadas, correos o reuniones con el cliente`,
+      );
+    }
   }
 
   // Plan bajo el cual se registró la atención (usado en notificaciones). 404 si el usuario

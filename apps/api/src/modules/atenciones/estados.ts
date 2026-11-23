@@ -28,6 +28,8 @@ export interface ContextoTransicion {
   comitesAbiertos: number;
   // Provisiones de fondos sin rendir ni cerrar (Anexo §VIII 10: cuentas cerradas al terminar).
   provisionesAbiertas?: number;
+  // Provisiones solicitadas que el cliente aún no paga (Anexo §VIII l.1076).
+  provisionesImpagas?: number;
   // Motivo de retención por arancel impago; null si no aplica.
   bloqueoArancel?: string | null;
   // Posesión efectiva: antecedentes del causante y herederos vigentes.
@@ -67,6 +69,10 @@ export function validarTransicion(
   if (a.tipo === "PosesionEfectiva" && ["EnPreparacion", "DocumentosPendientes", "ListaEmision", "Terminada"].includes(destino)) {
     faltan.push(...faltantesCausante(ctx.posesion?.causante));
     if (["ListaEmision", "Terminada"].includes(destino) && (ctx.posesion?.herederos ?? 0) === 0) faltan.push("al menos un heredero");
+  }
+  // Anexo §VIII l.1076: la tramitación del juicio se inicia con arancel y provisión regularizados.
+  if (a.tipo === "Juicio" && ["Pendiente", "EnGestion"].includes(destino) && (ctx.provisionesImpagas ?? 0) > 0) {
+    faltan.push(`pago de ${ctx.provisionesImpagas} provisión(es) solicitada(s) al cliente`);
   }
   if (a.tipo === "Juicio" && destino === "Pendiente") {
     if (!a.tribunalId) faltan.push("tribunal");

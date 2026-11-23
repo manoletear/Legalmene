@@ -162,7 +162,8 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   Las cachés de resultados acotados deben incluir `claveAlcance()` en la clave.
 - **Reglas de negocio clave (Anexo)**: solo planes vigentes permiten nuevas atenciones;
   aranceles son por materia y la cobertura por plan define el copago; una atención con
-  arancel impago queda detenida; no se cierra una asesoría/juicio con gestiones o comité
+  arancel impago queda detenida (solo admite gestiones de contacto: llamada, correo, reunión) y un juicio no
+  inicia la tramitación con provisiones solicitadas e impagas; no se cierra una asesoría/juicio con gestiones o comité
   pendientes; no se pide nueva entrega de provisión con rendiciones pendientes; las
   búsquedas no precargan datos.
 - **Búsquedas (Anexo §XI)**: usar `lm-criterios-busqueda` (`apps/web/src/app/shared`) y no pedir datos
