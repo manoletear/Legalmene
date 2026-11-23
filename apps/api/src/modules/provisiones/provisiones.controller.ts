@@ -64,7 +64,7 @@ export class ProvisionesController {
   @Post("provisiones/:id/pago-cliente")
   @Permiso("provisiones.registrar_pago")
   pagoCliente(@CurrentUser() user: AuthenticatedUser, @Param("id", ParseUUIDPipe) id: string, @Body() body: PagoClienteDto) {
-    return this.service.registrarPagoCliente(id, usuarioId(user), body.medio, body.fecha);
+    return this.service.registrarPagoCliente(id, usuarioId(user), body.medio, body.fecha, { cuotas: body.cuotas, referencia: body.referencia });
   }
 
   @Post("provisiones/:id/solicitar-entrega")

@@ -147,6 +147,8 @@ export class ComprobantesPdfService {
             filas: [
               ["Fecha de pago", fecha(ar.fechaPago)],
               ["Forma de pago", MEDIO_PAGO_LABEL[ar.medioPago ?? ""] ?? ar.medioPago ?? "—"],
+              ...(ar.cuotasPago ? ([["Cuotas", String(ar.cuotasPago)]] as [string, string][]) : []),
+              ...(ar.referenciaPago ? ([["Referencia", ar.referenciaPago]] as [string, string][]) : []),
               ["Copago", uf(ar.copagoUfCentesimas)],
               ["Valor UF del día", ar.ufValorCentavos == null ? "—" : clp(Math.round(ar.ufValorCentavos / 100))],
               ["Monto pagado", clp(ar.montoClp)],
@@ -178,6 +180,8 @@ export class ComprobantesPdfService {
               ["Monto recibido", clp(p.monto)],
               ["Fecha de pago", fecha(p.fechaPagoCliente)],
               ["Forma de pago", MEDIO_PAGO_LABEL[p.medioPagoCliente ?? ""] ?? p.medioPagoCliente ?? "—"],
+              ...(p.cuotasPagoCliente ? ([["Cuotas", String(p.cuotasPagoCliente)]] as [string, string][]) : []),
+              ...(p.referenciaPagoCliente ? ([["Referencia", p.referenciaPagoCliente]] as [string, string][]) : []),
               ["Estado actual", ESTADO_PROVISION_LABEL[p.estado as EstadoProvision] ?? p.estado],
             ],
           },

@@ -15,6 +15,7 @@ import { MeService } from "../../core/services/me.service";
 import { PromptService } from "../../shared/prompt.service";
 import { CriteriosBusquedaComponent, type Criterios } from "../../shared/criterios-busqueda.component";
 import { descargarArchivo } from "../../shared/descarga";
+import { PagoDialogService } from "../../shared/pago-dialog.component";
 import { AccionProvision, accionesProvision, severidadProvision } from "../../shared/provision-acciones";
 import { Observable } from "rxjs";
 
@@ -105,6 +106,7 @@ import { Observable } from "rxjs";
 export class ProvisionesComponent implements OnInit {
   private api = inject(ProvisionesApiService);
   private me = inject(MeService);
+  private pagoDialog = inject(PagoDialogService);
 
   // Anexo §X 05.1: recibo del dinero de la provisión (dos copias en el PDF).
   async comprobante(p: { id: string; correlativo: string }) {
@@ -198,13 +200,9 @@ export class ProvisionesComponent implements OnInit {
     let req: Observable<unknown> | null = null;
     switch (ac.id) {
       case "pago": {
-        const medio = await this.prompt.open({ header: "Pago del cliente", label: "Medio (WebPay, CasaCentral o Transferencia)", initialValue: "Transferencia", required: true });
-        if (!medio) return;
-        if (!["WebPay", "CasaCentral", "Transferencia"].includes(medio.trim())) {
-          this.msg.add({ severity: "warn", summary: "Medio inválido", detail: "Use WebPay, CasaCentral o Transferencia", life: 4000 });
-          return;
-        }
-        req = this.api.pagoCliente(p.id, medio.trim() as "WebPay");
+        const pago = await this.pagoDialog.open(`Pago de la provisión ${p.correlativo}`, { detalle: `Monto: $ ${p.monto.toLocaleString("es-CL")}` });
+        if (!pago) return;
+        req = this.api.pagoCliente(p.id, pago.medio, { fecha: pago.fecha, cuotas: pago.cuotas, referencia: pago.referencia });
         break;
       }
       case "solicitarEntrega":

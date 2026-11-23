@@ -237,8 +237,13 @@ export class ProvisionesService {
     return row;
   }
 
-  registrarPagoCliente(id: string, usuarioId: string, medio: MedioPago, fecha?: string) {
-    return this.transicionar(id, "Pagada", usuarioId, { medioPagoCliente: medio, fechaPagoCliente: fecha ?? hoyChileISO() });
+  registrarPagoCliente(id: string, usuarioId: string, medio: MedioPago, fecha?: string, datos: { cuotas?: number; referencia?: string } = {}) {
+    return this.transicionar(id, "Pagada", usuarioId, {
+      medioPagoCliente: medio,
+      fechaPagoCliente: fecha ?? hoyChileISO(),
+      cuotasPagoCliente: datos.cuotas ?? null,
+      referenciaPagoCliente: datos.referencia || null,
+    });
   }
 
   async solicitarEntrega(id: string, usuarioId: string) {

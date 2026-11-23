@@ -80,6 +80,8 @@ export const ProvisionSchema = z.object({
   fechaSolicitud: z.string().datetime(),
   fechaResolucion: z.string().datetime().optional().nullable(),
   medioPagoCliente: MedioPagoEnum.optional().nullable(),
+  cuotasPagoCliente: z.number().int().optional().nullable(),
+  referenciaPagoCliente: z.string().optional().nullable(),
   fechaPagoCliente: z.string().optional().nullable(),
   fechaDisponible: z.string().datetime().optional().nullable(),
   montoEntregado: z.number().int().optional().nullable(),
@@ -95,9 +97,19 @@ export const SolicitarProvisionSchema = z.object({
 });
 export type SolicitarProvision = z.infer<typeof SolicitarProvisionSchema>;
 
-export const PagoClienteSchema = z.object({
+// Datos del pago que registra el contador (Anexo §X 05): medio, cuotas y referencia del depósito o
+// transferencia.
+export const DatosPagoSchema = z.object({
+  cuotas: z.number().int().min(1).max(48).optional(),
+  referencia: z.string().trim().max(80).optional(),
+});
+
+export const PagoClienteSchema = DatosPagoSchema.extend({
   medio: MedioPagoEnum,
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+}).refine((p) => p.medio !== "Transferencia" || !!p.referencia, {
+  message: "Una transferencia requiere su número de referencia",
+  path: ["referencia"],
 });
 export type PagoCliente = z.infer<typeof PagoClienteSchema>;
 

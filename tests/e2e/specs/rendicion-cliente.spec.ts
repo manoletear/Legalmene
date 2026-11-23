@@ -8,7 +8,7 @@ test.describe("Rendición de fondos al cliente", () => {
     const a = await crearAsesoria(request, `Rendición E2E ${Date.now()}`);
     // Provisión pagada por el cliente y no entregada: todo el monto vuelve al cliente.
     const prov = await request.post(`${API}/atenciones/${a.id}/provisiones`, { data: { monto: 120_000, motivo: "Peritaje E2E" } }).then((r) => r.json());
-    expect((await request.post(`${API}/provisiones/${prov.id}/pago-cliente`, { data: { medio: "Transferencia" } })).ok()).toBeTruthy();
+    expect((await request.post(`${API}/provisiones/${prov.id}/pago-cliente`, { data: { medio: "Transferencia", referencia: "TRF-E2E" } })).ok()).toBeTruthy();
 
     await page.goto(`/atenciones/${a.id}`);
     await expect(page.getByTestId("saldo-cuenta")).toContainText("120.000");
@@ -32,5 +32,31 @@ test.describe("Rendición de fondos al cliente", () => {
     await expect(bloque.locator("strong")).toHaveText("Rendido a cliente");
     const lista = await request.get(`${API}/atenciones/${a.id}/provisiones`).then((r) => r.json());
     expect(lista.data[0].estado).toBe("RendidaCliente");
+  });
+});
+
+test.describe("Registro de pagos del cliente", () => {
+  test("el pago de una provisión se registra con medio, cuotas y referencia desde Provisiones", async ({ page, request }) => {
+    const a = await crearAsesoria(request, `Pago E2E ${Date.now()}`);
+    const prov = await request.post(`${API}/atenciones/${a.id}/provisiones`, { data: { monto: 80_000, motivo: "Receptor E2E" } }).then((r) => r.json());
+
+    await page.goto("/provisiones");
+    await page.locator("input[name='correlativo']").fill(a.correlativo);
+    await page.getByRole("button", { name: "Buscar" }).click();
+    const fila = page.locator("tr", { hasText: a.correlativo });
+    await fila.getByRole("button", { name: "Registrar pago del cliente" }).click();
+
+    const dlg = page.getByRole("dialog");
+    await dlg.locator("p-select[name='medio']").click();
+    await page.getByRole("option", { name: "Transferencia bancaria" }).click();
+    // Una transferencia exige la referencia.
+    await expect(dlg.getByRole("button", { name: "Registrar pago" })).toBeDisabled();
+    await dlg.locator("input[name='referencia']").fill("TRF-UI-777");
+    await dlg.getByRole("button", { name: "Registrar pago" }).click();
+    await expect(fila).toContainText("Pagada por cliente");
+
+    const lista = await request.get(`${API}/atenciones/${a.id}/provisiones`).then((r) => r.json());
+    const p = lista.data.find((x: { id: string }) => x.id === prov.id);
+    expect(p).toMatchObject({ estado: "Pagada", medioPagoCliente: "Transferencia", referenciaPagoCliente: "TRF-UI-777" });
   });
 });

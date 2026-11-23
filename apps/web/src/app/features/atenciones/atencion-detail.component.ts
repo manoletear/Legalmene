@@ -18,6 +18,7 @@ import { TabsModule } from "primeng/tabs";
 import { MessageService } from "primeng/api";
 import { PromptService } from "../../shared/prompt.service";
 import { descargarArchivo } from "../../shared/descarga";
+import { PagoDialogService } from "../../shared/pago-dialog.component";
 import type { Observable } from "rxjs";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { GestionesApiService } from "../../core/services/gestiones.service";
@@ -518,6 +519,7 @@ export class AtencionDetailComponent implements OnInit {
   private documentosApi = inject(DocumentosApiService);
   private msg = inject(MessageService);
   private prompt = inject(PromptService);
+  private pagoDialog = inject(PagoDialogService);
   private provisionesApi = inject(ProvisionesApiService);
   protected me = inject(MeService);
   private usuariosApi = inject(UsuariosAdminService);
@@ -703,16 +705,9 @@ export class AtencionDetailComponent implements OnInit {
       if (!motivo) return;
       req = this.api.rechazarArancel(atencionId, motivo);
     } else {
-      const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(new Date());
-      const fecha = await this.prompt.open({ header: "Registrar pago del arancel", label: "Fecha de pago (AAAA-MM-DD)", initialValue: hoy, required: true });
-      if (!fecha) return;
-      const medio = await this.prompt.open({ header: "Medio de pago", label: "WebPay, CasaCentral o Transferencia", initialValue: "CasaCentral", required: true });
-      if (!medio) return;
-      if (!["WebPay", "CasaCentral", "Transferencia"].includes(medio.trim())) {
-        this.msg.add({ severity: "warn", summary: "Medio inválido", detail: "Use WebPay, CasaCentral o Transferencia", life: 4000 });
-        return;
-      }
-      req = this.api.pagarArancel(atencionId, { fechaPago: fecha.trim(), medio: medio.trim() as "CasaCentral" });
+      const pago = await this.pagoDialog.open("Registrar pago del arancel", { detalle: "El monto en pesos se calcula con la UF del día del pago." });
+      if (!pago) return;
+      req = this.api.pagarArancel(atencionId, { fechaPago: pago.fecha, medio: pago.medio, cuotas: pago.cuotas, referencia: pago.referencia });
     }
     req.subscribe({
       next: (r) => {

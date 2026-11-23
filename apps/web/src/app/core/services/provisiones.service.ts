@@ -68,8 +68,8 @@ export class ProvisionesApiService {
     return this.http.post<Provision>(`${this.base}/provisiones/${id}/${accion}`, body);
   }
 
-  pagoCliente(id: string, medio: MedioPago) {
-    return this.accion(id, "pago-cliente", { medio });
+  pagoCliente(id: string, medio: MedioPago, datos: { fecha?: string; cuotas?: number; referencia?: string } = {}) {
+    return this.accion(id, "pago-cliente", { medio, ...datos });
   }
   solicitarEntrega(id: string) {
     return this.accion(id, "solicitar-entrega");

@@ -183,6 +183,13 @@
       "when": 1795473618691,
       "tag": "0025_rendicion_cliente",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795474061092,
+      "tag": "0026_datos_pago",
+      "breakpoints": true
     }
   ]
 }

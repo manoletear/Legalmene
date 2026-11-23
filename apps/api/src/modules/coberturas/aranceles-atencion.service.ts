@@ -164,6 +164,8 @@ export class ArancelesAtencionService {
     return this.transicionar(atencionId, "Pagado", usuarioId, {
       fechaPago: input.fechaPago,
       medioPago: input.medio,
+      cuotasPago: input.cuotas ?? null,
+      referenciaPago: input.referencia || null,
       ufValorCentavos: uf.valorCentavos,
       montoClp,
       comprobanteDocumentoId: input.comprobanteDocumentoId ?? null,

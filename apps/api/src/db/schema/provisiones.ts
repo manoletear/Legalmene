@@ -57,6 +57,9 @@ export const provisiones = pgTable(
     fechaResolucion: timestamp("fecha_resolucion", { withTimezone: true }),
     medioPagoCliente: medioPagoEnum("medio_pago_cliente"),
     fechaPagoCliente: date("fecha_pago_cliente", { mode: "string" }),
+    // Cuotas y referencia del depósito o transferencia (Anexo §X 05).
+    cuotasPagoCliente: integer("cuotas_pago_cliente"),
+    referenciaPagoCliente: varchar("referencia_pago_cliente", { length: 80 }),
     fechaDisponible: timestamp("fecha_disponible", { withTimezone: true }),
     montoEntregado: integer("monto_entregado"),
     fechaEntrega: timestamp("fecha_entrega", { withTimezone: true }),
