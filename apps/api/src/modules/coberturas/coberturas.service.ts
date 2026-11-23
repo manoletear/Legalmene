@@ -4,14 +4,18 @@ import {
   PLANES_SIN_COBERTURA,
   type CopagoResultado,
   type CopiarCoberturasResultado,
+  type CoberturaConMaestros,
   type CreateCobertura,
+  type ResumenPlanCobertura,
   type TipoAtencion,
   type UpdateCobertura,
 } from "@legalmene/shared";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { coberturas, CoberturaRow } from "../../db/schema/aranceles";
 import { competencias, materias } from "../../db/schema/maestros";
-import { planes } from "../../db/schema/planes";
+import { canales, planes } from "../../db/schema/planes";
+import { planesAfiliado } from "../../db/schema/afiliados";
+import { planProductoVigenteSql, planVigenteSql } from "../afiliados/vigencia";
 import { atenciones } from "../../db/schema/atenciones";
 import { filtroAtenciones } from "../../common/acceso/alcance";
 import { esViolacionUnica } from "../../common/utils/pg-errors";
@@ -39,6 +43,39 @@ export class CoberturasService {
       // Reglas generales primero, luego por materia.
       .orderBy(asc(coberturas.codPlan), sql`${coberturas.materiaId} IS NOT NULL`, asc(materias.nombre), asc(coberturas.tipo));
     return rows.map((r) => ({ ...r.cobertura, materiaNombre: r.materiaNombre, competenciaNombre: r.competenciaNombre }));
+  }
+
+  // Planes vigentes (por código o canal, o los que tengan vigente un RUT) con sus RUT vigentes
+  // y las reglas de cobertura vigentes. Los planes no vigentes no aparecen.
+  async resumenPlanes(filtro: { codPlan?: string; canalId?: string; afiliadoId?: string }): Promise<ResumenPlanCobertura[]> {
+    const condiciones: (SQL | undefined)[] = [
+      planProductoVigenteSql,
+      filtro.codPlan ? eq(planes.codPlan, filtro.codPlan) : undefined,
+      filtro.canalId ? eq(planes.canalId, filtro.canalId) : undefined,
+      filtro.afiliadoId
+        ? sql`exists (select 1 from ${planesAfiliado} where ${planesAfiliado.codPlan} = ${planes.codPlan}
+            and ${planesAfiliado.afiliadoId} = ${filtro.afiliadoId} and ${planVigenteSql})`
+        : undefined,
+    ];
+    const filas = await this.db
+      .select({
+        codPlan: planes.codPlan,
+        nombre: planes.nombre,
+        canalId: planes.canalId,
+        canalNombre: canales.nombre,
+        rutsVigentes: sql<number>`(select count(distinct ${planesAfiliado.afiliadoId})::int from ${planesAfiliado}
+          where ${planesAfiliado.codPlan} = ${planes.codPlan} and ${planVigenteSql})`,
+      })
+      .from(planes)
+      .leftJoin(canales, eq(canales.id, planes.canalId))
+      .where(and(...condiciones))
+      .orderBy(asc(planes.codPlan))
+      .limit(200);
+    if (!filas.length) return [];
+    const reglas = (await this.listar({ vigente: true })) as CoberturaConMaestros[];
+    const porPlan = new Map<string, CoberturaConMaestros[]>();
+    for (const r of reglas) porPlan.set(r.codPlan, [...(porPlan.get(r.codPlan) ?? []), r]);
+    return filas.map((f) => ({ ...f, rutsVigentes: Number(f.rutsVigentes), coberturas: porPlan.get(f.codPlan) ?? [] }));
   }
 
   async crear(input: CreateCobertura): Promise<CoberturaRow> {

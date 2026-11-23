@@ -88,7 +88,7 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 
 - [x] Columnas en pantalla equivalentes al Excel; columna "Bienes" en asesorías y juicios. (§XI)
 - [x] Filtros "tipo de atención" (aranceles, provisiones) y "tipo de pago" (WebPay). (§IX l.1423, §XI)
-- [ ] Búsquedas de afiliados con coberturas y materias del plan; solo planes vigentes. (§XI l.1926–1955)
+- [x] Búsquedas de afiliados con coberturas y materias del plan; solo planes vigentes. (§XI l.1926–1955)
 - [x] Estado de derivación con todas las etapas y fechas. (§XI ~l.1905)
 - [ ] Informe de afiliados con selección de campos y hoja resumen; listados de atenciones y RUT en reportes. (§XII, §XIII)
 - [ ] Carga masiva de coberturas y de atenciones; campo Ciudad; maestros región/ciudad/comuna; canales editables. (§I l.54, §II l.141, l.150)
@@ -140,4 +140,5 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 | 2026-11-23 | 5 | STOCK conserva lo que viene en el archivo aunque su fila tenga error; cargas y bienes ya no dan de baja todo el plan si ninguna fila es válida | 28a3682 |
 | 2026-11-23 | 5 | Filtro por tipo de atención en aranceles y provisiones (pantalla y Excel) y por tipo de pago en WebPay | 1679bc1 |
 | 2026-11-23 | 5 | Estado de derivación con todas las etapas y fechas (solicitud, resolución, contacto, arancel, primera gestión, término) en pantalla y Excel | 36b785e |
-| 2026-11-23 | 5 | Búsquedas de consultas, asesorías y juicios con las columnas del Excel (afiliado, plan/canal, abogado, organismo/tribunal, derivación) y columna Bienes en pantalla y Excel | ver commit |
+| 2026-11-23 | 5 | Búsquedas de consultas, asesorías y juicios con las columnas del Excel (afiliado, plan/canal, abogado, organismo/tribunal, derivación) y columna Bienes en pantalla y Excel | 4d7220a |
+| 2026-11-23 | 5 | Búsqueda de afiliados por plan o canal y ficha del afiliado muestran los planes vigentes con RUT vigentes, coberturas y materias (`GET /coberturas/resumen-planes`) | ver commit |

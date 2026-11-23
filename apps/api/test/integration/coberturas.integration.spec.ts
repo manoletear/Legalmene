@@ -8,7 +8,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { sql } from "drizzle-orm";
 import { DatabaseModule, PG_POOL } from "../../src/db/database.module";
 import { planes } from "../../src/db/schema/planes";
-import { afiliados } from "../../src/db/schema/afiliados";
+import { afiliados, planesAfiliado } from "../../src/db/schema/afiliados";
 import { atenciones } from "../../src/db/schema/atenciones";
 import { materias } from "../../src/db/schema/maestros";
 import { ArancelesService } from "../../src/modules/aranceles/aranceles.service";
@@ -65,6 +65,7 @@ const RUN = !!process.env.DATABASE_URL;
     const db = drizzle(pool);
     await db.execute(sql`DELETE FROM atenciones WHERE id = ${atencionId}`);
     await db.execute(sql`DELETE FROM coberturas WHERE cod_plan IN (${PLAN}, ${DESTINO})`);
+    await db.execute(sql`DELETE FROM planes_afiliado WHERE afiliado_id = ${afiliadoId}`);
     await db.execute(sql`DELETE FROM afiliados WHERE id = ${afiliadoId}`);
     await borrarMateriaDePrueba(db, cm);
     await db.execute(sql`DELETE FROM planes WHERE cod_plan IN (${PLAN}, ${DESTINO})`);
@@ -162,5 +163,22 @@ const RUN = !!process.env.DATABASE_URL;
     await expect(coberturasSrv.copiar(DESTINO, DESTINO, false)).rejects.toBeInstanceOf(BadRequestException);
     await expect(coberturasSrv.copiar(DESTINO, "NO_EXISTE", false)).rejects.toBeInstanceOf(BadRequestException);
     await expect(coberturasSrv.copiar("REZAGADO", PLAN, false)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("resumen de planes: solo planes vigentes, con RUT vigentes y coberturas con su materia", async () => {
+    const db = drizzle(pool);
+    await db.insert(planesAfiliado).values([
+      { afiliadoId, codPlan: PLAN, fechaInicio: "2020-01-01" },
+      { afiliadoId, codPlan: DESTINO, fechaInicio: "2020-01-01" },
+    ]);
+    await db.update(planes).set({ vigente: false }).where(sql`cod_plan = ${DESTINO}`);
+
+    const [plan] = await coberturasSrv.resumenPlanes({ codPlan: PLAN });
+    expect(plan).toMatchObject({ codPlan: PLAN, rutsVigentes: 1 });
+    expect(plan.coberturas.find((c) => c.materiaId === otraMateriaId)?.materiaNombre).toBe(`Otra ${SUF}`);
+
+    expect(await coberturasSrv.resumenPlanes({ codPlan: DESTINO })).toEqual([]);
+    const delAfiliado = await coberturasSrv.resumenPlanes({ afiliadoId });
+    expect(delAfiliado.map((p) => p.codPlan)).toEqual([PLAN]);
   });
 });

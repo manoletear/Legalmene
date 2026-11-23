@@ -65,3 +65,14 @@ export interface CopagoResultado {
   copagoClp: number | null;
   requiereCopago: boolean;
 }
+
+// Resumen de un plan vigente para las búsquedas de afiliados (Anexo §XI l.1926–1955):
+// RUT con el plan vigente hoy y reglas de cobertura vigentes con su materia.
+export interface ResumenPlanCobertura {
+  codPlan: string;
+  nombre: string;
+  canalId: string | null;
+  canalNombre: string | null;
+  rutsVigentes: number;
+  coberturas: CoberturaConMaestros[];
+}

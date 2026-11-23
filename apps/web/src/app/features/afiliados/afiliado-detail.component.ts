@@ -13,6 +13,7 @@ import { ConfirmationService, MessageService } from "primeng/api";
 import { PARENTESCO_LABEL, type AfiliadoConPlanes, type BienAfiliado, type CargaAfiliado, type Parentesco, type Plan, type PlanAfiliadoDetalle } from "@legalmene/shared";
 import { AfiliadosApiService } from "../../core/services/afiliados.service";
 import { PlanesApiService } from "../../core/services/planes.service";
+import { ResumenPlanesComponent } from "../../shared/resumen-planes.component";
 import { PermisoDirective } from "../../core/permisos";
 import { AfiliadoFormComponent } from "./afiliado-form.component";
 
@@ -22,7 +23,7 @@ const TIPO_BIEN: Record<string, string> = { Inmueble: "Inmueble", Vehiculo: "Veh
 @Component({
   selector: "lm-afiliado-detail",
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, CardModule, TableModule, TagModule, ButtonModule, DialogModule, InputTextModule, SelectModule, PermisoDirective, AfiliadoFormComponent],
+  imports: [CommonModule, FormsModule, RouterLink, CardModule, TableModule, TagModule, ButtonModule, DialogModule, InputTextModule, SelectModule, PermisoDirective, AfiliadoFormComponent, ResumenPlanesComponent],
   template: `
     <div *ngIf="afiliado() as a; else cargando">
       <div class="lm-row" style="margin-bottom:16px; align-items:flex-start;">
@@ -70,6 +71,7 @@ const TIPO_BIEN: Record<string, string> = { Inmueble: "Inmueble", Vehiculo: "Veh
           </ng-template>
           <ng-template pTemplate="emptymessage"><tr><td colspan="5" class="lm-muted" style="text-align:center;">Sin planes.</td></tr></ng-template>
         </p-table>
+        <lm-resumen-planes [afiliadoId]="a.id" [refresco]="a" titulo="Coberturas de sus planes vigentes"></lm-resumen-planes>
       </p-card>
 
       <p-card header="Cargas" [style]="{ 'margin-bottom': '16px', display: 'block' }">
