@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { createZodDto } from "nestjs-zod";
 import { z } from "zod";
 import type { Response } from "express";
-import { InformeAtencionesSchema, PeriodoSchema } from "@legalmene/shared";
+import { InformeAfiliadosSchema, InformeAtencionesSchema, PeriodoSchema } from "@legalmene/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Permiso } from "../../common/decorators/permiso.decorator";
 import { PermisosGuard } from "../../common/guards/permisos.guard";
@@ -17,6 +17,7 @@ class AfiliadosMesDto extends createZodDto(
   PeriodoSchema.and(z.object({ codPlan: z.string().optional(), canalId: z.string().uuid().optional() })),
 ) {}
 class InformeDto extends createZodDto(InformeAtencionesSchema) {}
+class InformeAfiliadosDto extends createZodDto(InformeAfiliadosSchema) {}
 class ControllerDto extends createZodDto(
   z.object({
     desde: fecha.optional(),
@@ -81,6 +82,12 @@ export class ReportesController {
   @Permiso("reportes.ver")
   async informe(@Body() body: InformeDto, @Res() res: Response) {
     enviarXlsx(res, "informe-atenciones", await this.service.informeXlsx(body));
+  }
+
+  @Post("informe-afiliados.xlsx")
+  @Permiso("reportes.ver")
+  async informeAfiliados(@Body() body: InformeAfiliadosDto, @Res() res: Response) {
+    enviarXlsx(res, "informe-afiliados", await this.service.informeAfiliadosXlsx(body));
   }
 
   @Get("controller")

@@ -132,3 +132,36 @@ export const InformeAtencionesSchema = z.object({
   abogadoId: z.string().uuid().optional(),
 });
 export type InformeAtenciones = z.infer<typeof InformeAtencionesSchema>;
+
+// Informe de afiliados (§XIII A–C): listado RUT–Plan vigente en el período con los campos elegidos
+// y hoja "Resumen" por plan.
+export const CAMPOS_INFORME_AFILIADOS = {
+  rut: "RUT",
+  nombre: "Nombre",
+  email: "Correo",
+  telefono: "Teléfono",
+  direccion: "Dirección",
+  comuna: "Comuna",
+  region: "Región",
+  fechaNacimiento: "Fecha de nacimiento",
+  codPlan: "Cód. plan",
+  plan: "Plan",
+  canal: "Canal",
+  fechaInicio: "Inicio vigencia",
+  fechaTermino: "Término vigencia",
+  vigencia: "Estado vigencia",
+  vigenteHoy: "Vigente hoy",
+} as const;
+export type CampoInformeAfiliado = keyof typeof CAMPOS_INFORME_AFILIADOS;
+
+export const InformeAfiliadosSchema = z.object({
+  desde: fecha,
+  hasta: fecha,
+  campos: z
+    .array(z.enum(Object.keys(CAMPOS_INFORME_AFILIADOS) as [CampoInformeAfiliado, ...CampoInformeAfiliado[]]))
+    .min(1, "Seleccione al menos un campo"),
+  codPlan: z.string().optional(),
+  canalId: z.string().uuid().optional(),
+  rut: z.string().max(12).optional(),
+}).refine((p) => p.desde <= p.hasta, { message: "La fecha inicial no puede ser posterior a la final", path: ["hasta"] });
+export type InformeAfiliados = z.infer<typeof InformeAfiliadosSchema>;

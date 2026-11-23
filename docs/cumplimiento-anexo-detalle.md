@@ -345,11 +345,11 @@ Solo lectura: no modifiqué ningún archivo ni ejecuté nada. Las referencias de
 | Ref | Requisito (resumido) | Estado | Evidencia / qué falta |
 |---|---|---|---|
 | ~2033-2045 | Reporte Plan: consultas de la nómina dentro de la vigencia RUT–Plan; asesorías y juicios contados por plan | Cumple | reportes.service.ts:54-56 y :69-121. |
-| ~2047-2050 | Reporte Plan: exportar resumen **y listado de atenciones** | Parcial | xlsxPorPlan (:360) exporta solo el resumen, sin listado. |
+| ~2047-2050 | Reporte Plan: exportar resumen **y listado de atenciones** | Cumple (fase 5) | Hoja "Atenciones" en plan.xlsx y canal.xlsx (`listadoAtenciones`). Antes: xlsxPorPlan (:360) exporta solo el resumen, sin listado. |
 | 2061-2075 | Reporte Canal sin duplicar | Parcial (verificar) | Usa la misma regla "dentro de vigencia" (:125-177). El anexo dice "posterior a la fecha de término" (posible error del documento; confirmar con el cliente). Exporta resumen y detalle por plan, sin listado de atenciones (:365-371). |
-| 2097-2107 | Afiliados por plan y mes, export con lista de RUT | Parcial | Existe la serie mensual (:181-203) con XLSX (:374). Falta la lista de RUT vigentes. |
-| 2110-2120 | Afiliados por canal agrupados por plan, con lista de RUT | Parcial | Solo filtra por canal en la misma serie; falta agrupar por canal y la lista de RUT. |
-| 2148-2153, 2173-2180, 2190-2195 | Informe de afiliados (plan, canal, período, cliente), selección de campos, XLS con listado y hoja resumen | No cumple | Solo existe el informe de atenciones. |
+| 2097-2107 | Afiliados por plan y mes, export con lista de RUT | Cumple (fase 5) | Hoja "RUT vigentes" (`relacionesEnPeriodo`). Antes: Existe la serie mensual (:181-203) con XLSX (:374). Falta la lista de RUT vigentes. |
+| 2110-2120 | Afiliados por canal agrupados por plan, con lista de RUT | Cumple (fase 5) | La lista de RUT va ordenada por canal y plan. Antes: Solo filtra por canal en la misma serie; falta agrupar por canal y la lista de RUT. |
+| 2148-2153, 2173-2180, 2190-2195 | Informe de afiliados (plan, canal, período, cliente), selección de campos, XLS con listado y hoja resumen | Cumple (fase 5) | `POST /reportes/informe-afiliados.xlsx` y pestaña "Informe de afiliados". Antes: Solo existe el informe de atenciones. |
 | 2156-2165 | Informe de atenciones: filtros plan, canal, fecha, cliente, abogado, estado, materia, tema y tasa de uso | Parcial | El esquema acepta plan, canal, abogado y fechas (busqueda.ts:117-127); la UI no envía abogado (reportes.component.ts:304). Faltan cliente, estado, materia y tema. La tasa de uso está en los reportes por plan y canal (fórmula pendiente de validar con el cliente). |
 | 2167-2170, 2182-2187 | Elegir tipos de atención y campos | Cumple | `tipos` y `campos` (busqueda.ts:98-127; reportes.component.ts:146). |
 | ~2198-2204 | XLS con una hoja por tipo más hoja Resumen | Cumple | reportes.service.ts:206-256. |

@@ -67,4 +67,13 @@ test.describe("Reportes", () => {
     await expect(tr.locator("td").nth(7)).toHaveText(fila.total.toLocaleString("es-CL"));
     await expect(page.getByText("fórmula a validar con LegalChile")).toBeVisible();
   });
+
+  test("informe de afiliados: descarga el Excel con los campos elegidos", async ({ page }) => {
+    await page.goto("/reportes?vista=informe-afiliados");
+    await page.locator("input[name='desde']").fill("2000-01-01");
+    const boton = page.getByRole("button", { name: "Descargar informe de afiliados" });
+    await expect(boton).toBeVisible();
+    const [descarga] = await Promise.all([page.waitForEvent("download"), boton.click()]);
+    expect(descarga.suggestedFilename()).toMatch(/^informe-afiliados-2000-01-01_\d{4}-\d{2}-\d{2}\.xlsx$/);
+  });
 });

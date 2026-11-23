@@ -11,7 +11,9 @@ import { TableModule } from "primeng/table";
 import { TabsModule } from "primeng/tabs";
 import { MessageService } from "primeng/api";
 import {
+  CAMPOS_INFORME_AFILIADOS,
   CAMPOS_INFORME_ATENCIONES,
+  type CampoInformeAfiliado,
   type CampoInformeAtencion,
   type FilaController,
   type FilaReporteCanal,
@@ -24,7 +26,7 @@ import { PlanesApiService } from "../../core/services/planes.service";
 import { MeService } from "../../core/services/me.service";
 import { descargarArchivo } from "../../shared/descarga";
 
-type Vista = "plan" | "canal" | "afiliados" | "informe" | "controller";
+type Vista = "plan" | "canal" | "afiliados" | "informe" | "informe-afiliados" | "controller";
 
 interface Opcion {
   label: string;
@@ -71,6 +73,7 @@ function hoyChile(): string {
           <p-tab value="canal">Por canal</p-tab>
           <p-tab value="afiliados">Afiliados activos</p-tab>
           <p-tab value="informe">Informe de atenciones</p-tab>
+          <p-tab value="informe-afiliados">Informe de afiliados</p-tab>
           <p-tab *ngIf="puedeController()" value="controller">Controller de usuarios</p-tab>
         </p-tablist>
         <p-tabpanels>
@@ -152,6 +155,26 @@ function hoyChile(): string {
             <p class="lm-small lm-muted">El libro incluye una hoja "Resumen" con el conteo por plan y tipo, y una hoja por cada tipo elegido.</p>
           </p-tabpanel>
 
+          <p-tabpanel value="informe-afiliados">
+            <div class="lm-reporte-filtros" style="margin-bottom:12px;">
+              <div class="lm-col" style="gap:4px;">
+                <label class="lm-small">RUT (opcional)</label>
+                <input pInputText name="rutInforme" [(ngModel)]="rutInforme" placeholder="12345678-9" />
+              </div>
+              <div class="lm-col" style="gap:4px; grid-column: span 2;">
+                <label class="lm-small">Campos</label>
+                <p-multiselect [(ngModel)]="camposAfiliados" [options]="campoAfiliadoOpts" optionLabel="label" optionValue="value" placeholder="Elija campos" appendTo="body" display="chip"></p-multiselect>
+              </div>
+            </div>
+            <div class="lm-reporte-acciones">
+              <button pButton icon="pi pi-file-excel" label="Descargar informe de afiliados" [disabled]="descargando()" (click)="descargarInformeAfiliados()"></button>
+            </div>
+            <p class="lm-small lm-muted">
+              Una fila por RUT y plan vigente algún día del período. La hoja "Resumen" cuenta por plan los RUT vigentes,
+              las altas y los términos del período y los vigentes hoy.
+            </p>
+          </p-tabpanel>
+
           <p-tabpanel *ngIf="puedeController()" value="controller">
             <ng-container *ngTemplateOutlet="acciones; context: { v: 'controller' }"></ng-container>
             <p-table *ngIf="controller() as filas; else vacio" [value]="filas" styleClass="p-datatable-sm">
@@ -181,6 +204,7 @@ function hoyChile(): string {
       <div class="lm-reporte-acciones">
         <button pButton icon="pi pi-play" label="Generar" [loading]="cargando()" (click)="generar(v)"></button>
         <button pButton icon="pi pi-file-excel" label="Descargar Excel" [outlined]="true" [disabled]="descargando()" (click)="descargar(v)"></button>
+        <span class="lm-small lm-muted" *ngIf="nota(v) as n">{{ n }}</span>
       </div>
     </ng-template>
 
@@ -233,11 +257,22 @@ export class ReportesComponent implements OnInit {
     { label: "Juicios", value: "Juicio" },
     { label: "Posesiones efectivas", value: "PosesionEfectiva" },
   ];
+  protected notaExcel: Partial<Record<Vista, string>> = {
+    plan: "El Excel incluye el listado de las atenciones contadas.",
+    canal: "El Excel incluye el detalle por plan y el listado de las atenciones contadas.",
+    afiliados: "El Excel incluye la lista de RUT vigentes por canal y plan.",
+  };
+  protected nota(v: Vista): string | undefined {
+    return this.notaExcel[v];
+  }
+  protected rutInforme = "";
+  protected camposAfiliados: CampoInformeAfiliado[] = ["rut", "nombre", "email", "codPlan", "plan", "canal", "fechaInicio", "fechaTermino", "vigenteHoy"];
+  protected campoAfiliadoOpts = (Object.entries(CAMPOS_INFORME_AFILIADOS) as [CampoInformeAfiliado, string][]).map(([value, label]) => ({ label, value }));
   protected campoOpts = (Object.entries(CAMPOS_INFORME_ATENCIONES) as [CampoInformeAtencion, string][]).map(([value, label]) => ({ label, value }));
 
   ngOnInit() {
     const v = this.route.snapshot.queryParamMap.get("vista") as Vista | null;
-    if (v && ["plan", "canal", "afiliados", "informe", "controller"].includes(v)) this.vista.set(v);
+    if (v && ["plan", "canal", "afiliados", "informe", "informe-afiliados", "controller"].includes(v)) this.vista.set(v);
     this.planesApi.listar().subscribe((ps) => this.planOpts.set(ps.map((p) => ({ label: `${p.codPlan} — ${p.nombre}`, value: p.codPlan }))));
     this.planesApi.canales().subscribe((cs) => this.canalOpts.set(cs.map((c) => ({ label: c.nombre, value: c.id }))));
   }
@@ -291,7 +326,7 @@ export class ReportesComponent implements OnInit {
 
   async descargar(v: Vista) {
     if (!this.periodoValido()) return;
-    const ruta = { plan: "plan", canal: "canal", afiliados: "afiliados-mes", controller: "controller", informe: "" }[v];
+    const ruta = { plan: "plan", canal: "canal", afiliados: "afiliados-mes", controller: "controller", informe: "", "informe-afiliados": "" }[v];
     await this.bajar(`/reportes/${ruta}.xlsx`, `reporte-${ruta}`, { params: this.params(v) });
   }
 
@@ -303,6 +338,17 @@ export class ReportesComponent implements OnInit {
     }
     const body = { desde: this.desde, hasta: this.hasta, tipos: this.tipos, campos: this.campos, codPlan: this.codPlan, canalId: this.canalId };
     await this.bajar("/reportes/informe.xlsx", "informe-atenciones", { body });
+  }
+
+  async descargarInformeAfiliados() {
+    if (!this.periodoValido()) return;
+    if (!this.camposAfiliados.length) {
+      this.msg.add({ severity: "warn", summary: "Faltan datos", detail: "Elija al menos un campo", life: 3000 });
+      return;
+    }
+    const rut = this.rutInforme.replace(/[.\s]/g, "").toUpperCase() || undefined;
+    const body = { desde: this.desde, hasta: this.hasta, campos: this.camposAfiliados, codPlan: this.codPlan, canalId: this.canalId, rut };
+    await this.bajar("/reportes/informe-afiliados.xlsx", "informe-afiliados", { body });
   }
 
   private async bajar(ruta: string, nombre: string, opciones: Parameters<typeof descargarArchivo>[2]) {

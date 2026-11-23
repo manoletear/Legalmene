@@ -90,7 +90,7 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 - [x] Filtros "tipo de atención" (aranceles, provisiones) y "tipo de pago" (WebPay). (§IX l.1423, §XI)
 - [x] Búsquedas de afiliados con coberturas y materias del plan; solo planes vigentes. (§XI l.1926–1955)
 - [x] Estado de derivación con todas las etapas y fechas. (§XI ~l.1905)
-- [ ] Informe de afiliados con selección de campos y hoja resumen; listados de atenciones y RUT en reportes. (§XII, §XIII)
+- [x] Informe de afiliados con selección de campos y hoja resumen; listados de atenciones y RUT en reportes. (§XII, §XIII)
 - [ ] Carga masiva de coberturas y de atenciones; campo Ciudad; maestros región/ciudad/comuna; canales editables. (§I l.54, §II l.141, l.150)
 - [x] Stock: no dar de baja un RUT que viene en el archivo con error de validación. (§III l.293)
 
@@ -141,4 +141,5 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 | 2026-11-23 | 5 | Filtro por tipo de atención en aranceles y provisiones (pantalla y Excel) y por tipo de pago en WebPay | 1679bc1 |
 | 2026-11-23 | 5 | Estado de derivación con todas las etapas y fechas (solicitud, resolución, contacto, arancel, primera gestión, término) en pantalla y Excel | 36b785e |
 | 2026-11-23 | 5 | Búsquedas de consultas, asesorías y juicios con las columnas del Excel (afiliado, plan/canal, abogado, organismo/tribunal, derivación) y columna Bienes en pantalla y Excel | 4d7220a |
-| 2026-11-23 | 5 | Búsqueda de afiliados por plan o canal y ficha del afiliado muestran los planes vigentes con RUT vigentes, coberturas y materias (`GET /coberturas/resumen-planes`) | ver commit |
+| 2026-11-23 | 5 | Búsqueda de afiliados por plan o canal y ficha del afiliado muestran los planes vigentes con RUT vigentes, coberturas y materias (`GET /coberturas/resumen-planes`) | 616ccdb |
+| 2026-11-23 | 5 | Informe de afiliados (campos elegibles, hoja Resumen por plan con altas y términos); los Excel por plan y canal traen el listado de atenciones contadas y el de afiliados por mes, la lista de RUT vigentes por canal y plan. Los reportes ya no cuentan relaciones ni afiliados eliminados | ver commit |
