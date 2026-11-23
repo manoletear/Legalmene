@@ -62,6 +62,8 @@ const RUN = !!process.env.DATABASE_URL;
     await service.solicitarEntrega(p.id, abogado);
     await service.autorizar(p.id, jefe, "OK");
     await service.marcarDisponible(p.id, jefe);
+    // La entrega es desde las 15:00 del día hábil siguiente a la autorización.
+    await pool.query("UPDATE provisiones SET fecha_resolucion = now() - interval '10 days' WHERE id = $1", [p.id]);
     return service.entregar(p.id, jefe);
   }
 
@@ -114,6 +116,9 @@ const RUN = !!process.env.DATABASE_URL;
     expect((await service.solicitarEntrega(p.id, abogado)).estado).toBe("EnAprobacion");
     expect((await service.autorizar(p.id, jefe, "Procede")).estado).toBe("Autorizada");
     expect((await service.marcarDisponible(p.id, jefe)).estado).toBe("Disponible");
+    // Anexo §X l.1673: el mismo día de la autorización todavía no se puede entregar.
+    await expect(service.entregar(p.id, jefe)).rejects.toThrow(/15:00 del día hábil siguiente/);
+    await pool.query("UPDATE provisiones SET fecha_resolucion = now() - interval '10 days' WHERE id = $1", [p.id]);
     const entregada = await service.entregar(p.id, jefe);
     expect(entregada.estado).toBe("Entregada");
     expect(entregada.montoEntregado).toBe(450_000);

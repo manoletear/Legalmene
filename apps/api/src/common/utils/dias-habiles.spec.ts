@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diasHabilesEntre, hoyChileISO, sumarDiasHabiles } from "./dias-habiles";
+import { diasHabilesEntre, hoyChileISO, instanteChile, sumarDiasHabiles } from "./dias-habiles";
 
 describe("días hábiles", () => {
   it("salta sábados y domingos", () => {
@@ -22,5 +22,10 @@ describe("días hábiles", () => {
   it("hoy en Chile usa la zona America/Santiago", () => {
     // 02:00 UTC del 5 de noviembre es aún 4 de noviembre en Chile.
     expect(hoyChileISO(new Date("2026-11-05T02:00:00Z"))).toBe("2026-11-04");
+  });
+
+  it("instanteChile respeta el horario de verano e invierno", () => {
+    expect(instanteChile("2026-07-01", "15:00").toISOString()).toBe("2026-07-01T19:00:00.000Z"); // UTC−4
+    expect(instanteChile("2026-12-01", "15:00").toISOString()).toBe("2026-12-01T18:00:00.000Z"); // UTC−3
   });
 });

@@ -41,6 +41,8 @@ import {
   ESTADO_ARANCEL_COLOR,
   ESTADO_ARANCEL_LABEL,
   TIPO_GESTION_LABEL,
+  TIPO_PLAZO_LABEL,
+  type PlazoAtencion,
   TipoGestionEnum,
   type TipoGestion,
 } from "@legalmene/shared";
@@ -168,6 +170,26 @@ interface PipelineStep {
               <div class="lm-info-row"><span>Ingreso</span><strong>{{ a.fechaApertura | date: 'dd/MM/yyyy' }}</strong></div>
               <div class="lm-info-row"><span>Última gestión</span><strong>{{ a.fechaUltimaGestion ? (a.fechaUltimaGestion | date: 'dd/MM/yyyy') : '—' }}</strong></div>
               <div class="lm-info-row"><span>Próxima audiencia</span><strong>{{ proximaAudiencia() ? (proximaAudiencia() | date: 'dd/MM/yyyy HH:mm') : '—' }}</strong></div>
+            </div>
+
+            <!-- Plazos del Anexo en días hábiles (con feriados). -->
+            <div class="lm-info-card" *ngIf="plazos().length" data-testid="plazos">
+              <div class="lm-info-card-header"><i class="pi pi-clock"></i> Plazos</div>
+              <div *ngFor="let p of plazos()" class="lm-info-row" style="align-items:flex-start;">
+                <span>
+                  {{ tipoPlazo(p.tipo) }}
+                  <div class="lm-small lm-muted">
+                    <ng-container *ngIf="p.cumplidoEn; else limite">Cumplido el {{ p.cumplidoEn | date: 'dd/MM/yyyy HH:mm' }}</ng-container>
+                    <ng-template #limite>Vence el {{ p.limite | date: 'dd/MM/yyyy' }}</ng-template>
+                  </div>
+                </span>
+                <p-tag [value]="estadoPlazo(p.estado)" [severity]="p.estado === 'Cumplido' ? 'success' : p.estado === 'Pendiente' ? 'info' : p.estado === 'Vencido' ? 'danger' : 'warn'"></p-tag>
+              </div>
+              <ng-container *ngIf="contactoPendiente()">
+                <div *lmPermiso="'gestiones.registrar'" style="margin-top:8px;">
+                  <button pButton icon="pi pi-phone" label="Registrar contacto con el cliente" size="small" [outlined]="true" (click)="registrarContacto(a.id)"></button>
+                </div>
+              </ng-container>
             </div>
 
             <div class="lm-info-card">
@@ -484,6 +506,8 @@ export class AtencionDetailComponent implements OnInit {
     return "Sin cobertura";
   });
   protected gestiones = signal<Gestion[]>([]);
+  protected plazos = signal<PlazoAtencion[]>([]);
+  protected contactoPendiente = computed(() => this.plazos().some((p) => p.tipo === "ContactoCliente" && !p.cumplidoEn));
   protected comites = signal<Comite[]>([]);
   protected documentos = signal<DocumentoMeta[]>([]);
   protected uploading = signal(false);
@@ -598,6 +622,7 @@ export class AtencionDetailComponent implements OnInit {
   cargar(id: string) {
     this.api.obtener(id).subscribe((a) => this.atencion.set(a));
     this.gestionesApi.listar(id).subscribe((g) => this.gestiones.set(g));
+    this.api.plazos(id).subscribe({ next: (p) => this.plazos.set(p), error: () => this.plazos.set([]) });
     this.comitesApi.listar(id).subscribe((c) => this.comites.set(c));
     this.documentosApi.listar(id).subscribe((d) => this.documentos.set(d));
     this.api.copago(id).subscribe({ next: (c) => this.copago.set(c), error: () => this.copago.set(null) });
@@ -732,6 +757,24 @@ export class AtencionDetailComponent implements OnInit {
       a.href = url;
       a.download = doc.nombre;
       a.click();
+    });
+  }
+
+  protected tipoPlazo(t: PlazoAtencion["tipo"]): string {
+    return TIPO_PLAZO_LABEL[t];
+  }
+
+  protected estadoPlazo(e: PlazoAtencion["estado"]): string {
+    return e === "CumplidoFueraDePlazo" ? "Fuera de plazo" : e;
+  }
+
+  protected registrarContacto(atencionId: string) {
+    this.api.registrarContacto(atencionId).subscribe({
+      next: (p) => {
+        this.plazos.set(p);
+        this.msg.add({ severity: "success", summary: "Contacto registrado", life: 2500 });
+      },
+      error: (err) => this.msg.add({ severity: "error", summary: "No se pudo registrar", detail: err.error?.message ?? err.message, life: 5000 }),
     });
   }
 

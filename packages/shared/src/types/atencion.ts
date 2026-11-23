@@ -29,6 +29,7 @@ export const AtencionSchema = z.object({
   fechaApertura: z.string().datetime(),
   fechaCierre: z.string().datetime().optional().nullable(),
   fechaUltimaGestion: z.string().datetime().optional().nullable(),
+  fechaPrimerContacto: z.string().datetime().optional().nullable(),
   prioridad: z.enum(["Baja", "Media", "Alta", "Urgente"]).default("Media"),
   origen: z.string().max(80).optional().nullable(),
   // Consultas (Anexo §VI).
@@ -97,6 +98,7 @@ export const CreateAtencionSchema = AtencionSchema.omit({
   fechaApertura: true,
   fechaCierre: true,
   fechaUltimaGestion: true,
+  fechaPrimerContacto: true,
   horaInicio: true,
   horaTermino: true,
   revisadoPorComite: true,

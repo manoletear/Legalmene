@@ -14,7 +14,10 @@ import {
 } from "@nestjs/common";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { createZodDto } from "nestjs-zod";
+import { RegistrarContactoSchema } from "@legalmene/shared";
 import { AtencionesService } from "./atenciones.service";
+import { PlazosService } from "./plazos.service";
 import {
   CambiarEstadoDto,
   CreateAtencionDto,
@@ -28,12 +31,29 @@ import { Permiso } from "../../common/decorators/permiso.decorator";
 import { PermisosGuard } from "../../common/guards/permisos.guard";
 import { CurrentUser, AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 
+class RegistrarContactoDto extends createZodDto(RegistrarContactoSchema) {}
+
 @ApiTags("atenciones")
 @ApiBearerAuth("EntraID")
 @UseGuards(JwtAuthGuard, PermisosGuard)
 @Controller()
 export class AtencionesController {
-  constructor(@Inject(AtencionesService) private readonly service: AtencionesService) {}
+  constructor(
+    @Inject(AtencionesService) private readonly service: AtencionesService,
+    @Inject(PlazosService) private readonly plazos: PlazosService,
+  ) {}
+
+  // Plazos del Anexo en días hábiles (contacto, primera presentación, rendición de fondos).
+  @Get("atenciones/:id/plazos")
+  plazosDeAtencion(@Param("id", ParseUUIDPipe) id: string) {
+    return this.plazos.deAtencion(id);
+  }
+
+  @Post("atenciones/:id/primer-contacto")
+  @Permiso("gestiones.registrar")
+  registrarContacto(@Param("id", ParseUUIDPipe) id: string, @Body() body: RegistrarContactoDto) {
+    return this.plazos.registrarContacto(id, body.fecha);
+  }
 
   @Get("atenciones")
   buscar(@Query() filtro: FiltroAtencionesDto) {

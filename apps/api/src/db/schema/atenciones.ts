@@ -90,6 +90,8 @@ export const atenciones = pgTable(
     fechaApertura: timestamp("fecha_apertura", { withTimezone: true }).notNull().defaultNow(),
     fechaCierre: timestamp("fecha_cierre", { withTimezone: true }),
     fechaUltimaGestion: timestamp("fecha_ultima_gestion", { withTimezone: true }),
+    // Primer contacto del abogado con el cliente (Anexo §VII l.765, §VIII l.984: ≤ 24 h hábiles).
+    fechaPrimerContacto: timestamp("fecha_primer_contacto", { withTimezone: true }),
     prioridad: prioridadEnum("prioridad").notNull().default("Media"),
     origen: varchar("origen", { length: 80 }),
     // Consultas (Anexo §VI).

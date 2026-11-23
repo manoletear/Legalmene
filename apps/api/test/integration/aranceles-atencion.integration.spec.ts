@@ -162,6 +162,7 @@ const FECHA_PAGO = "2001-03-15";
       await provisionesSrv.solicitarEntrega(p.id, abogado.id);
       await provisionesSrv.autorizar(p.id, jefe.id);
       await provisionesSrv.marcarDisponible(p.id, jefe.id);
+      await pool.query("UPDATE provisiones SET fecha_resolucion = now() - interval '10 days' WHERE id = $1", [p.id]);
       await provisionesSrv.entregar(p.id, jefe.id);
       await provisionesSrv.registrarMovimiento(p.id, abogado.id, { tipo: "Gasto", monto: 10_000, glosa: "Receptor" });
       await provisionesSrv.rendir(p.id, abogado.id);

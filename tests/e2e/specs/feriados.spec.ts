@@ -19,10 +19,11 @@ test.describe("Feriados", () => {
     await page.goto("/admin/maestros");
     await page.getByRole("tab", { name: "Feriados" }).click();
     await page.locator("input[name='fechaFeriado']").fill(fecha);
-    await page.locator("input[name='nombreFeriado']").fill("Feriado E2E por decreto");
+    const nombre = `Feriado E2E ${Date.now()}`;
+    await page.locator("input[name='nombreFeriado']").fill(nombre);
     await page.getByRole("button", { name: "Agregar feriado" }).click();
     await expect(page.getByText("Feriado agregado").first()).toBeVisible();
-    const fila = page.locator("tr", { hasText: "Feriado E2E por decreto" });
+    const fila = page.locator("tr", { hasText: nombre });
     await expect(fila).toContainText("Agregado");
 
     const despues: { fecha: string; origen: string }[] = await request.get(`${API}/feriados?anio=${anio}`).then((r) => r.json());

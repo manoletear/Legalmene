@@ -31,7 +31,7 @@ import {
   ProvisionMovimiento,
 } from "../../db/schema/provisiones";
 import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
-import { diasHabilesEntre, hoyChileISO } from "../../common/utils/dias-habiles";
+import { diasHabilesEntre, hoyChileISO, instanteChile, sumarDiasHabiles } from "../../common/utils/dias-habiles";
 
 type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
@@ -45,6 +45,13 @@ const ESTADOS_ATENCION_CERRADA: string[] = ["Terminada", "Abandonada", "Derivada
 const ESTADOS_PROVISIONADOS: EstadoProvision[] = ["Pagada", "EnAprobacion", "Autorizada", "Disponible", "Entregada", "Rendida", "Cerrada"];
 // Plazo para retirar fondos disponibles antes de que vuelvan a la compañía (Anexo §X 11.1).
 export const DIAS_HABILES_RETIRO = 2;
+
+// Anexo §X l.1673: la entrega al abogado ocurre desde las 15:00 del día hábil siguiente a la
+// autorización.
+export function entregaPermitidaDesde(fechaAutorizacion: Date | null): Date | null {
+  if (!fechaAutorizacion) return null;
+  return instanteChile(sumarDiasHabiles(hoyChileISO(fechaAutorizacion), 1), "15:00");
+}
 const clp = (n: number) => "$" + n.toLocaleString("es-CL");
 
 const sumaMov = (tipo: "Gasto" | "Reintegro") =>
@@ -262,6 +269,12 @@ export class ProvisionesService {
 
   entregar(id: string, usuarioId: string, montoEntregado?: number) {
     return this.transicionar(id, "Entregada", usuarioId, {}, null, async (p, tx) => {
+      const desde = entregaPermitidaDesde(p.fechaResolucion);
+      if (desde && Date.now() < desde.getTime()) {
+        throw new BadRequestException(
+          `Los fondos se entregan desde las 15:00 del día hábil siguiente a la autorización (${desde.toLocaleString("es-CL", { timeZone: "America/Santiago", dateStyle: "short", timeStyle: "short" })})`,
+        );
+      }
       const monto = montoEntregado ?? p.monto;
       if (monto > p.monto) throw new BadRequestException(`No se puede entregar más de lo provisionado (${clp(p.monto)})`);
       // Dentro de la transacción: dos entregas pedidas antes no pueden quedar ambas entregadas.

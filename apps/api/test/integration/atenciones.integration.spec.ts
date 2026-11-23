@@ -12,6 +12,7 @@ import { AfiliadosService } from "../../src/modules/afiliados/afiliados.service"
 import { atenciones as atencionesTabla } from "../../src/db/schema/atenciones";
 import { usuarios } from "../../src/db/schema/usuarios";
 import { GestionesService } from "../../src/modules/gestiones/gestiones.service";
+import { PlazosService } from "../../src/modules/atenciones/plazos.service";
 import { AtencionesService } from "../../src/modules/atenciones/atenciones.service";
 import { WebhooksService } from "../../src/modules/webhooks/webhooks.service";
 import { NotifInboxService } from "../../src/modules/notif-inbox/notif-inbox.service";
@@ -37,6 +38,8 @@ import {
 const RUN = !!process.env.DATABASE_URL;
 
 const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
+
+const avisos: { titulo: string; metadata?: Record<string, unknown> }[] = [];
 
 (RUN ? describe : describe.skip)("AtencionesService (integration)", () => {
   let moduleRef: TestingModule;
@@ -66,6 +69,7 @@ const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
         ArancelesService,
         DerivacionesService,
         GestionesService,
+        PlazosService,
         // Stub: el test no verifica entrega real de webhooks; basta con la
         // promesa resolviendo para no romper la pipeline.
         { provide: WebhooksService, useValue: { emitir: async () => undefined } },
@@ -74,7 +78,10 @@ const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
           provide: NotifInboxService,
           useValue: {
             crear: async () => null,
-            crearSiNoExisteUnseen: async () => null,
+            crearSiNoExisteUnseen: async (input: { titulo: string; metadata?: Record<string, unknown> }) => {
+              avisos.push(input);
+              return null;
+            },
             crearBulk: async () => [],
           },
         },
@@ -258,6 +265,31 @@ const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
     } finally {
       await db.execute(sql`DELETE FROM usuarios WHERE id = ${inactivo.id}`);
     }
+  });
+
+  it("plazos: contacto con el cliente se cumple al completar una llamada y avisa los vencidos", async () => {
+    const plazosSrv = moduleRef.get(PlazosService);
+    const gestionesSrv = moduleRef.get(GestionesService);
+    const db = drizzle(pool);
+    const a = await atenciones.crear({ ...base(), tipo: "Asesoria", ...cm, asunto: "Plazos", abogadoAsignadoId: abogado.id });
+    const [contacto] = await plazosSrv.deAtencion(a.id);
+    expect(contacto).toMatchObject({ tipo: "ContactoCliente", estado: "Pendiente", cumplidoEn: null });
+
+    // Abierta hace 10 días y sin contacto: vencido y avisado al abogado (una vez).
+    await db.update(atencionesTabla).set({ createdAt: new Date(Date.now() - 10 * 86_400_000) }).where(eq(atencionesTabla.id, a.id));
+    expect((await plazosSrv.deAtencion(a.id))[0].estado).toBe("Vencido");
+    avisos.length = 0;
+    await plazosSrv.avisarVencidos();
+    expect(avisos.filter((x) => x.metadata?.plazoVencido === `${a.id}:ContactoCliente:`)).toHaveLength(1);
+
+    // Una llamada realizada cuenta como primer contacto (fuera de plazo).
+    const g = await gestionesSrv.crear({ atencionId: a.id, tipo: "LlamadaTelefonica", titulo: "Llamada", responsableId: abogado.id, documentosIds: [] });
+    await gestionesSrv.completar(g.id, { resultado: "Contactado" });
+    expect((await plazosSrv.deAtencion(a.id))[0].estado).toBe("CumplidoFueraDePlazo");
+    // Registrar un contacto anterior lo adelanta (nunca lo atrasa).
+    const antes = new Date(Date.now() - 9.5 * 86_400_000).toISOString();
+    expect((await plazosSrv.registrarContacto(a.id, antes))[0].cumplidoEn).toBe(antes);
+    expect((await plazosSrv.registrarContacto(a.id))[0].cumplidoEn).toBe(antes);
   });
 
   it("el abogado asignado al crear o reasignar debe existir y estar activo", async () => {

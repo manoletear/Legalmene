@@ -66,32 +66,16 @@ test.describe("Aranceles y provisiones", () => {
     expect((await paso("autorizar", abogado)).status()).toBe(403);
     expect((await paso("autorizar", supervisor, { observacion: "OK" })).ok()).toBeTruthy();
     expect((await paso("disponible", finanzas)).ok()).toBeTruthy();
-    expect((await paso("entregar", finanzas)).ok()).toBeTruthy();
-
-    const gasto = await request.post(`${API}/provisiones/${provision.id}/movimientos`, {
-      headers: abogado,
-      data: { tipo: "Gasto", monto: 50_000, glosa: "Honorario perito" },
-    });
-    expect(gasto.ok()).toBeTruthy();
-    const rendirAntes = await paso("rendir", abogado);
-    expect(rendirAntes.status()).toBe(400);
-    expect((await rendirAntes.json()).message).toMatch(/saldo por rendir/);
-    await request.post(`${API}/provisiones/${provision.id}/movimientos`, {
-      headers: abogado,
-      data: { tipo: "Reintegro", monto: 150_000, glosa: "Saldo devuelto" },
-    });
-    expect((await paso("rendir", abogado)).ok()).toBeTruthy();
+    // Anexo §X l.1673: la entrega es desde las 15:00 del día hábil siguiente a la autorización.
+    // Gastos, reintegro y rendición se prueban en la integración (provisiones.integration.spec.ts),
+    // donde la autorización se fecha en el pasado.
+    const entrega = await paso("entregar", finanzas);
+    expect(entrega.status()).toBe(400);
+    expect((await entrega.json()).message).toMatch(/15:00 del día hábil siguiente/);
 
     const resumen = await request
       .get(`${API}/atenciones/${caso.id}/provisiones`, { headers: abogado })
       .then((r) => r.json());
-    expect(resumen.resumen).toEqual({
-      provisionado: 200_000,
-      entregado: 200_000,
-      utilizado: 50_000,
-      reintegrado: 150_000,
-      saldoPorRendir: 0,
-      pendientePago: 0,
-    });
+    expect(resumen.resumen).toMatchObject({ provisionado: 200_000, entregado: 0, pendientePago: 0 });
   });
 });

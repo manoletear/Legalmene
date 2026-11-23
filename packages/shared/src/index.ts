@@ -19,3 +19,4 @@ export * from "./types/posesion";
 export * from "./types/auth";
 export * from "./types/webhook";
 export * from "./types/documento";
+export * from "./types/plazos";

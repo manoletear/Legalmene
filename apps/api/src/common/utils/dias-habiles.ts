@@ -50,7 +50,25 @@ export function diasHabilesEntre(desde: string, hasta: string): number {
   return n;
 }
 
-// Vencimiento al final de la jornada en Chile (23:59, hora estándar UTC-3/UTC-4 aproximada a -03).
+// Instante de una hora local de Chile continental (America/Santiago, con su horario de verano o
+// invierno) en una fecha ISO. Ej.: instanteChile("2026-07-01", "15:00") → 19:00 UTC.
+export function instanteChile(iso: string, hhmm: string): Date {
+  const supuesto = new Date(`${iso}T${hhmm}:00Z`);
+  const partes = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Santiago",
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(supuesto);
+  const n = (t: string) => Number(partes.find((p) => p.type === t)?.value);
+  const local = Date.UTC(n("year"), n("month") - 1, n("day"), n("hour"), n("minute"));
+  return new Date(supuesto.getTime() - (local - supuesto.getTime()));
+}
+
+// Vencimiento al final de la jornada en Chile (23:59 hora local).
 export function finDeDiaChile(iso: string): Date {
-  return new Date(`${iso}T23:59:00-03:00`);
+  return instanteChile(iso, "23:59");
 }

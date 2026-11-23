@@ -69,7 +69,7 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 ## Fase 3 — Controles y plazos del negocio (~1 semana)
 
 - [x] Feriados chilenos en `dias-habiles.ts` (todos los plazos dependen de esto).
-- [ ] Plazos con alerta: contacto en 24 h hábiles, primera presentación del juicio en 5 días hábiles, gasto rendido en 8 días hábiles, entrega de fondos después de las 15:00 del día hábil siguiente. (§VII l.765, §VIII l.1106, §X l.1673, l.1722)
+- [x] Plazos con alerta: contacto en 24 h hábiles, primera presentación del juicio en 5 días hábiles, gasto rendido en 8 días hábiles, entrega de fondos después de las 15:00 del día hábil siguiente. (§VII l.765, §VIII l.1106, §X l.1673, l.1722)
 - [ ] V°B° de jefatura antes de Terminada (asesorías y juicios). (§VII l.904, §VIII l.1192)
 - [ ] Comité obligatorio al terminar con riesgo ≥ 20 y "Revisado por comité" ligado al estado EnComite. (§VIII l.1196, l.1217)
 - [ ] Autorización de Gerencia de Servicios cuando no hay cobertura. (§VII l.750)
@@ -127,4 +127,5 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 | 2026-11-23 | 1 | Abogados y jefaturas: lectura de aranceles y pagos WebPay acotada a sus atenciones (migración 0019) | f22ca0a |
 | 2026-11-23 | 1 | Selector de abogado al crear la atención; la API valida que el asignado exista y esté activo | e4fa43d |
 | 2026-11-23 | 1 | Gestiones: diálogo con tipo, responsable, inicio y compromiso; Completar con fecha real (409 si ya está cerrada). **Fase 1 completa** | e31fa84, d441057 |
-| 2026-11-23 | 3 | Feriados: tabla `feriados` (migración 0020) con los legales calculados por año y los agregados por el administrador; los plazos en días hábiles los saltan | ver commit |
+| 2026-11-23 | 3 | Feriados: tabla `feriados` (migración 0020) con los legales calculados por año y los agregados por el administrador; los plazos en días hábiles los saltan | e171d41 |
+| 2026-11-23 | 3 | Plazos: contacto 24 h hábiles (primer contacto, migración 0021), primera presentación 5 días, rendición 8 días; aviso diario de vencidos; entrega de fondos desde las 15:00 del día hábil siguiente | ver commit |

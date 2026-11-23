@@ -29,6 +29,7 @@ import type {
   UpdateContraparte,
   CriteriosBusqueda,
   TipoAtencion,
+  PlazoAtencion,
 } from "@legalmene/shared";
 
 export interface BuscarAtencionesOpts extends Partial<CriteriosBusqueda> {
@@ -145,6 +146,14 @@ export class AtencionesApiService {
   }
 
   // --- Arancel (copago) de la atención ---
+  plazos(id: string): Observable<PlazoAtencion[]> {
+    return this.http.get<PlazoAtencion[]>(`${this.base}/${id}/plazos`);
+  }
+
+  registrarContacto(id: string, fecha?: string): Observable<PlazoAtencion[]> {
+    return this.http.post<PlazoAtencion[]>(`${this.base}/${id}/primer-contacto`, fecha ? { fecha } : {});
+  }
+
   arancel(id: string): Observable<ArancelAtencion | null> {
     return this.http.get<ArancelAtencion | null>(`${this.base}/${id}/arancel`);
   }

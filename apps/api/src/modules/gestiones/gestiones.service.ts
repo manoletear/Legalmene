@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { and, count, desc, eq, inArray, isNotNull, lt } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { filtroAtenciones } from "../../common/acceso/alcance";
 import { gestiones, NuevaGestion, Gestion } from "../../db/schema/gestiones";
@@ -164,6 +164,19 @@ export class GestionesService {
       .where(and(eq(gestiones.id, gestionId), inArray(gestiones.estado, ESTADOS_GESTION_ABIERTA)))
       .returning();
     if (!updated) throw new ConflictException(`La gestión ya está ${row.estado === "Completada" ? "completada" : "cancelada"}`);
+    // Una llamada, correo o reunión realizada cuenta como contacto con el cliente (plazo de 24 h
+    // hábiles); se conserva el contacto más temprano.
+    if (["LlamadaTelefonica", "Email", "Reunion"].includes(row.tipo)) {
+      await this.db
+        .update(atenciones)
+        .set({ fechaPrimerContacto: fechaEjecucion })
+        .where(
+          and(
+            eq(atenciones.id, row.atencionId),
+            sql`(${atenciones.fechaPrimerContacto} is null or ${atenciones.fechaPrimerContacto} > ${fechaEjecucion})`,
+          ),
+        );
+    }
     await this.db
       .update(atenciones)
       .set({ fechaUltimaGestion: new Date(), updatedAt: new Date() })
