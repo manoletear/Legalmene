@@ -11,6 +11,10 @@ export const EstadoProvisionEnum = z.enum([
   "Disponible",
   "Entregada",
   "Rendida",
+  // Saldo no gastado devuelto por el abogado y registrado por el contador (Anexo §X 14).
+  "Reingresado",
+  // Fondos rendidos al cliente con el cheque de devolución (Anexo §X 20).
+  "RendidaCliente",
   "Cerrada",
 ]);
 export type EstadoProvision = z.infer<typeof EstadoProvisionEnum>;
@@ -24,18 +28,22 @@ export const ESTADO_PROVISION_LABEL: Record<EstadoProvision, string> = {
   Disponible: "Disponible para retiro",
   Entregada: "Entregada al abogado",
   Rendida: "Rendida",
+  Reingresado: "Saldo reingresado",
+  RendidaCliente: "Rendida al cliente",
   Cerrada: "Cerrada",
 };
 
 // Transiciones manuales permitidas (Cerrada la asigna el cierre de la atención).
 export const TRANSICIONES_PROVISION: Record<EstadoProvision, readonly EstadoProvision[]> = {
   Solicitada: ["Pagada"],
-  Pagada: ["EnAprobacion"],
+  Pagada: ["EnAprobacion", "RendidaCliente"],
   EnAprobacion: ["Autorizada", "Pagada"],
   Autorizada: ["Disponible"],
   Disponible: ["Entregada", "Pagada"],
   Entregada: ["Rendida"],
-  Rendida: [],
+  Rendida: ["Reingresado", "RendidaCliente"],
+  Reingresado: ["RendidaCliente"],
+  RendidaCliente: [],
   Rechazada: [],
   Cerrada: [],
 };
@@ -102,11 +110,41 @@ export type Rechazo = z.infer<typeof RechazoSchema>;
 export const EntregaSchema = z.object({ montoEntregado: z.number().int().positive().optional() });
 export type Entrega = z.infer<typeof EntregaSchema>;
 
-export const DevolucionSchema = z.object({
+// Cheque de devolución al cliente por el saldo de la cuenta de la atención (Anexo §X 18).
+export const ChequeDevolucionSchema = z.object({
   numeroCheque: z.string().trim().min(1).max(40),
   observacion: z.string().max(2000).optional(),
 });
-export type Devolucion = z.infer<typeof DevolucionSchema>;
+export type ChequeDevolucion = z.infer<typeof ChequeDevolucionSchema>;
+
+// Reingreso del saldo no gastado (lo registra el contador al recibirlo; Anexo §X 14).
+export const ReingresoSchema = z.object({
+  monto: z.number().int().positive(),
+  glosa: z.string().trim().min(3).max(300).optional(),
+});
+export type Reingreso = z.infer<typeof ReingresoSchema>;
+
+// Rendición de fondos al cliente (Anexo §X 16–20), una a la vez por atención.
+export const EstadoRendicionClienteEnum = z.enum(["Solicitada", "ChequeEmitido", "Entregada"]);
+export type EstadoRendicionCliente = z.infer<typeof EstadoRendicionClienteEnum>;
+export const ESTADO_RENDICION_CLIENTE_LABEL: Record<EstadoRendicionCliente, string> = {
+  Solicitada: "Rendición solicitada",
+  ChequeEmitido: "Cheque de devolución disponible",
+  Entregada: "Rendido a cliente",
+};
+export interface RendicionCliente {
+  id: string;
+  atencionId: string;
+  estado: EstadoRendicionCliente;
+  monto: number | null;
+  numeroCheque: string | null;
+  solicitadaPorId: string;
+  solicitadaEn: string;
+  chequePorId: string | null;
+  chequeEn: string | null;
+  entregadaPorId: string | null;
+  entregadaEn: string | null;
+}
 
 export const MovimientoProvisionSchema = z.object({
   id: z.string().uuid(),
@@ -151,4 +189,12 @@ export interface ResumenProvisionAtencion {
   saldoPorRendir: number;
   // Solicitado al cliente y aún no pagado.
   pendientePago: number;
+  // Saldo de la cuenta de la atención: pagado por el cliente − gastos − devuelto al cliente.
+  saldoCuenta: number;
+  // Saldo de provisiones rendidas que el abogado aún no reingresa.
+  pendienteReingreso: number;
+  // Devuelto al cliente con cheque.
+  rendidoCliente: number;
+  // Rendición al cliente en curso o la última realizada.
+  rendicion: RendicionCliente | null;
 }

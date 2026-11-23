@@ -23,7 +23,10 @@ describe("transiciones de provisión (Anexo §X)", () => {
   it("no se saltan etapas ni se sale de estados finales", () => {
     expect(puedeTransicionarProvision("Solicitada", "Entregada")).toBe(false);
     expect(puedeTransicionarProvision("Pagada", "Autorizada")).toBe(false);
-    for (const e of ["Rendida", "Cerrada", "Rechazada"] as const) expect(TRANSICIONES_PROVISION[e]).toEqual([]);
+    for (const e of ["RendidaCliente", "Cerrada", "Rechazada"] as const) expect(TRANSICIONES_PROVISION[e]).toEqual([]);
+    // Rendida sigue al reingreso del saldo o a la rendición al cliente (Anexo §X 14–20).
+    expect(TRANSICIONES_PROVISION.Rendida).toEqual(["Reingresado", "RendidaCliente"]);
+    expect(puedeTransicionarProvision("Entregada", "RendidaCliente")).toBe(false);
   });
 
   it("todo destino es un estado válido y los abiertos excluyen los finales", () => {

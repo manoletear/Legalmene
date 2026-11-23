@@ -132,23 +132,51 @@ const RUN = !!process.env.DATABASE_URL;
     expect(entregada.montoEntregado).toBe(450_000);
 
     await service.registrarMovimiento(p.id, abogado, { tipo: "Gasto", monto: 300_000, glosa: "Honorario perito" });
-    await expect(service.rendir(p.id, abogado)).rejects.toThrow(/saldo por rendir \(\$150\.000\)/);
-    await service.registrarMovimiento(p.id, abogado, { tipo: "Reintegro", monto: 150_000, glosa: "Saldo devuelto" });
-    expect(await service.resumenAtencion(atencionId)).toEqual({
+    // El abogado ya no registra reintegros: el saldo lo registra el contador al recibirlo.
+    await expect(service.registrarMovimiento(p.id, abogado, { tipo: "Reintegro", monto: 150_000, glosa: "Saldo" })).rejects.toThrow(
+      /lo registra el contador/,
+    );
+    // Rinde con saldo: queda pendiente de reingreso y no puede pedir más fondos ni rendir al cliente.
+    expect((await service.rendir(p.id, abogado)).estado).toBe("Rendida");
+    await expect(service.solicitar(atencionId, abogado, { monto: 1_000, motivo: "Otra" })).rejects.toThrow(/sin reingresar/);
+    expect((await service.resumenAtencion(atencionId)).pendienteReingreso).toBe(150_000);
+
+    // Anexo §X 14: el contador registra el reingreso del saldo exacto.
+    await expect(service.registrarReingreso(p.id, jefe, 100_000)).rejects.toThrow(/saldo no gastado \(\$150\.000\)/);
+    expect((await service.registrarReingreso(p.id, jefe, 150_000)).estado).toBe("Reingresado");
+    expect(await service.resumenAtencion(atencionId)).toMatchObject({
       provisionado: 450_000,
       entregado: 450_000,
       utilizado: 300_000,
       reintegrado: 150_000,
       saldoPorRendir: 0,
       pendientePago: 0,
+      saldoCuenta: 150_000,
+      pendienteReingreso: 0,
+      rendidoCliente: 0,
+      rendicion: null,
     });
-    expect((await service.rendir(p.id, abogado)).estado).toBe("Rendida");
-    const dev = await service.registrarDevolucion(p.id, jefe, "CH-001");
-    expect(dev.numeroCheque).toBe("CH-001");
+
+    // Anexo §X 16–20: rendición al cliente por el saldo de la cuenta.
+    const comprobantesSrv = moduleRef.get(ComprobantesPdfService);
+    await expect(service.registrarChequeDevolucion(atencionId, jefe, "CH-001")).rejects.toThrow(/No hay una rendición/);
+    expect((await service.solicitarRendicionCliente(atencionId, abogado)).estado).toBe("Solicitada");
+    await expect(service.solicitarRendicionCliente(atencionId, abogado)).rejects.toThrow(/en curso/);
+    await expect(comprobantesSrv.rendicionCliente(atencionId)).rejects.toBeInstanceOf(ConflictException);
+    const cheque = await service.registrarChequeDevolucion(atencionId, jefe, "CH-001");
+    expect(cheque).toMatchObject({ estado: "ChequeEmitido", monto: 150_000, numeroCheque: "CH-001" });
+    expect((await service.resumenAtencion(atencionId)).saldoCuenta).toBe(0);
+    const rendicion = await comprobantesSrv.rendicionCliente(atencionId);
+    expect(rendicion.copias).toHaveLength(3);
+    expect(rendicion.secciones.find((x) => x.titulo === "Resumen")!.filas).toEqual(
+      expect.arrayContaining([["Total provisionado", "$ 450.000"], ["Total gastado", "$ 300.000"], ["Devuelto al cliente", "$ 150.000"], ["Cheque N°", "CH-001"]]),
+    );
+    expect((await service.marcarRendidoCliente(atencionId, abogado)).estado).toBe("Entregada");
+    await expect(service.marcarRendidoCliente(atencionId, abogado)).rejects.toBeInstanceOf(ConflictException);
 
     const eventos = await service.eventos(p.id);
     expect(eventos.map((e) => e.estadoHasta)).toEqual([
-      "Solicitada", "Pagada", "EnAprobacion", "Autorizada", "Disponible", "Entregada", "Rendida", "Rendida",
+      "Solicitada", "Pagada", "EnAprobacion", "Autorizada", "Disponible", "Entregada", "Rendida", "Reingresado", "RendidaCliente",
     ]);
   });
 

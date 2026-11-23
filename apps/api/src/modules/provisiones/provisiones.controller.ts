@@ -17,7 +17,8 @@ import { Permiso } from "../../common/decorators/permiso.decorator";
 import { PermisosGuard } from "../../common/guards/permisos.guard";
 import { ProvisionesService } from "./provisiones.service";
 import {
-  DevolucionDto,
+  ChequeDevolucionDto,
+  ReingresoDto,
   EntregaDto,
   FiltroProvisionesDto,
   ObservacionDto,
@@ -102,10 +103,30 @@ export class ProvisionesController {
     return this.service.rendir(id, usuarioId(user));
   }
 
-  @Post("provisiones/:id/devolucion")
+  // Anexo §X 14: el contador registra el saldo no gastado que devuelve el abogado.
+  @Post("provisiones/:id/reingreso")
+  @Permiso("provisiones.registrar_pago")
+  reingreso(@CurrentUser() user: AuthenticatedUser, @Param("id", ParseUUIDPipe) id: string, @Body() body: ReingresoDto) {
+    return this.service.registrarReingreso(id, usuarioId(user), body.monto, body.glosa);
+  }
+
+  // Anexo §X 16–20: rendición de fondos al cliente.
+  @Post("atenciones/:atencionId/rendicion-cliente")
+  @Permiso("provisiones.rendir")
+  solicitarRendicion(@CurrentUser() user: AuthenticatedUser, @Param("atencionId", ParseUUIDPipe) atencionId: string) {
+    return this.service.solicitarRendicionCliente(atencionId, usuarioId(user));
+  }
+
+  @Post("atenciones/:atencionId/rendicion-cliente/cheque")
   @Permiso("provisiones.disponer_entregar")
-  devolucion(@CurrentUser() user: AuthenticatedUser, @Param("id", ParseUUIDPipe) id: string, @Body() body: DevolucionDto) {
-    return this.service.registrarDevolucion(id, usuarioId(user), body.numeroCheque, body.observacion);
+  chequeDevolucion(@CurrentUser() user: AuthenticatedUser, @Param("atencionId", ParseUUIDPipe) atencionId: string, @Body() body: ChequeDevolucionDto) {
+    return this.service.registrarChequeDevolucion(atencionId, usuarioId(user), body.numeroCheque, body.observacion);
+  }
+
+  @Post("atenciones/:atencionId/rendicion-cliente/entregada")
+  @Permiso("provisiones.rendir")
+  rendidoCliente(@CurrentUser() user: AuthenticatedUser, @Param("atencionId", ParseUUIDPipe) atencionId: string) {
+    return this.service.marcarRendidoCliente(atencionId, usuarioId(user));
   }
 
   @Get("provisiones/:id/eventos")

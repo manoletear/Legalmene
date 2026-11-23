@@ -1,5 +1,5 @@
 import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { and, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import PDFDocument = require("pdfkit");
 import { Writable } from "stream";
@@ -12,7 +12,7 @@ import { planes } from "../../db/schema/planes";
 import { competencias, materias } from "../../db/schema/maestros";
 import { usuarios } from "../../db/schema/usuarios";
 import { arancelesAtencion } from "../../db/schema/finanzas";
-import { provisiones } from "../../db/schema/provisiones";
+import { provisionMovimientos, provisiones, rendicionesCliente } from "../../db/schema/provisiones";
 
 export const MEDIO_PAGO_LABEL: Record<string, string> = {
   CasaCentral: "Pago en casa central",
@@ -184,6 +184,66 @@ export class ComprobantesPdfService {
         ],
         nota: "Los fondos se destinan a los gastos del caso y se rinden al cliente al término de la atención.",
         firmas: ["Firma y timbre LegalChile", "Firma del cliente"],
+    };
+  }
+
+  // Anexo §X 19: comprobante de rendición de fondos al cliente en tres copias (dos para el
+  // abogado, una de ellas firmada por el cliente, y una para Finanzas).
+  async rendicionCliente(atencionId: string): Promise<Comprobante> {
+    const a = await this.atencion(atencionId);
+    const [r] = await this.db
+      .select()
+      .from(rendicionesCliente)
+      .where(and(eq(rendicionesCliente.atencionId, atencionId), inArray(rendicionesCliente.estado, ["ChequeEmitido", "Entregada"])))
+      .orderBy(desc(rendicionesCliente.chequeEn))
+      .limit(1);
+    if (!r) throw new ConflictException("La atención no tiene un cheque de devolución emitido");
+    const provs = await this.db
+      .select()
+      .from(provisiones)
+      .where(eq(provisiones.atencionId, atencionId))
+      .orderBy(asc(provisiones.fechaSolicitud));
+    // Solo lo que el cliente efectivamente pagó (una solicitud impaga o rechazada no suma).
+    const pagadas = provs.filter((p) => p.fechaPagoCliente && !["Solicitada", "Rechazada"].includes(p.estado));
+    const movs = pagadas.length
+      ? await this.db
+          .select()
+          .from(provisionMovimientos)
+          .where(inArray(provisionMovimientos.provisionId, pagadas.map((p) => p.id)))
+          .orderBy(asc(provisionMovimientos.fecha))
+      : [];
+    const gastos = movs.filter((m) => m.tipo === "Gasto");
+    const totalPagado = pagadas.reduce((s, p) => s + p.monto, 0);
+    const totalGastos = gastos.reduce((s, m) => s + m.monto, 0);
+    return {
+      titulo: "Rendición de fondos al cliente",
+      numero: `${a.correlativo}-REN`,
+      copias: ["Abogado", "Cliente (firma de recepción)", "Finanzas"],
+      secciones: [
+        this.seccionAtencion(a),
+        {
+          titulo: "Fondos provisionados por el cliente",
+          filas: pagadas.map((p) => [`${fecha(p.fechaPagoCliente)} · ${p.motivo}`, clp(p.monto)] as [string, string]),
+        },
+        {
+          titulo: "Gastos del caso",
+          filas: gastos.length
+            ? gastos.map((m) => [`${fecha(m.fecha)} · ${m.glosa}`, clp(m.monto)] as [string, string])
+            : [["Sin gastos registrados", "—"]],
+        },
+        {
+          titulo: "Resumen",
+          filas: [
+            ["Total provisionado", clp(totalPagado)],
+            ["Total gastado", clp(totalGastos)],
+            ["Devuelto al cliente", clp(r.monto)],
+            ["Cheque N°", r.numeroCheque ?? "—"],
+            ["Emitido por", `${await this.nombreUsuario(r.chequePorId)} el ${fecha(r.chequeEn)}`],
+          ],
+        },
+      ],
+      nota: "Con este documento LegalChile rinde al cliente los fondos provisionados para su atención.",
+      firmas: ["Finanzas LegalChile", "Abogado responsable", "Cliente (recibí conforme)"],
     };
   }
 }

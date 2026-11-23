@@ -46,6 +46,14 @@ export class ExportsController {
     this.enviarComprobante(c, `comprobante-arancel-${c.numero}.pdf`, res);
   }
 
+  // Anexo §X 19: rendición de fondos al cliente, en tres copias.
+  @Get("comprobantes/rendicion/:atencionId.pdf")
+  @Permiso("finanzas.ver")
+  async rendicionCliente(@Param("atencionId", ParseUUIDPipe) atencionId: string, @Res() res: Response) {
+    const c = await this.comprobantes.rendicionCliente(atencionId);
+    this.enviarComprobante(c, `rendicion-${c.numero}.pdf`, res);
+  }
+
   // Anexo §X 05.1: recibo del dinero de una provisión, en dos copias.
   @Get("comprobantes/provision/:provisionId.pdf")
   @Permiso("finanzas.ver")

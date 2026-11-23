@@ -140,7 +140,12 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   `ProvisionesService` (mapas `TRANSICIONES_ARANCEL` / `TRANSICIONES_PROVISION` en shared); cada
   cambio escribe su fila de eventos. Aprobar exige `aranceles_atencion.aprobar` / `provisiones.autorizar`
   (jefaturas); registrar pagos `*.registrar_pago` (Contador); disponer y entregar fondos
-  `provisiones.disponer_entregar` (Finanzas). El CLP de un arancel usa la UF de la fecha de pago.
+  `provisiones.disponer_entregar` (Finanzas). El CLP de un arancel usa la UF de la fecha de pago. Cuenta de la atención = pagado por el cliente − gastos −
+  devuelto al cliente. El abogado solo registra gastos y rinde; el saldo no gastado lo registra el contador como
+  reingreso (`provisiones.registrar_pago`, estado Reingresado). Rendición al cliente (`rendiciones_cliente`): el
+  abogado la solicita, Finanzas registra el cheque por el saldo total (sin fondos por rendir/reingresar ni entregas
+  en curso) y el abogado marca "rendido a cliente" (provisiones → RendidaCliente). Comprobantes PDF con
+  `dibujarComprobante()` (`modules/exports/comprobantes-pdf.service.ts`).
 - **Login con enlace de acceso**: `POST /auth/enlace` siempre responde 202 (no revela si el correo
   existe); solo usuarios activos, no bloqueados y del dominio permitido reciben enlace (máx. 3 cada
   15 min). El token es de un solo uso, vence en 15 min y se guarda solo su hash (`enlaces_acceso`).

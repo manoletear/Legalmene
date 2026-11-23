@@ -176,6 +176,13 @@
       "when": 1795472740812,
       "tag": "0024_intentos_fallidos",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795473618691,
+      "tag": "0025_rendicion_cliente",
+      "breakpoints": true
     }
   ]
 }

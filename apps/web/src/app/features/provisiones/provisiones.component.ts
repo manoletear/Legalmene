@@ -228,24 +228,23 @@ export class ProvisionesComponent implements OnInit {
       case "entregar":
         req = this.api.entregar(p.id);
         break;
-      case "gasto":
-      case "reintegro": {
-        const monto = await this.monto(ac.id === "gasto" ? `Gasto contra ${p.correlativo}` : `Reintegro de saldo de ${p.correlativo}`);
+      case "gasto": {
+        const monto = await this.monto(`Gasto contra ${p.correlativo}`);
         if (monto === null) return;
-        const glosa = await this.prompt.open({ header: ac.id === "gasto" ? "Detalle del gasto" : "Detalle del reintegro", label: "Glosa", required: true });
+        const glosa = await this.prompt.open({ header: "Detalle del gasto", label: "Glosa", required: true });
         if (!glosa) return;
-        req = this.api.registrarMovimiento(p.id, { tipo: ac.id === "gasto" ? "Gasto" : "Reintegro", monto, glosa });
+        req = this.api.registrarMovimiento(p.id, { tipo: "Gasto", monto, glosa });
+        break;
+      }
+      case "reingreso": {
+        const monto = await this.monto(`Saldo devuelto por el abogado (${p.correlativo})`);
+        if (monto === null) return;
+        req = this.api.reingreso(p.id, monto);
         break;
       }
       case "rendir":
         req = this.api.rendir(p.id);
         break;
-      case "devolucion": {
-        const cheque = await this.prompt.open({ header: "Devolución al cliente", label: "Número de cheque", required: true });
-        if (!cheque) return;
-        req = this.api.devolucion(p.id, cheque.trim());
-        break;
-      }
     }
     req?.subscribe({
       next: () => {

@@ -2,7 +2,7 @@ import type { EstadoProvision, Permiso } from "@legalmene/shared";
 
 // Acción del ciclo de provisión disponible según estado y perfil (Anexo §X).
 export interface AccionProvision {
-  id: "pago" | "solicitarEntrega" | "autorizar" | "rechazarEntrega" | "disponible" | "entregar" | "gasto" | "reintegro" | "rendir" | "devolucion";
+  id: "pago" | "solicitarEntrega" | "autorizar" | "rechazarEntrega" | "disponible" | "entregar" | "gasto" | "rendir" | "reingreso";
   label: string;
   severidad?: "success" | "danger" | "secondary";
 }
@@ -16,16 +16,16 @@ const ACCIONES: { estado: EstadoProvision; permiso: Permiso; accion: AccionProvi
   { estado: "Autorizada", permiso: "provisiones.disponer_entregar", accion: { id: "disponible", label: "Marcar disponible" } },
   { estado: "Disponible", permiso: "provisiones.disponer_entregar", accion: { id: "entregar", label: "Registrar entrega" } },
   { estado: "Entregada", permiso: "provisiones.registrar_movimientos", accion: { id: "gasto", label: "Registrar gasto" } },
-  { estado: "Entregada", permiso: "provisiones.registrar_movimientos", accion: { id: "reintegro", label: "Reintegrar saldo", severidad: "secondary" } },
   { estado: "Entregada", permiso: "provisiones.rendir", accion: { id: "rendir", label: "Rendir", severidad: "success" } },
-  { estado: "Rendida", permiso: "provisiones.disponer_entregar", accion: { id: "devolucion", label: "Registrar devolución", severidad: "secondary" } },
+  // El saldo no gastado lo registra el contador al recibirlo (la API exige el saldo exacto).
+  { estado: "Rendida", permiso: "provisiones.registrar_pago", accion: { id: "reingreso", label: "Registrar reingreso", severidad: "secondary" } },
 ];
 
 export function accionesProvision(estado: EstadoProvision, permisos: ReadonlySet<string>): AccionProvision[] {
   return ACCIONES.filter((a) => a.estado === estado && permisos.has(a.permiso)).map((a) => a.accion);
 }
 export function severidadProvision(e: EstadoProvision): "success" | "info" | "warn" | "danger" | "secondary" {
-  if (e === "Rendida" || e === "Cerrada") return "success";
+  if (e === "Rendida" || e === "Reingresado" || e === "RendidaCliente" || e === "Cerrada") return "success";
   if (e === "Rechazada") return "danger";
   if (e === "Entregada" || e === "Disponible") return "info";
   if (e === "Solicitada" || e === "EnAprobacion") return "warn";

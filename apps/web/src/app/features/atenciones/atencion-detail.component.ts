@@ -18,6 +18,7 @@ import { TabsModule } from "primeng/tabs";
 import { MessageService } from "primeng/api";
 import { PromptService } from "../../shared/prompt.service";
 import { descargarArchivo } from "../../shared/descarga";
+import type { Observable } from "rxjs";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { GestionesApiService } from "../../core/services/gestiones.service";
 import { ComitesApiService } from "../../core/services/comites.service";
@@ -43,6 +44,8 @@ import {
   ESTADO_ARANCEL_LABEL,
   TIPO_GESTION_LABEL,
   TIPO_PLAZO_LABEL,
+  ESTADO_RENDICION_CLIENTE_LABEL,
+  type EstadoRendicionCliente,
   type PlazoAtencion,
   TipoGestionEnum,
   type TipoGestion,
@@ -244,6 +247,31 @@ interface PipelineStep {
                 <div *ngIf="r.reintegrado > 0" class="lm-info-row"><span>Devuelto</span><strong>$ {{ r.reintegrado | number }}</strong></div>
                 <div class="lm-info-row"><span>Saldo por rendir</span><strong [style.color]="r.saldoPorRendir > 0 ? '#b45309' : '#16a34a'">$ {{ r.saldoPorRendir | number }}</strong></div>
                 <div *ngIf="r.pendientePago > 0" class="lm-info-row"><span>Pendiente de pago</span><strong style="color:#b45309;">$ {{ r.pendientePago | number }}</strong></div>
+                <div *ngIf="r.pendienteReingreso > 0" class="lm-info-row"><span>Saldo por reingresar</span><strong style="color:#b45309;">$ {{ r.pendienteReingreso | number }}</strong></div>
+                <div class="lm-info-row" data-testid="saldo-cuenta"><span>Saldo de la cuenta</span><strong>$ {{ r.saldoCuenta | number }}</strong></div>
+                <div *ngIf="r.rendidoCliente > 0" class="lm-info-row"><span>Devuelto al cliente</span><strong>$ {{ r.rendidoCliente | number }}</strong></div>
+                <!-- Rendición al cliente (Anexo §X 16–20) -->
+                <div class="lm-small" data-testid="rendicion-cliente" style="margin-top:6px;">
+                  <ng-container *ngIf="r.rendicion as rc; else sinRendicion">
+                    <strong>{{ estadoRendicion(rc.estado) }}</strong>
+                    <span *ngIf="rc.numeroCheque" class="lm-muted"> · cheque {{ rc.numeroCheque }} por $ {{ rc.monto | number }}</span>
+                    <div class="lm-row" style="gap:4px; flex-wrap:wrap; margin-top:4px;">
+                      <ng-container *ngIf="rc.estado === 'Solicitada'">
+                        <button *lmPermiso="'provisiones.disponer_entregar'" pButton size="small" [outlined]="true" label="Cheque devolución" (click)="chequeDevolucion(a.id)"></button>
+                      </ng-container>
+                      <ng-container *ngIf="rc.estado !== 'Solicitada'">
+                        <button *lmPermiso="'finanzas.ver'" pButton size="small" [text]="true" icon="pi pi-print" label="Comprobante de rendición" (click)="comprobanteRendicion(a.id, a.correlativo)"></button>
+                      </ng-container>
+                      <ng-container *ngIf="rc.estado === 'ChequeEmitido'">
+                        <button *lmPermiso="'provisiones.rendir'" pButton size="small" [outlined]="true" label="Rendido a cliente" (click)="rendidoCliente(a.id)"></button>
+                      </ng-container>
+                    </div>
+                  </ng-container>
+                  <ng-template #sinRendicion></ng-template>
+                  <ng-container *ngIf="r.saldoCuenta > 0 && (!r.rendicion || r.rendicion.estado === 'Entregada')">
+                    <button *lmPermiso="'provisiones.rendir'" pButton size="small" [outlined]="true" label="Rendir cliente" (click)="solicitarRendicion(a.id)"></button>
+                  </ng-container>
+                </div>
               </ng-container>
               <div class="lm-info-card-footer">
                 <a style="cursor:pointer;" (click)="solicitarProvision(a.id)">Solicitar provisión</a> ·
@@ -763,6 +791,42 @@ export class AtencionDetailComponent implements OnInit {
       a.download = doc.nombre;
       a.click();
     });
+  }
+
+  protected estadoRendicion(e: EstadoRendicionCliente): string {
+    return ESTADO_RENDICION_CLIENTE_LABEL[e];
+  }
+
+  private accionRendicion(req: Observable<unknown>, ok: string, atencionId: string) {
+    req.subscribe({
+      next: () => {
+        this.msg.add({ severity: "success", summary: ok, life: 3000 });
+        this.cargarProvisiones(atencionId);
+      },
+      error: (err) => this.msg.add({ severity: "error", summary: "No se pudo completar", detail: err.error?.message ?? err.message, life: 6000 }),
+    });
+  }
+
+  solicitarRendicion(atencionId: string) {
+    this.accionRendicion(this.provisionesApi.solicitarRendicion(atencionId), "Rendición solicitada; se avisó a Finanzas", atencionId);
+  }
+
+  async chequeDevolucion(atencionId: string) {
+    const cheque = await this.prompt.open({ header: "Cheque de devolución", label: "Número de cheque (por el total del saldo)", required: true });
+    if (!cheque) return;
+    this.accionRendicion(this.provisionesApi.chequeDevolucion(atencionId, cheque.trim()), "Cheque registrado; se avisó al abogado", atencionId);
+  }
+
+  rendidoCliente(atencionId: string) {
+    this.accionRendicion(this.provisionesApi.rendidoCliente(atencionId), "Fondos rendidos al cliente", atencionId);
+  }
+
+  async comprobanteRendicion(atencionId: string, correlativo: string) {
+    try {
+      await descargarArchivo(`/exports/comprobantes/rendicion/${atencionId}.pdf`, `rendicion-${correlativo}.pdf`);
+    } catch (e) {
+      this.msg.add({ severity: "error", summary: "No se pudo generar el comprobante", detail: (e as Error).message, life: 5000 });
+    }
   }
 
   // Anexo §IX 5.4: comprobante del pago del arancel (dos copias en el PDF).

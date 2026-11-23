@@ -71,5 +71,6 @@ export async function borrarAtencionesDePlan(db: NodePgDatabase<any>, codPlan: s
   await db.execute(sql`DELETE FROM aranceles_atencion_eventos WHERE arancel_atencion_id IN (SELECT id FROM aranceles_atencion WHERE atencion_id IN ${ids})`);
   await db.execute(sql`DELETE FROM aranceles_atencion WHERE atencion_id IN ${ids}`);
   await db.execute(sql`DELETE FROM provisiones WHERE atencion_id IN ${ids}`);
+  await db.execute(sql`DELETE FROM rendiciones_cliente WHERE atencion_id IN ${ids}`);
   await db.execute(sql`DELETE FROM atenciones WHERE cod_plan = ${codPlan}`);
 }

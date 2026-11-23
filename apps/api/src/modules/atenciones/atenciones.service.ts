@@ -6,7 +6,7 @@ import {
   ConflictException,
   ForbiddenException,
 } from "@nestjs/common";
-import { and, eq, count, inArray, isNull, sql, desc, getTableColumns } from "drizzle-orm";
+import { and, eq, count, inArray, isNull, or, sql, desc, getTableColumns } from "drizzle-orm";
 import {
   ESTADOS_PROVISION_ABIERTOS,
   ESTADO_INICIAL,
@@ -34,7 +34,7 @@ import { gestiones } from "../../db/schema/gestiones";
 import { comites } from "../../db/schema/comites";
 import { provisiones } from "../../db/schema/provisiones";
 import { ArancelesAtencionService } from "../coberturas/aranceles-atencion.service";
-import { cerrarProvisionesDeAtencion } from "../provisiones/provisiones.service";
+import { cerrarProvisionesDeAtencion, condicionFondosPendientes } from "../provisiones/provisiones.service";
 import { causasTermino, competencias, materias } from "../../db/schema/maestros";
 import { planesDeAfiliados } from "../afiliados/vigencia";
 import { siguienteCorrelativo } from "../../common/utils/correlativo";
@@ -433,7 +433,7 @@ export class AtencionesService {
       this.db
         .select({ n: count() })
         .from(provisiones)
-        .where(and(eq(provisiones.atencionId, id), inArray(provisiones.estado, [...ESTADOS_PROVISION_ABIERTOS]))),
+        .where(and(eq(provisiones.atencionId, id), or(inArray(provisiones.estado, [...ESTADOS_PROVISION_ABIERTOS]), condicionFondosPendientes()))),
       this.db
         .select({ n: count() })
         .from(provisiones)
