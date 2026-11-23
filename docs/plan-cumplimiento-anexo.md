@@ -31,8 +31,8 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 
 ## Fase 0 — Ajustes inmediatos y decisiones (1–2 días)
 
-- [ ] `AtencionesService.cambiarEstado` y el paso a "Derivada": escritura condicional al estado leído (409 si cambió), según la regla de la auditoría run-2.
-- [ ] `CLAUDE.md`: Entra ID no está en el frontend (solo backend); la infraestructura CDK ya existe en `infra/cdk`.
+- [x] `AtencionesService.cambiarEstado` y el paso a "Derivada": escritura condicional al estado leído (409 si cambió), según la regla de la auditoría run-2.
+- [x] `CLAUDE.md`: Entra ID no está en el frontend (solo backend); la infraestructura CDK ya existe en `infra/cdk`.
 - [ ] Decisiones con LegalChile (bloquean fases posteriores):
   - [ ] ¿Un RUT no registrado puede atenderse como Rezagado/MetLife con alta rápida? (§VI l.524)
   - [ ] Formato oficial de carga "SGC-RG-OP-004" (xlsx/csv y sus 5 campos obligatorios). (§III l.192)
@@ -116,3 +116,4 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 | Fecha | Fase | Avance | Commit |
 |---|---|---|---|
 | 2026-11-23 | — | Plan creado a partir de la revisión del Anexo | — |
+| 2026-11-23 | 0 | Estados de atención condicionales (409); derivar consulta cerrada es 409; CLAUDE.md corregido | ver commit siguiente |

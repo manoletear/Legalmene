@@ -184,6 +184,25 @@ const actor = (u: UsuarioPrueba) => ({ id: u.id, permisos: u.permisos as Permiso
     expect(derivadas.rows).toHaveLength(1);
   });
 
+  it("atenciones: dos cambios de estado simultáneos — solo uno gana; derivar una consulta ya cerrada es 409", async () => {
+    const nueva = () =>
+      atencionesSrv.crear(
+        { codPlan: PLAN, afiliadoId, tipo: "Consulta", asunto: "Estados", ...cm, abogadoAsignadoId: jefeA.id } as never,
+        actor(jefeA) as never,
+      );
+    const c = await nueva();
+    const r = await Promise.allSettled([
+      atencionesSrv.cambiarEstado(c.id, { estado: "Respondida" } as never, actor(jefeA) as never),
+      atencionesSrv.cambiarEstado(c.id, { estado: "Terminada" } as never, actor(jefeA) as never),
+    ]);
+    expect(r.filter((x) => x.status === "fulfilled")).toHaveLength(1);
+
+    const c2 = await nueva();
+    const d = await deriv.solicitar(c2.id, jefeA.id, { nuevoTipo: "Juicio", motivo: "Requiere juicio" });
+    await atencionesSrv.cambiarEstado(c2.id, { estado: "Terminada" } as never, actor(jefeA) as never);
+    await expect(deriv.aprobar(d.id, actor(jefeB) as never, {})).rejects.toBeInstanceOf(ConflictException);
+  });
+
   it("comités: un comité cerrado no se vuelve a cerrar ni cambia su decisión", async () => {
     const at = await juicio();
     const c = await comitesSrv.convocar(jefeA.id, { atencionId: at, motivo: "Revisión", participantesIds: [jefeB.id] } as never);

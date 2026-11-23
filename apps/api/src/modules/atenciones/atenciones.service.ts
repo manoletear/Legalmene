@@ -402,7 +402,13 @@ export class AtencionesService {
     if (input.observacion) {
       set.metadata = { ...(actual.metadata ?? {}), ultimaObservacionEstado: input.observacion };
     }
-    const [row] = await this.db.update(atenciones).set(set).where(eq(atenciones.id, id)).returning();
+    // Solo desde el estado leído: si otro usuario lo cambió entretanto, 409 (regla auditoría run-2).
+    const [row] = await this.db
+      .update(atenciones)
+      .set(set)
+      .where(and(eq(atenciones.id, id), eq(atenciones.estado, actual.estado)))
+      .returning();
+    if (!row) throw new ConflictException("La atención cambió de estado mientras se procesaba; actualice y reintente");
     if (row.estado === "Terminada") await cerrarProvisionesDeAtencion(this.db, id, actor?.id ?? null);
     await this.webhooks.emitir(row.codPlan, "atencion.estado", { atencionId: id, desde: actual.estado, hasta: row.estado });
     return row;

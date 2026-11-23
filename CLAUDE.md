@@ -26,7 +26,7 @@ ejemplo y nunca deben quedar fijas en el código.
 | Cargas masivas FLUJO/STOCK | ✅ Implementado |
 | Frontend Angular 19 | ✅ Shell + Dashboard + Afiliados + Atenciones + Aranceles + Provisiones + Derivaciones + Finanzas |
 | Alineación con Anexo PSL | ✅ Pasos 1–5 (5a búsquedas sin precarga, XLSX, reportes, controller; 5b cargas, bienes, posesión efectiva). Pendientes en `docs/requerimientos-anexo-psl.md` §5 |
-| Infraestructura AWS (CDK) | ⏳ Pendiente |
+| Infraestructura AWS (CDK) | 🟡 Escrita en `infra/cdk` (Aurora, ECS, S3, WAF); no desplegada |
 | Migración SQL Server → Postgres | ⏳ Pendiente |
 | WebPay producción | ⏳ Stub (esperar SDK Transbank) |
 | Auditoría / S3 / OpenSearch | ⏳ Esquema definido, lógica pendiente |
@@ -34,7 +34,8 @@ ejemplo y nunca deben quedar fijas en el código.
 ## Stack
 
 - **Backend**: NestJS 10 · TypeScript estricto · Drizzle ORM · PostgreSQL 16
-- **Frontend**: Angular 19 (standalone components) · PrimeNG (Aura) · MSAL.js para Entra ID · locale es-CL
+- **Frontend**: Angular 19 (standalone components) · PrimeNG (Aura) · locale es-CL. MSAL está instalado pero
+  **el login con Entra ID aún no está conectado en la web** (solo el backend valida sus tokens; ver plan, fase 7)
 - **Auth**: login con enlace de acceso (magic link, `/login`) + Microsoft Entra ID (OIDC, JWT vía JWKS)
 - **Planes (no hay tenant)**: `afiliados` es la persona (RUT único) y `planes_afiliado` guarda
   cada relación RUT–Plan con su vigencia. `atenciones.cod_plan` es el plan bajo el cual se

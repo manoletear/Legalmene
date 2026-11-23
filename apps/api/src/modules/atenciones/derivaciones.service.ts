@@ -1,7 +1,7 @@
 import type { CriteriosBusqueda } from "@legalmene/shared";
 import { condicionAtencion } from "../../common/busqueda/criterios";
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import type {
   AprobarDerivacion,
   DerivacionRow,
@@ -24,6 +24,8 @@ export interface FiltroDerivaciones extends CriteriosBusqueda {
   page?: number;
   pageSize?: number;
 }
+
+const ESTADOS_CONSULTA_DERIVABLE: Atencion["estado"][] = ["Iniciada", "Respondida"];
 
 @Injectable()
 export class DerivacionesService {
@@ -85,7 +87,7 @@ export class DerivacionesService {
   async solicitar(consultaId: string, usuarioId: string, input: SolicitarDerivacion): Promise<Derivacion> {
     const consulta = await this.atencionesSrv.obtener(consultaId);
     if (consulta.tipo !== "Consulta") throw new BadRequestException("Solo una consulta se deriva");
-    if (!["Iniciada", "Respondida"].includes(consulta.estado)) {
+    if (!ESTADOS_CONSULTA_DERIVABLE.includes(consulta.estado)) {
       throw new BadRequestException(`No se puede derivar una consulta en estado ${consulta.estado}`);
     }
     const [pendiente] = await this.db
@@ -114,6 +116,10 @@ export class DerivacionesService {
     const d = await this.pendiente(id);
     if (d.solicitadaPorId === actor.id) throw new ForbiddenException("Quien solicitó la derivación no puede resolverla");
     const consulta = await this.atencionesSrv.obtener(d.consultaId);
+    // La consulta pudo cerrarse después de pedir la derivación.
+    if (!ESTADOS_CONSULTA_DERIVABLE.includes(consulta.estado)) {
+      throw new ConflictException(`La consulta está ${consulta.estado}; ya no se puede derivar`);
+    }
     const competenciaId = input.competenciaId ?? consulta.competenciaId;
     const materiaId = input.materiaId ?? consulta.materiaId;
     try {
@@ -176,7 +182,7 @@ export class DerivacionesService {
         horaTermino: consulta.horaTermino ? new Date(consulta.horaTermino) : ahora,
         updatedAt: ahora,
       })
-      .where(eq(atenciones.id, consulta.id));
+      .where(and(eq(atenciones.id, consulta.id), inArray(atenciones.estado, ESTADOS_CONSULTA_DERIVABLE)));
 
     await this.webhooks.emitir(consulta.codPlan, "atencion.derivada", { origen: consulta, nueva });
     if (nueva.abogadoAsignadoId) {
