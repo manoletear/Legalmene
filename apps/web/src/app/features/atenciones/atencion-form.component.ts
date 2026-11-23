@@ -8,12 +8,16 @@ import { TextareaModule } from "primeng/textarea";
 import { SelectModule } from "primeng/select";
 import { ButtonModule } from "primeng/button";
 import { MessageService } from "primeng/api";
+import { forkJoin, of } from "rxjs";
+import { catchError, map } from "rxjs/operators";
+import { PermisoDirective } from "../../core/permisos";
+import { AfiliadoFormComponent } from "../afiliados/afiliado-form.component";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { AfiliadosApiService } from "../../core/services/afiliados.service";
 import { MaestrosApiService } from "../../core/services/maestros.service";
 import { CoberturasApiService } from "../../core/services/coberturas.service";
 import { PARENTESCO_LABEL, PLANES_SIN_COBERTURA, type CargaAfiliado } from "@legalmene/shared";
-import type { AfiliadoConPlanes, CanalContacto, Competencia, CopagoResultado, MaestroSimple, Materia, TipoAtencion } from "@legalmene/shared";
+import type { Afiliado, AfiliadoConPlanes, CanalContacto, Competencia, CopagoResultado, MaestroSimple, Materia, TipoAtencion } from "@legalmene/shared";
 
 @Component({
   selector: "lm-atencion-form",
@@ -26,6 +30,8 @@ import type { AfiliadoConPlanes, CanalContacto, Competencia, CopagoResultado, Ma
     TextareaModule,
     SelectModule,
     ButtonModule,
+    PermisoDirective,
+    AfiliadoFormComponent,
   ],
   template: `
     <p-card header="Nueva atención">
@@ -42,20 +48,27 @@ import type { AfiliadoConPlanes, CanalContacto, Competencia, CopagoResultado, Ma
           ></p-select>
         </div>
 
+        <!-- Anexo §VI: el afiliado se busca por RUT, sin lista precargada. -->
         <div class="lm-col" style="gap:4px;">
-          <label>Afiliado</label>
-          <p-select
-            formControlName="afiliadoId"
-            [options]="afiliadoOpts()"
-            optionLabel="label"
-            optionValue="value"
-            [filter]="true"
-            filterBy="label"
-            appendTo="body"
-            placeholder="Selecciona afiliado"
-            (onChange)="cargarPlanes($event.value)"
-          ></p-select>
+          <label for="rutAfiliado">RUT del afiliado</label>
+          <div class="lm-row" style="gap:8px;">
+            <input pInputText id="rutAfiliado" name="rutAfiliado" [value]="rutBuscado()" (input)="rutBuscado.set($any($event.target).value)"
+              (keydown.enter)="$event.preventDefault(); buscarRut()" placeholder="12.345.678-5" style="flex:1;" />
+            <button pButton type="button" icon="pi pi-search" label="Buscar" [outlined]="true" (click)="buscarRut()" [loading]="buscandoRut()"></button>
+          </div>
+          <div *ngIf="afiliado() as a" class="lm-small" data-testid="afiliado-encontrado">
+            <i class="pi pi-user"></i> <strong>{{ a.nombres }} {{ a.apellidoPaterno }} {{ a.apellidoMaterno }}</strong>
+            <span class="lm-muted"> · {{ a.rut }}</span>
+          </div>
+          <div *ngIf="rutNoRegistrado()" class="lm-small" role="status">
+            <span class="lm-muted">El RUT {{ rutNoRegistrado() }} no está registrado.</span>
+            <button *lmPermiso="'afiliados.crear'" pButton type="button" [text]="true" size="small" icon="pi pi-user-plus"
+              label="Registrar afiliado" (click)="altaRapida.set(true)"></button>
+          </div>
+          <small *ngIf="errorRut()" style="color:var(--p-red-600,#c62828);" role="alert">{{ errorRut() }}</small>
         </div>
+        <lm-afiliado-form [visible]="altaRapida()" [rutInicial]="rutNoRegistrado() ?? ''" (cerrar)="altaRapida.set(false)"
+          (guardado)="afiliadoCreado($event)"></lm-afiliado-form>
 
         <div class="lm-col" style="gap:4px;" *ngIf="form.value.afiliadoId">
           <label>Plan</label>
@@ -67,8 +80,9 @@ import type { AfiliadoConPlanes, CanalContacto, Competencia, CopagoResultado, Ma
             optionDisabled="disabled"
             appendTo="body"
             placeholder="Selecciona plan"
-            (onChange)="codPlanSel.set($event.value ?? ''); form.patchValue({ cargaId: null }); previsualizarCopago()"
+            (onChange)="planManual = true; codPlanSel.set($event.value ?? ''); form.patchValue({ cargaId: null }); previsualizarCopago()"
           ></p-select>
+          <small *ngIf="planSugerido()" class="lm-muted">Se sugiere el plan vigente con menor copago para esta materia.</small>
           <small *ngIf="sinPlanVigente()" class="lm-muted">
             El RUT no tiene planes vigentes: la atención se registra como Rezagado o MetLife.
           </small>
@@ -107,7 +121,7 @@ import type { AfiliadoConPlanes, CanalContacto, Competencia, CopagoResultado, Ma
             appendTo="body"
             [placeholder]="form.value.competenciaId ? 'Selecciona materia' : 'Primero elige la competencia'"
             emptyMessage="La competencia no tiene materias para este tipo de atención"
-            (onChange)="previsualizarCopago()"
+            (onChange)="elegirMejorPlan()"
           ></p-select>
           <small *ngIf="copago() as c" class="lm-muted">
             <ng-container *ngIf="c.copagoUfCentesimas !== null; else sinArancel">
@@ -209,7 +223,15 @@ export class AtencionFormComponent {
     { label: "Videoconferencia", value: "Videoconferencia" },
   ];
 
-  protected afiliados = signal<AfiliadoConPlanes[]>([]);
+  protected afiliado = signal<AfiliadoConPlanes | null>(null);
+  protected rutBuscado = signal("");
+  protected buscandoRut = signal(false);
+  protected rutNoRegistrado = signal<string | null>(null);
+  protected errorRut = signal<string | null>(null);
+  protected altaRapida = signal(false);
+  protected planSugerido = signal(false);
+  // true cuando el usuario eligió el plan a mano: ya no se sugiere otro.
+  protected planManual = false;
   protected planOpts = signal<{ label: string; value: string; disabled: boolean }[]>([]);
   protected sinPlanVigente = signal(false);
   protected saving = signal(false);
@@ -234,12 +256,6 @@ export class AtencionFormComponent {
     { label: "Urgente", value: "Urgente" },
   ];
 
-  protected afiliadoOpts = () =>
-    this.afiliados().map((a) => ({
-      label: `${a.rut} — ${a.apellidoPaterno}, ${a.nombres}`,
-      value: a.id,
-    }));
-
   protected form = this.fb.group({
     tipo: ["Consulta", Validators.required],
     afiliadoId: ["", Validators.required],
@@ -263,7 +279,11 @@ export class AtencionFormComponent {
     // ?tipo=PosesionEfectiva (desde la búsqueda de posesiones) preselecciona el tipo.
     const tipo = this.route.snapshot.queryParamMap.get("tipo");
     if (tipo && this.tipoOpts.some((o) => o.value === tipo)) this.form.patchValue({ tipo });
-    this.afiliadosApi.buscar({ pageSize: 200 }).subscribe((res) => this.afiliados.set(res.data));
+    const rut = this.route.snapshot.queryParamMap.get("rut");
+    if (rut) {
+      this.rutBuscado.set(rut);
+      this.buscarRut();
+    }
     this.maestrosApi.listar("competencias", { vigente: true }).subscribe((c) => this.competencias.set(c));
     this.maestrosApi.listar("tipos-consulta", { vigente: true }).subscribe((t) => this.tiposConsulta.set(t));
   }
@@ -281,7 +301,7 @@ export class AtencionFormComponent {
       .subscribe((m) => {
         this.materias.set(m);
         if (!m.some((x) => x.id === materiaId)) this.form.patchValue({ materiaId: "" });
-        this.previsualizarCopago();
+        this.elegirMejorPlan();
       });
   }
 
@@ -297,14 +317,58 @@ export class AtencionFormComponent {
     });
   }
 
+  buscarRut() {
+    const rut = this.rutBuscado().replace(/[.\s]/g, "").toUpperCase();
+    this.errorRut.set(null);
+    this.rutNoRegistrado.set(null);
+    this.afiliado.set(null);
+    this.form.patchValue({ afiliadoId: "" });
+    this.cargarPlanes(null);
+    if (!/^\d{1,8}-[\dK]$/.test(rut)) {
+      this.errorRut.set("Ingrese un RUT con formato 12.345.678-5");
+      return;
+    }
+    this.buscandoRut.set(true);
+    this.afiliadosApi.porRut(rut).subscribe({
+      next: (a) => {
+        this.buscandoRut.set(false);
+        if (a.vigencia === "Eliminado") {
+          this.errorRut.set(`El afiliado ${a.rut} está eliminado; restáurelo antes de atenderlo.`);
+          return;
+        }
+        this.usarAfiliado(a);
+      },
+      error: (err) => {
+        this.buscandoRut.set(false);
+        if (err.status === 404) this.rutNoRegistrado.set(rut);
+        else this.errorRut.set(err.error?.message ?? err.message);
+      },
+    });
+  }
+
+  afiliadoCreado(a: Afiliado) {
+    this.altaRapida.set(false);
+    this.rutNoRegistrado.set(null);
+    this.rutBuscado.set(a.rut);
+    this.afiliadosApi.obtener(a.id).subscribe((afi) => this.usarAfiliado(afi));
+  }
+
+  private usarAfiliado(a: AfiliadoConPlanes) {
+    this.afiliado.set(a);
+    this.form.patchValue({ afiliadoId: a.id });
+    this.cargarPlanes(a);
+  }
+
   // Solo los planes vigentes del RUT son seleccionables; sin ninguno, Rezagado/MetLife.
-  cargarPlanes(afiliadoId: string | null) {
+  cargarPlanes(afi: AfiliadoConPlanes | null) {
     this.form.patchValue({ codPlan: "", cargaId: null });
     this.planOpts.set([]);
     this.cargas.set([]);
-    if (!afiliadoId) return;
-    this.afiliadosApi.cargas(afiliadoId).subscribe((cs) => this.cargas.set(cs));
-    this.afiliadosApi.obtener(afiliadoId).subscribe((afi) => {
+    this.planManual = false;
+    this.planSugerido.set(false);
+    if (!afi) return;
+    this.afiliadosApi.cargas(afi.id).subscribe((cs) => this.cargas.set(cs));
+    {
       const vigentes = afi.planes.filter((p) => p.vigente);
       const opciones = afi.planes.map((p) => ({
         label: `${p.codPlan} — ${p.nombrePlan}${p.vigente ? "" : " (no vigente)"}`,
@@ -320,6 +384,37 @@ export class AtencionFormComponent {
       this.planOpts.set(opciones);
       this.form.patchValue({ codPlan: vigentes[0]?.codPlan ?? "REZAGADO" });
       this.codPlanSel.set(this.form.value.codPlan ?? "");
+      this.elegirMejorPlan();
+    }
+  }
+
+  // Anexo §VI l.518: con varios planes vigentes se preselecciona el de mayor cobertura, es decir,
+  // el de menor copago para la materia elegida (calculado por la API). No pisa una elección manual.
+  elegirMejorPlan() {
+    const { materiaId, tipo } = this.form.value;
+    const vigentes = (this.afiliado()?.planes ?? []).filter((p) => p.vigente).map((p) => p.codPlan);
+    if (this.planManual || !materiaId || !tipo || vigentes.length < 2) {
+      this.previsualizarCopago();
+      return;
+    }
+    forkJoin(
+      vigentes.map((codPlan) =>
+        this.coberturasApi.copago(codPlan, materiaId, tipo as TipoAtencion).pipe(
+          map((c) => ({ codPlan, copago: c.copagoUfCentesimas })),
+          catchError(() => of({ codPlan, copago: null as number | null })),
+        ),
+      ),
+    ).subscribe((rs) => {
+      const conValor = rs.filter((r) => r.copago !== null) as { codPlan: string; copago: number }[];
+      if (!conValor.length || this.planManual) {
+        this.previsualizarCopago();
+        return;
+      }
+      const mejor = conValor.reduce((a, b) => (b.copago < a.copago ? b : a));
+      if (mejor.codPlan !== this.form.value.codPlan) this.form.patchValue({ cargaId: null });
+      this.form.patchValue({ codPlan: mejor.codPlan });
+      this.codPlanSel.set(mejor.codPlan);
+      this.planSugerido.set(true);
       this.previsualizarCopago();
     });
   }

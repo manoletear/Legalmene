@@ -45,10 +45,10 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 ## Fase 1 — Operable desde la web (~1,5 semanas)
 
 - [x] Subir documentos desde la ficha (botón hoy sin acción), solo PDF. (§VI 3.4/5, §VII 04, §VIII)
-- [ ] Afiliados: crear, editar y eliminar/restaurar en la web; alta rápida desde una consulta. (§II l.131)
+- [x] Afiliados: crear, editar y eliminar/restaurar en la web; alta rápida desde una consulta. (§II l.131)
 - [ ] Usuarios: crear desde Administración, con campo "cargo". (§II l.106, §IV l.338)
 - [ ] Pantalla de planes: alta, término de vigencia (fecha), asignar/copiar coberturas. (§II l.118, §I l.79)
-- [ ] Nueva consulta: buscar afiliado por RUT (sin lista precargada), plan preseleccionado por mayor cobertura. (§VI l.504, l.518)
+- [x] Nueva consulta: buscar afiliado por RUT (sin lista precargada), plan preseleccionado por mayor cobertura. (§VI l.504, l.518)
 - [ ] "Nuevo correlativo" que permita cambiar competencia y materia (la API ya lo soporta). (§VI l.604)
 - [ ] Gestiones: responsable, fecha de inicio y fecha real de término; botón "Completar" en la ficha. (§VII l.860, §VIII l.1122)
 - [ ] Fecha de término al abandonar o terminar (la API ya la acepta). (§VII l.757, §VIII l.1096)
@@ -117,4 +117,6 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 |---|---|---|---|
 | 2026-11-23 | — | Plan creado a partir de la revisión del Anexo | — |
 | 2026-11-23 | 0 | Estados de atención condicionales (409); derivar consulta cerrada es 409; CLAUDE.md corregido | ver commit siguiente |
-| 2026-11-23 | 1 | Subida de documentos PDF desde la ficha (API valida PDF y 100 MB) | ver commit |
+| 2026-11-23 | 1 | Subida de documentos PDF desde la ficha (API valida PDF y 100 MB) | 909083e |
+| 2026-11-23 | 1 | Afiliados: alta, edición, eliminar/restaurar, asignar y terminar planes en la web | 3e0978b |
+| 2026-11-23 | 1 | Nueva atención: afiliado por RUT con alta rápida; plan vigente de menor copago preseleccionado | ver commit |

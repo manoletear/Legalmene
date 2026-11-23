@@ -18,9 +18,10 @@ test.describe("Atenciones flow", () => {
     await page.locator("p-select[formcontrolname='tipo']").click();
     await page.locator(".p-select-overlay .p-select-option", { hasText: "Consulta" }).click();
 
-    await page.locator("p-select[formcontrolname='afiliadoId']").click();
-    const escaped = activo!.rut.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    await page.locator(".p-select-overlay .p-select-option").filter({ hasText: new RegExp(escaped) }).first().click();
+    // El afiliado se busca por RUT (sin lista precargada).
+    await page.locator("#rutAfiliado").fill(activo!.rut);
+    await page.getByRole("button", { name: "Buscar" }).click();
+    await expect(page.getByTestId("afiliado-encontrado")).toContainText(activo!.rut);
 
     // Al elegir el afiliado se carga su plan vigente como plan de la atención.
     await expect(page.locator("p-select[formcontrolname='codPlan']")).toContainText(planVigente);
@@ -50,5 +51,71 @@ test.describe("Atenciones flow", () => {
     await page.keyboard.press("Enter");
     await page.waitForTimeout(800);
     await expect(page.locator("table tbody tr").first()).toContainText(/despido/i);
+  });
+
+  test("RUT no registrado: alta rápida desde la nueva atención", async ({ page }) => {
+    // RUT válido (módulo 11) aleatorio para no chocar con el seed.
+    const cuerpo = String(40_000_000 + Math.floor(Math.random() * 9_000_000));
+    let suma = 0;
+    let mul = 2;
+    for (let i = cuerpo.length - 1; i >= 0; i--) {
+      suma += Number(cuerpo[i]) * mul;
+      mul = mul === 7 ? 2 : mul + 1;
+    }
+    const r = 11 - (suma % 11);
+    const rut = `${cuerpo}-${r === 11 ? "0" : r === 10 ? "K" : r}`;
+
+    await page.goto("/atenciones/nueva");
+    await page.locator("#rutAfiliado").fill(rut);
+    await page.getByRole("button", { name: "Buscar" }).click();
+    await expect(page.getByRole("status")).toContainText("no está registrado");
+    await page.getByRole("button", { name: "Registrar afiliado" }).click();
+    const dlg = page.getByRole("dialog");
+    await expect(dlg.locator('input[name="rut"]')).toHaveValue(rut);
+    await dlg.locator('input[name="nombres"]').fill("Alta");
+    await dlg.locator('input[name="apellidoPaterno"]').fill("Rapida");
+    await dlg.getByRole("button", { name: "Crear afiliado" }).click();
+    await expect(page.getByTestId("afiliado-encontrado")).toContainText("Alta Rapida");
+    // Sin planes vigentes la atención va como Rezagado.
+    await expect(page.locator("p-select[formcontrolname='codPlan']")).toContainText("Rezagado");
+  });
+
+  test("con varios planes vigentes se preselecciona el de menor copago", async ({ page, request }) => {
+    const afi = await request.get(`${API}/afiliados?pageSize=200`).then((r) => r.json());
+    type A = { rut: string; planes: { codPlan: string; vigente: boolean }[] };
+    const multi = (afi.data as A[]).find((a) => a.planes.filter((p) => p.vigente).length > 1);
+    test.skip(!multi, "El seed no tiene un RUT con varios planes vigentes");
+    const comps = await request.get(`${API}/maestros/competencias`).then((r) => r.json());
+    const laboral = comps.find((c: { nombre: string }) => c.nombre === "Laboral");
+    const mats = await request.get(`${API}/maestros/materias?competenciaId=${laboral.id}&aplicaA=Juicio`).then((r) => r.json());
+    const materia = mats.find((m: { nombre: string }) => m.nombre === "Cobro de prestaciones");
+    const copagos = await Promise.all(
+      multi!.planes
+        .filter((p) => p.vigente)
+        .map(async (p) => {
+          const c = await request
+            .get(`${API}/copago?codPlan=${p.codPlan}&materiaId=${materia.id}&tipo=Juicio`)
+            .then((r) => r.json());
+          expect(c).toHaveProperty("copagoUfCentesimas");
+          return { codPlan: p.codPlan, copago: c.copagoUfCentesimas as number | null };
+        }),
+    );
+    const conValor = copagos.filter((c) => c.copago !== null) as { codPlan: string; copago: number }[];
+    test.skip(conValor.length < 2, "La materia no tiene arancel");
+    const mejor = conValor.reduce((a, b) => (b.copago < a.copago ? b : a));
+    // Para que la prueba distinga, el plan más conveniente no debe ser el primero de la lista.
+    expect(mejor.codPlan, "el seed debe tener el plan más barato en segundo lugar").not.toBe(multi!.planes.find((p) => p.vigente)!.codPlan);
+
+    await page.goto("/atenciones/nueva");
+    await page.locator("p-select[formcontrolname='tipo']").click();
+    await page.locator(".p-select-overlay .p-select-option", { hasText: "Juicio" }).click();
+    await page.locator("#rutAfiliado").fill(multi!.rut);
+    await page.getByRole("button", { name: "Buscar" }).click();
+    await expect(page.getByTestId("afiliado-encontrado")).toBeVisible();
+    await page.locator("p-select[formcontrolname='competenciaId']").click();
+    await page.locator(".p-select-overlay .p-select-option", { hasText: "Laboral" }).click();
+    await page.locator("p-select[formcontrolname='materiaId']").click();
+    await page.locator(".p-select-overlay .p-select-option", { hasText: "Cobro de prestaciones" }).click();
+    await expect(page.locator("p-select[formcontrolname='codPlan']")).toContainText(mejor.codPlan);
   });
 });
