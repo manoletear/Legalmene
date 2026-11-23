@@ -21,9 +21,8 @@ export const notificaciones = pgTable(
   "notificaciones",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    codPlan: varchar("cod_plan", { length: 20 })
-      .notNull()
-      .references(() => planes.codPlan, { onDelete: "cascade" }),
+    // null en avisos del sistema (p. ej. cuenta bloqueada), que no son de un plan.
+    codPlan: varchar("cod_plan", { length: 20 }).references(() => planes.codPlan, { onDelete: "cascade" }),
     usuarioId: uuid("usuario_id")
       .notNull()
       .references(() => usuarios.id, { onDelete: "cascade" }),

@@ -4,7 +4,7 @@ import { DRIZZLE, Database } from "../../db/database.module";
 import { notificaciones, NuevaNotificacion, Notificacion } from "../../db/schema/notificaciones";
 
 export interface CrearNotif {
-  codPlan: string;
+  codPlan: string | null;
   usuarioId: string;
   severidad?: "info" | "warn" | "critical";
   titulo: string;

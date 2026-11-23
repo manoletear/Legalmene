@@ -19,6 +19,9 @@ import { DRIZZLE, Database } from "../../db/database.module";
 import { perfiles, perfilPermisos, usuarios, Usuario } from "../../db/schema/usuarios";
 import type { AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 import { dominioPermitido } from "../auth/dominio";
+import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
+
+export const MAX_INTENTOS_FALLIDOS = 3;
 
 // entraOid de un usuario que aún no ingresa con Microsoft (alta por enlace o desde Administración).
 // En su primer ingreso con Entra ID se reemplaza por el oid real (ver resolveByEntraOid).
@@ -69,7 +72,10 @@ const jefes = aliasedTable(usuarios, "jefes");
 
 @Injectable()
 export class UsuariosService {
-  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: Database,
+    @Inject(NotifInboxService) private readonly notif: NotifInboxService,
+  ) {}
 
   async obtenerPorId(id: string): Promise<Usuario | null> {
     const [row] = await this.db.select().from(usuarios).where(eq(usuarios.id, id));
@@ -301,6 +307,52 @@ export class UsuariosService {
     return row;
   }
 
+  // Anexo §I.10: tras 3 intentos fallidos de inicio de sesión la cuenta se bloquea y se avisa a los
+  // administradores. El último administrador activo no se bloquea (solo se avisa), para que
+  // siempre haya quien desbloquee.
+  async registrarIntentoFallido(usuarioId: string): Promise<{ intentos: number; bloqueada: boolean }> {
+    const [u] = await this.db
+      .update(usuarios)
+      .set({ intentosFallidos: sql`${usuarios.intentosFallidos} + 1` })
+      .where(eq(usuarios.id, usuarioId))
+      .returning();
+    if (!u) return { intentos: 0, bloqueada: false };
+    if (u.intentosFallidos < MAX_INTENTOS_FALLIDOS || u.bloqueado) return { intentos: u.intentosFallidos, bloqueada: false };
+    let bloquear = true;
+    if (await this.esAdmin(u)) {
+      try {
+        await this.asegurarOtroAdmin(u.id);
+      } catch {
+        bloquear = false;
+      }
+    }
+    if (bloquear) {
+      await this.db
+        .update(usuarios)
+        .set({ bloqueado: true, motivoBloqueo: `${MAX_INTENTOS_FALLIDOS} intentos fallidos de inicio de sesión`, updatedAt: new Date() })
+        .where(and(eq(usuarios.id, u.id), eq(usuarios.bloqueado, false)));
+    }
+    const admins = await this.db
+      .selectDistinct({ id: usuarios.id })
+      .from(usuarios)
+      .innerJoin(perfiles, eq(perfiles.id, usuarios.perfilId))
+      .leftJoin(perfilPermisos, and(eq(perfilPermisos.perfilId, perfiles.id), eq(perfilPermisos.permiso, "usuarios.administrar")))
+      .where(and(or(eq(perfiles.codigo, PERFIL_ADMIN), sql`${perfilPermisos.permiso} is not null`), eq(usuarios.activo, true), eq(usuarios.bloqueado, false), ne(usuarios.id, u.id)));
+    for (const a of admins) {
+      await this.notif.crear({
+        codPlan: null,
+        usuarioId: a.id,
+        severidad: "critical",
+        titulo: bloquear ? `Cuenta bloqueada: ${u.email}` : `Intentos fallidos de inicio de sesión: ${u.email}`,
+        detalle: bloquear
+          ? `${MAX_INTENTOS_FALLIDOS} intentos fallidos de inicio de sesión. Desbloquéela en Administración → Usuarios si corresponde.`
+          : "Es el último administrador activo: no se bloqueó. Revise la auditoría.",
+        accionUrl: "/admin/usuarios",
+      });
+    }
+    return { intentos: u.intentosFallidos, bloqueada: bloquear };
+  }
+
   async bloquear(id: string, bloqueado: boolean, motivo: string | undefined, actorId: string): Promise<Usuario> {
     const actual = await this.obtenerPorId(id);
     if (!actual) throw new NotFoundException(`Usuario ${id} no existe`);
@@ -310,7 +362,7 @@ export class UsuariosService {
     }
     const [row] = await this.db
       .update(usuarios)
-      .set({ bloqueado, motivoBloqueo: bloqueado ? (motivo ?? null) : null, updatedAt: new Date() })
+      .set({ bloqueado, motivoBloqueo: bloqueado ? (motivo ?? null) : null, ...(bloqueado ? {} : { intentosFallidos: 0 }), updatedAt: new Date() })
       .where(eq(usuarios.id, id))
       .returning();
     return row;

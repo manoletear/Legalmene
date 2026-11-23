@@ -5,10 +5,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { DatabaseModule, PG_POOL } from "../../src/db/database.module";
 import { perfiles, usuarios, enlacesAcceso } from "../../src/db/schema/usuarios";
 import { AuditService } from "../../src/modules/audit/audit.service";
+import { NotifInboxService } from "../../src/modules/notif-inbox/notif-inbox.service";
 import { NotificacionesService, type EmailMessage } from "../../src/modules/notificaciones/notificaciones.service";
 import { UsuariosService } from "../../src/modules/usuarios/usuarios.service";
 import { EnlacesAccesoService, MAX_ENLACES_POR_VENTANA, hashToken } from "../../src/modules/auth/enlaces-acceso.service";
@@ -21,9 +22,11 @@ const RUN = !!process.env.DATABASE_URL;
   let srv: EnlacesAccesoService;
   let pool: Pool;
   const enviados: EmailMessage[] = [];
+  const avisos: { titulo: string }[] = [];
   const SUF = Math.random().toString(36).slice(2, 8);
   const email = `enlace-${SUF}@legalchile.cl`;
   const bootstrap = `boot-${SUF}@legalchile.cl`;
+  const bloqueable = `bloqueo-${SUF}@legalchile.cl`;
   let usuarioId: string;
   const authPrevio = process.env.AUTH_DISABLED;
 
@@ -39,6 +42,7 @@ const RUN = !!process.env.DATABASE_URL;
         UsuariosService,
         { provide: AuditService, useValue: { log: async () => undefined } },
         { provide: NotificacionesService, useValue: { enviarEmail: async (m: EmailMessage) => void enviados.push(m) } },
+        { provide: NotifInboxService, useValue: { crear: async (n: { titulo: string }) => void avisos.push(n) } },
       ],
     }).compile();
     srv = moduleRef.get(EnlacesAccesoService);
@@ -56,7 +60,7 @@ const RUN = !!process.env.DATABASE_URL;
 
   afterAll(async () => {
     const db = drizzle(pool);
-    await db.execute(sql`DELETE FROM usuarios WHERE email IN (${email}, ${bootstrap})`);
+    await db.execute(sql`DELETE FROM usuarios WHERE email IN (${email}, ${bootstrap}, ${bloqueable})`);
     process.env.AUTH_DISABLED = authPrevio;
     delete process.env.BOOTSTRAP_ADMIN_EMAILS;
     await moduleRef.close();
@@ -100,6 +104,40 @@ const RUN = !!process.env.DATABASE_URL;
     await srv.solicitar(email);
     expect(enviados).toHaveLength(2);
     await db.update(usuarios).set({ activo: true }).where(eq(usuarios.id, usuarioId));
+  });
+
+  it("tres intentos fallidos bloquean la cuenta y avisan a los administradores; desbloquear reinicia", async () => {
+    const db = drizzle(pool);
+    const usuariosSrv = moduleRef.get(UsuariosService);
+    const [perfil] = await db.select({ id: perfiles.id }).from(perfiles).where(eq(perfiles.codigo, "ABOGADO"));
+    const [u] = await db.insert(usuarios).values({ entraOid: `bloq-${SUF}`, email: bloqueable, nombre: "Bea Bloqueo", perfilId: perfil.id }).returning();
+    // Debe existir al menos un administrador activo a quien avisar.
+    const [admin] = await db
+      .select({ id: usuarios.id })
+      .from(usuarios)
+      .innerJoin(perfiles, eq(perfiles.id, usuarios.perfilId))
+      .where(and(eq(perfiles.codigo, "ADMIN"), eq(usuarios.activo, true), eq(usuarios.bloqueado, false)));
+    expect(admin, "el seed debe tener un administrador activo").toBeTruthy();
+
+    await srv.solicitar(bloqueable);
+    const token = tokenDe(enviados[0]);
+    await srv.verificar(token);
+    avisos.length = 0;
+    for (let i = 0; i < 3; i++) await expect(srv.verificar(token)).rejects.toBeInstanceOf(UnauthorizedException);
+    const [fila] = await db.select().from(usuarios).where(eq(usuarios.id, u.id));
+    expect(fila).toMatchObject({ bloqueado: true, intentosFallidos: 3 });
+    expect(fila.motivoBloqueo).toMatch(/intentos fallidos/);
+    expect(avisos.some((a) => a.titulo === `Cuenta bloqueada: ${bloqueable}`)).toBe(true);
+    // Bloqueada: ya no recibe enlaces.
+    enviados.length = 0;
+    await srv.solicitar(bloqueable);
+    expect(enviados).toHaveLength(0);
+    // Un token desconocido no se atribuye a nadie.
+    await expect(srv.verificar("token-que-no-existe")).rejects.toBeInstanceOf(UnauthorizedException);
+
+    await usuariosSrv.bloquear(u.id, false, undefined, admin.id);
+    const [libre] = await db.select().from(usuarios).where(eq(usuarios.id, u.id));
+    expect(libre).toMatchObject({ bloqueado: false, intentosFallidos: 0 });
   });
 
   it(`limita a ${MAX_ENLACES_POR_VENTANA} enlaces por ventana`, async () => {

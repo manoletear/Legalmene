@@ -62,6 +62,8 @@ export const usuarios = pgTable(
     ultimoLogin: timestamp("ultimo_login", { withTimezone: true }),
     // Se incrementa al cerrar sesión: invalida todas las sesiones emitidas antes (claim "ver").
     sesionVersion: integer("sesion_version").notNull().default(0),
+    // Intentos fallidos de inicio de sesión desde el último ingreso exitoso (Anexo §I.10: 3 → bloqueo).
+    intentosFallidos: integer("intentos_fallidos").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

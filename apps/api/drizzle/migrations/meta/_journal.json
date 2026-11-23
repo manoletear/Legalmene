@@ -169,6 +169,13 @@
       "when": 1795472489533,
       "tag": "0023_autorizacion_cobertura",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795472740812,
+      "tag": "0024_intentos_fallidos",
+      "breakpoints": true
     }
   ]
 }

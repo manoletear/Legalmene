@@ -5,7 +5,7 @@ import { environment } from "../../../environments/environment";
 
 export interface NotifItem {
   id: string;
-  codPlan: string;
+  codPlan: string | null;
   usuarioId: string;
   severidad: "info" | "warn" | "critical";
   titulo: string;

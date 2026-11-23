@@ -102,7 +102,23 @@ export class EnlacesAccesoService {
       .set({ usadoEn: ahora })
       .where(and(eq(enlacesAcceso.tokenHash, hashToken(token)), isNull(enlacesAcceso.usadoEn), gt(enlacesAcceso.expiraEn, ahora)))
       .returning({ usuarioId: enlacesAcceso.usuarioId });
-    if (!canjeado) throw new UnauthorizedException("El enlace no es válido, ya fue usado o venció. Solicite uno nuevo.");
+    if (!canjeado) {
+      // Un enlace de la cuenta ya usado o vencido cuenta como intento fallido (Anexo §I.10); un
+      // token desconocido no se puede atribuir a nadie (lo limita el tope por IP).
+      const [previo] = await this.db
+        .select({ usuarioId: enlacesAcceso.usuarioId })
+        .from(enlacesAcceso)
+        .where(eq(enlacesAcceso.tokenHash, hashToken(token)));
+      if (previo) {
+        const u = await this.usuarios.obtenerPorId(previo.usuarioId);
+        if (u) {
+          const r = await this.usuarios.registrarIntentoFallido(u.id);
+          await this.registrar(u, "ENLACE_FALLIDO", req, { intentos: r.intentos });
+          if (r.bloqueada) await this.registrar(u, "CUENTA_BLOQUEADA", req, { motivo: "intentos fallidos" });
+        }
+      }
+      throw new UnauthorizedException("El enlace no es válido, ya fue usado o venció. Solicite uno nuevo.");
+    }
 
     let user;
     try {
@@ -118,7 +134,7 @@ export class EnlacesAccesoService {
       throw new ForbiddenException("Su cuenta no pertenece a un dominio autorizado de LegalChile");
     }
 
-    await this.db.update(usuarios).set({ ultimoLogin: ahora }).where(eq(usuarios.id, user.id));
+    await this.db.update(usuarios).set({ ultimoLogin: ahora, intentosFallidos: 0 }).where(eq(usuarios.id, user.id));
     await this.registrar(user, "LOGIN_ENLACE", req);
     const sesion = firmarSesion(user.id, HORAS_VALIDEZ_SESION, undefined, undefined, user.sesionVersion);
     return { token: sesion.token, expiraEn: sesion.expiraEn.toISOString() };

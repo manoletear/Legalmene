@@ -150,6 +150,9 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   (`usuarios.administrar`, dominio permitido, misma delegación que al cambiar perfil); quedan con `entra_oid`
   `enlace:<correo>` y Entra ID los vincula por correo en su primer ingreso. `BOOTSTRAP_ADMIN_EMAILS` acepta
   correos exactos o dominios con `@` inicial.
+  Canjear un enlace propio ya usado o vencido es un intento fallido (`usuarios.intentos_fallidos`); al tercero la
+  cuenta se bloquea y se avisa a los administradores (salvo el último administrador activo, que solo genera aviso).
+  Un ingreso exitoso o el desbloqueo reinician el contador.
 - **Permisos**: no existen roles fijos. Todo endpoint que modifique datos (o exponga un módulo
   restringido) lleva `@UseGuards(JwtAuthGuard, PermisosGuard)` + `@Permiso("clave")` con una
   clave del catálogo `PERMISOS` (`packages/shared/src/types/permisos.ts`); si falta una clave,

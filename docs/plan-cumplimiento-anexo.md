@@ -74,7 +74,7 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 - [ ] Comité obligatorio al terminar con riesgo ≥ 20 y "Revisado por comité" ligado al estado EnComite. (§VIII l.1196, l.1217)
 - [x] Autorización de Gerencia de Servicios cuando no hay cobertura. (§VII l.750)
 - [x] Arancel impago bloquea también gestiones; provisión impaga bloquea el inicio del juicio. (§VII l.797, §VIII l.1076)
-- [ ] Bloqueo de cuenta tras 3 intentos fallidos, con aviso al administrador. (§I l.65)
+- [x] Bloqueo de cuenta tras 3 intentos fallidos, con aviso al administrador. (§I l.65)
 
 ## Fase 4 — Finanzas completas (~1,5 semanas + WebPay)
 
@@ -131,4 +131,5 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 | 2026-11-23 | 3 | Plazos: contacto 24 h hábiles (primer contacto, migración 0021), primera presentación 5 días, rendición 8 días; aviso diario de vencidos; entrega de fondos desde las 15:00 del día hábil siguiente | 6024ee3 |
 | 2026-11-23 | 3 | V°B° de jefatura para terminar asesorías y juicios: solicitud, aprobación o rechazo con cuatro ojos (migración 0022, permiso `atenciones.aprobar_termino`) | 705c4be |
 | 2026-11-23 | 3 | Arancel impago: solo gestiones de contacto con el cliente; provisión solicitada e impaga impide iniciar la tramitación del juicio | 4595685 |
-| 2026-11-23 | 3 | Sin cobertura del plan: autorización de Gerencia de Servicios (migración 0023, permiso `atenciones.autorizar_sin_cobertura`); rechazada, solo se abandona | ver commit |
+| 2026-11-23 | 3 | Sin cobertura del plan: autorización de Gerencia de Servicios (migración 0023, permiso `atenciones.autorizar_sin_cobertura`); rechazada, solo se abandona | 8586669 |
+| 2026-11-23 | 3 | Bloqueo tras 3 intentos fallidos (enlace ya usado o vencido) con aviso a los administradores; avisos de sistema sin plan (migración 0024) | ver commit |
