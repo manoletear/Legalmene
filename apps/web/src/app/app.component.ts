@@ -323,6 +323,7 @@ export class AppComponent implements OnInit {
         { label: "Provisiones", icon: "pi-wallet", route: "/provisiones" },
         { label: "Pagos", icon: "pi-credit-card", route: "/pagos", permisos: ["pagos.ver"] },
         { label: "Bandeja de finanzas", icon: "pi-money-bill", route: "/finanzas", permisos: ["finanzas.ver"] },
+        { label: "Cuenta corriente", icon: "pi-book", route: "/cuenta-corriente", permisos: ["finanzas.ver"] },
       ],
     },
     {

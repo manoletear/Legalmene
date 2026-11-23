@@ -210,3 +210,26 @@ export interface ResumenProvisionAtencion {
   // Rendición al cliente en curso o la última realizada.
   rendicion: RendicionCliente | null;
 }
+
+// Cuenta corriente por abogado (Anexo §X 12): saldos por entregar y montos por rendir.
+export interface CuentaCorrienteAbogado {
+  abogadoId: string;
+  abogadoNombre: string;
+  // Autorizado o disponible, aún no entregado.
+  porEntregar: number;
+  // Entregado y no rendido (saldo sin gastos).
+  porRendir: number;
+  // Rendido con saldo que aún no devuelve.
+  porReingresar: number;
+  provisiones: {
+    id: string;
+    atencionId: string;
+    correlativo: string;
+    motivo: string;
+    estado: EstadoProvision;
+    monto: number;
+    montoEntregado: number | null;
+    saldo: number;
+    fechaEntrega: string | null;
+  }[];
+}

@@ -41,6 +41,13 @@ function usuarioId(user: AuthenticatedUser): string {
 export class ProvisionesController {
   constructor(@Inject(ProvisionesService) private readonly service: ProvisionesService) {}
 
+  // Anexo §X 12: cuenta corriente por abogado (por entregar, por rendir y por reingresar).
+  @Get("provisiones/cuenta-corriente")
+  @Permiso("finanzas.ver")
+  cuentaCorriente(@Query("abogadoId", new ParseUUIDPipe({ optional: true })) abogadoId?: string) {
+    return this.service.cuentaCorriente(abogadoId);
+  }
+
   @Get("provisiones")
   listar(@Query() filtro: FiltroProvisionesDto) {
     return this.service.listar(filtro);

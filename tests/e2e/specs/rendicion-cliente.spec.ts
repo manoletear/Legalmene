@@ -60,3 +60,27 @@ test.describe("Registro de pagos del cliente", () => {
     expect(p).toMatchObject({ estado: "Pagada", medioPagoCliente: "Transferencia", referenciaPagoCliente: "TRF-UI-777" });
   });
 });
+
+test.describe("Cuenta corriente por abogado", () => {
+  test("muestra lo autorizado por entregar de cada abogado", async ({ page, request }) => {
+    const a = await crearAsesoria(request, `Cta Cte E2E ${Date.now()}`);
+    const prov = await request.post(`${API}/atenciones/${a.id}/provisiones`, { data: { monto: 70_000, motivo: "Notario E2E" } }).then((r) => r.json());
+    const post = (accion: string, data: object = {}, headers: Record<string, string> = {}) =>
+      request.post(`${API}/provisiones/${prov.id}/${accion}`, { data, headers });
+    expect((await post("pago-cliente", { medio: "CasaCentral" })).ok()).toBeTruthy();
+    expect((await post("solicitar-entrega")).ok()).toBeTruthy();
+    // Cuatro ojos: autoriza otro usuario.
+    const claims = { entraOid: "dev-jefe-ctacte", email: "jefe-ctacte@test.cl", nombre: "Jefe Cta Cte", perfil: "GERENCIA_SERVICIOS" };
+    const jefe = { "X-Dev-User": Buffer.from(JSON.stringify(claims)).toString("base64") };
+    expect((await post("autorizar", {}, jefe)).ok()).toBeTruthy();
+
+    const cuentas = await request.get(`${API}/provisiones/cuenta-corriente`).then((r) => r.json());
+    const mia = cuentas.find((c: { provisiones: { id: string }[] }) => c.provisiones.some((p) => p.id === prov.id));
+    expect(mia.porEntregar).toBeGreaterThanOrEqual(70_000);
+
+    await page.goto("/cuenta-corriente");
+    await page.getByRole("button", { name: `Detalle de ${mia.abogadoNombre}` }).click();
+    await expect(page.getByText(a.correlativo).first()).toBeVisible();
+    await expect(page.locator("tr", { hasText: a.correlativo }).last()).toContainText("Entrega autorizada");
+  });
+});

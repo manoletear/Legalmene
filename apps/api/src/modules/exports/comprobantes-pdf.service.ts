@@ -250,4 +250,32 @@ export class ComprobantesPdfService {
       firmas: ["Finanzas LegalChile", "Abogado responsable", "Cliente (recibí conforme)"],
     };
   }
+
+  // Anexo §X 12: comprobante de entrega de dinero al abogado, en dos copias (Finanzas y abogado).
+  async entregaFondos(provisionId: string): Promise<Comprobante> {
+    const [p] = await this.db.select().from(provisiones).where(eq(provisiones.id, provisionId));
+    if (!p) throw new NotFoundException(`Provisión ${provisionId} no existe`);
+    const a = await this.atencion(p.atencionId);
+    if (!p.fechaEntrega || p.montoEntregado == null) throw new ConflictException("La provisión aún no se entrega al abogado");
+    return {
+      titulo: "Comprobante de entrega de fondos al abogado",
+      numero: `${a.correlativo}-ENT-${p.id.slice(0, 8).toUpperCase()}`,
+      copias: ["Finanzas", "Abogado"],
+      secciones: [
+        this.seccionAtencion(a),
+        {
+          titulo: "Entrega",
+          filas: [
+            ["Abogado", await this.nombreUsuario(p.solicitadaPorId)],
+            ["Motivo de la provisión", p.motivo],
+            ["Monto entregado", clp(p.montoEntregado)],
+            ["Fecha de entrega", fecha(p.fechaEntrega)],
+            ["Autorizado por", await this.nombreUsuario(p.resueltaPorId)],
+          ],
+        },
+      ],
+      nota: "El abogado rinde estos fondos con los comprobantes de gasto y devuelve el saldo no gastado.",
+      firmas: ["Entregado por (Finanzas)", "Recibí conforme (Abogado)"],
+    };
+  }
 }

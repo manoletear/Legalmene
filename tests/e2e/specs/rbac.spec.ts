@@ -111,4 +111,16 @@ test.describe("RBAC", () => {
     const res = await request.get(`${API}/afiliados`);
     expect(res.ok()).toBeTruthy();
   });
+
+  test("Ejecutivo de Finanzas (EF) entrega fondos pero no registra pagos ni administra aranceles", async ({ request }) => {
+    const ef = { "X-Dev-User": asUser("EJECUTIVO_FINANZAS") };
+    const me = await request.get(`${API}/me`, { headers: ef }).then((r) => r.json());
+    expect(me.permisos).toEqual(expect.arrayContaining(["provisiones.disponer_entregar", "finanzas.ver"]));
+    expect(me.permisos).not.toContain("provisiones.registrar_pago");
+    expect(me.permisos).not.toContain("aranceles.administrar");
+    const idFalso = "00000000-0000-4000-8000-000000000000";
+    expect((await request.post(`${API}/provisiones/${idFalso}/pago-cliente`, { headers: ef, data: { medio: "CasaCentral" } })).status()).toBe(403);
+    // Con el permiso, la provisión inexistente responde 404 (no 403).
+    expect((await request.post(`${API}/provisiones/${idFalso}/disponible`, { headers: ef })).status()).toBe(404);
+  });
 });

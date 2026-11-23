@@ -134,6 +134,12 @@ export const routes: Routes = [
       import("./features/admin/admin-maestros.component").then((m) => m.AdminMaestrosComponent),
   },
   {
+    path: "cuenta-corriente",
+    canActivate: [permisoGuard("finanzas.ver")],
+    loadComponent: () =>
+      import("./features/cuenta-corriente/cuenta-corriente.component").then((m) => m.CuentaCorrienteComponent),
+  },
+  {
     path: "admin/planes",
     canActivate: [permisoGuard("planes.administrar", "coberturas.administrar")],
     loadComponent: () =>

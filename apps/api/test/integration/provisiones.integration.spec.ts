@@ -130,6 +130,12 @@ const RUN = !!process.env.DATABASE_URL;
     const entregada = await service.entregar(p.id, jefe);
     expect(entregada.estado).toBe("Entregada");
     expect(entregada.montoEntregado).toBe(450_000);
+    // Anexo §X 12: comprobante de entrega (2 copias) y cuenta corriente del abogado.
+    const entrega = await moduleRef.get(ComprobantesPdfService).entregaFondos(p.id);
+    expect(entrega.copias).toEqual(["Finanzas", "Abogado"]);
+    expect(entrega.secciones[1].filas).toEqual(expect.arrayContaining([["Monto entregado", "$ 450.000"]]));
+    const [cc] = await service.cuentaCorriente(abogado);
+    expect(cc).toMatchObject({ abogadoId: abogado, porRendir: 450_000, porReingresar: 0 });
 
     await service.registrarMovimiento(p.id, abogado, { tipo: "Gasto", monto: 300_000, glosa: "Honorario perito" });
     // El abogado ya no registra reintegros: el saldo lo registra el contador al recibirlo.
@@ -140,6 +146,7 @@ const RUN = !!process.env.DATABASE_URL;
     expect((await service.rendir(p.id, abogado)).estado).toBe("Rendida");
     await expect(service.solicitar(atencionId, abogado, { monto: 1_000, motivo: "Otra" })).rejects.toThrow(/sin reingresar/);
     expect((await service.resumenAtencion(atencionId)).pendienteReingreso).toBe(150_000);
+    expect((await service.cuentaCorriente(abogado)).find((c) => c.abogadoId === abogado)).toMatchObject({ porRendir: 0, porReingresar: 150_000 });
 
     // Anexo §X 14: el contador registra el reingreso del saldo exacto.
     await expect(service.registrarReingreso(p.id, jefe, 100_000)).rejects.toThrow(/saldo no gastado \(\$150\.000\)/);

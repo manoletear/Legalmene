@@ -82,6 +82,8 @@ import { Observable } from "rxjs";
             <td class="lm-small">{{ p.solicitadaPorEmail }}</td>
             <td class="lm-small">{{ p.fechaSolicitud | date: 'dd/MM/yyyy' }}</td>
             <td style="text-align:right; white-space:nowrap;">
+              <button *ngIf="p.fechaEntrega" pButton type="button" class="p-button-sm p-button-text" icon="pi pi-print"
+                label="Entrega" title="Comprobante de entrega de fondos al abogado (2 copias)" (click)="comprobanteEntrega(p)"></button>
               <button *ngIf="p.fechaPagoCliente" pButton type="button" class="p-button-sm p-button-text" icon="pi pi-print"
                 label="Comprobante" title="Recibo del dinero entregado por el cliente (2 copias)" (click)="comprobante(p)"></button>
               <button
@@ -107,6 +109,15 @@ export class ProvisionesComponent implements OnInit {
   private api = inject(ProvisionesApiService);
   private me = inject(MeService);
   private pagoDialog = inject(PagoDialogService);
+
+  // Anexo §X 12: comprobante de entrega de fondos al abogado.
+  async comprobanteEntrega(p: { id: string; correlativo: string }) {
+    try {
+      await descargarArchivo(`/exports/comprobantes/entrega/${p.id}.pdf`, `entrega-${p.correlativo}.pdf`);
+    } catch (e) {
+      this.msg.add({ severity: "error", summary: "No se pudo generar el comprobante", detail: (e as Error).message, life: 5000 });
+    }
+  }
 
   // Anexo §X 05.1: recibo del dinero de la provisión (dos copias en el PDF).
   async comprobante(p: { id: string; correlativo: string }) {

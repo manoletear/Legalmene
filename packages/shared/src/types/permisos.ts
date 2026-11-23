@@ -203,9 +203,15 @@ export const PERFILES_SISTEMA: PerfilSistema[] = [
     ],
   },
   {
+    codigo: "EJECUTIVO_FINANZAS",
+    nombre: "Ejecutivo de Finanzas",
+    descripcion: "Gira y entrega fondos a los abogados y emite el cheque de devolución al cliente (EF).",
+    permisos: ["afiliados.ver", "atenciones.ver_todas", "finanzas.ver", "pagos.ver", "provisiones.disponer_entregar"],
+  },
+  {
     codigo: "GERENCIA_FINANZAS",
     nombre: "Gerencia de Finanzas",
-    descripcion: "Ejecutivo y gerencia de finanzas: dispone, entrega y devuelve fondos.",
+    descripcion: "Gerencia de administración y finanzas: controla ingresos de provisiones, devoluciones a clientes, aranceles y UF (GAF).",
     permisos: [...CONTABLE, "provisiones.disponer_entregar", "valores_uf.registrar", "aranceles.administrar", "pagos.iniciar", "reportes.ver", "exportar.datos"],
   },
   { codigo: "CONTADOR", nombre: "Contador", descripcion: "Ejecutivo contable: registra pagos de aranceles y provisiones.", permisos: CONTABLE },

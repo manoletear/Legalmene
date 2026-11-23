@@ -16,6 +16,7 @@ import {
   type EventoFinanciero,
   type MedioPago,
   type RegistrarMovimiento,
+  type CuentaCorrienteAbogado,
   type ResumenProvisionAtencion,
   type SolicitarProvision,
 } from "@legalmene/shared";
@@ -342,6 +343,60 @@ export class ProvisionesService {
         registradoPorId: usuarioId,
       });
     });
+  }
+
+  // Cuenta corriente por abogado (Anexo §X 12): provisiones autorizadas, disponibles, entregadas o
+  // con saldo por reingresar, agrupadas por quien las solicitó. Acotada al alcance del usuario.
+  async cuentaCorriente(abogadoId?: string): Promise<CuentaCorrienteAbogado[]> {
+    const filas = await this.db
+      .select({
+        id: provisiones.id,
+        atencionId: provisiones.atencionId,
+        correlativo: atenciones.correlativo,
+        motivo: provisiones.motivo,
+        estado: provisiones.estado,
+        monto: provisiones.monto,
+        montoEntregado: provisiones.montoEntregado,
+        saldo: saldoProvisionSql,
+        fechaEntrega: provisiones.fechaEntrega,
+        abogadoId: provisiones.solicitadaPorId,
+        abogadoNombre: usuarios.nombre,
+      })
+      .from(provisiones)
+      .innerJoin(atenciones, eq(atenciones.id, provisiones.atencionId))
+      .innerJoin(usuarios, eq(usuarios.id, provisiones.solicitadaPorId))
+      .where(
+        and(
+          filtroAtenciones(),
+          abogadoId ? eq(provisiones.solicitadaPorId, abogadoId) : undefined,
+          or(inArray(provisiones.estado, ["Autorizada", "Disponible"]), condicionFondosPendientes()),
+        ),
+      )
+      .orderBy(asc(usuarios.nombre), asc(provisiones.fechaSolicitud));
+    const porAbogado = new Map<string, CuentaCorrienteAbogado>();
+    for (const f of filas) {
+      let c = porAbogado.get(f.abogadoId);
+      if (!c) {
+        c = { abogadoId: f.abogadoId, abogadoNombre: f.abogadoNombre, porEntregar: 0, porRendir: 0, porReingresar: 0, provisiones: [] };
+        porAbogado.set(f.abogadoId, c);
+      }
+      const saldo = Number(f.saldo);
+      if (f.estado === "Autorizada" || f.estado === "Disponible") c.porEntregar += f.monto;
+      else if (f.estado === "Entregada") c.porRendir += saldo;
+      else c.porReingresar += saldo;
+      c.provisiones.push({
+        id: f.id,
+        atencionId: f.atencionId,
+        correlativo: f.correlativo,
+        motivo: f.motivo,
+        estado: f.estado,
+        monto: f.monto,
+        montoEntregado: f.montoEntregado,
+        saldo: f.estado === "Autorizada" || f.estado === "Disponible" ? f.monto : saldo,
+        fechaEntrega: f.fechaEntrega?.toISOString() ?? null,
+      });
+    }
+    return [...porAbogado.values()];
   }
 
   // --- Rendición de fondos al cliente (Anexo §X 16–20) ---

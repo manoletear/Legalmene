@@ -80,8 +80,8 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 
 - [x] Comprobantes PDF: recibo de arancel (2 copias), entrega de fondos, rendición al cliente (3 copias). (§IX l.1445, §X l.1585, l.1811)
 - [x] Cierre con el cliente: "Rendir cliente", cheque de devolución validando saldo 0, estados Reingresado y Rendido a cliente. (§X l.1740–1830)
-- [ ] Cuenta corriente por abogado; cuotas y referencia de transferencia en pagos. (§X l.1566, l.1703)
-- [ ] Separar roles EF y GAF; registro de saldo devuelto solo por EC. (§X l.1488, l.1740)
+- [x] Cuenta corriente por abogado; cuotas y referencia de transferencia en pagos. (§X l.1566, l.1703)
+- [x] Separar roles EF y GAF; registro de saldo devuelto solo por EC. (§X l.1488, l.1740)
 - [ ] WebPay real: link de pago al cliente, registro automático del pago, camino alternativo a casa central. (§IX l.1352–1380) — *depende de Transbank*
 
 ## Fase 5 — Búsquedas, reportes y cargas (~1 semana)
@@ -135,4 +135,5 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 | 2026-11-23 | 3 | Bloqueo tras 3 intentos fallidos (enlace ya usado o vencido) con aviso a los administradores; avisos de sistema sin plan (migración 0024) | 6f8910a |
 | 2026-11-23 | 4 | Comprobantes PDF de pago del arancel y de recepción de provisión (2 copias); rendición al cliente pendiente con el cierre | 37ee781 |
 | 2026-11-23 | 4 | Cierre con el cliente: reingreso del saldo por el contador (Reingresado), Rendir cliente, cheque por el saldo total, comprobante de rendición (3 copias) y Rendido a cliente (migración 0025) | b32eab9 |
-| 2026-11-23 | 4 | Pagos de arancel y provisión: diálogo con medio, fecha, cuotas y referencia (obligatoria en transferencias; migración 0026) | ver commit |
+| 2026-11-23 | 4 | Pagos de arancel y provisión: diálogo con medio, fecha, cuotas y referencia (obligatoria en transferencias; migración 0026) | bb13679 |
+| 2026-11-23 | 4 | Cuenta corriente por abogado, comprobante de entrega de fondos (2 copias) y perfil Ejecutivo de Finanzas separado de Gerencia de Finanzas (migración 0027). Fase 4 completa salvo WebPay | ver commit |
