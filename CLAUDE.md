@@ -184,6 +184,9 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
 - **Cargas y bienes**: cuelgan de la relación titular–plan (`cargas_afiliado`, `bienes_afiliado`); se
   cargan por `POST /cargas-masivas/:entidad` (FLUJO/STOCK). Una atención para una carga lleva
   `carga_id`, validada en `AtencionesService.crear()` (mismo titular y plan, vigente hoy).
+  También se cargan coberturas (FLUJO reemplaza la regla de igual materia y tipo; STOCK desactiva las ausentes;
+  exige `coberturas.administrar`) y atenciones (solo FLUJO; cada fila pasa por `AtencionesService.crear()` y por el
+  permiso de crear su tipo). Las materias se buscan por nombre de competencia + materia, sin tildes ni mayúsculas.
 - **Posesión efectiva**: es un tipo de atención (`PosesionEfectiva`, prefijo POSE); causante y
   herederos se manejan solo vía `PosesionesService`. La ficha PDF es un resumen interno, nunca el
   formulario oficial del Registro Civil.

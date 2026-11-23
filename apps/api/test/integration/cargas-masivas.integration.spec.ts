@@ -10,6 +10,7 @@ import { planes } from "../../src/db/schema/planes";
 import { afiliados, planesAfiliado } from "../../src/db/schema/afiliados";
 import { CargasMasivasService } from "../../src/modules/cargas-masivas/cargas-masivas.service";
 import { NotifInboxService } from "../../src/modules/notif-inbox/notif-inbox.service";
+import { AtencionesService } from "../../src/modules/atenciones/atenciones.service";
 import ExcelJS from "exceljs";
 import { planAleatorio, rutAleatorio } from "./helpers";
 
@@ -28,7 +29,7 @@ const RUN = !!process.env.DATABASE_URL;
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true }), DatabaseModule],
-      providers: [CargasMasivasService, { provide: NotifInboxService, useValue: { crearBulk: async (items: unknown[]) => { notificadas.push(items); return []; } } }],
+      providers: [CargasMasivasService, { provide: AtencionesService, useValue: {} }, { provide: NotifInboxService, useValue: { crearBulk: async (items: unknown[]) => { notificadas.push(items); return []; } } }],
     }).compile();
     service = moduleRef.get(CargasMasivasService);
     pool = moduleRef.get(PG_POOL);

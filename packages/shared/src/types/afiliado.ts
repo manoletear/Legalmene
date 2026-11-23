@@ -76,7 +76,7 @@ export const TipoCargaMasivaEnum = z.enum(["FLUJO", "STOCK"]);
 export type TipoCargaMasiva = z.infer<typeof TipoCargaMasivaEnum>;
 
 // Qué se carga: la nómina del plan, las cargas (familiares) o los bienes cubiertos (Anexo §III).
-export const EntidadCargaMasivaEnum = z.enum(["afiliados", "cargas", "bienes"]);
+export const EntidadCargaMasivaEnum = z.enum(["afiliados", "cargas", "bienes", "coberturas", "atenciones"]);
 export type EntidadCargaMasiva = z.infer<typeof EntidadCargaMasivaEnum>;
 
 export const CargaMasivaResultadoSchema = z.object({

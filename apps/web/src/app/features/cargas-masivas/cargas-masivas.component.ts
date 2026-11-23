@@ -31,7 +31,7 @@ import type { CargaMasivaResultado, EntidadCargaMasiva, TipoCargaMasiva } from "
         <div style="padding:16px 16px 0;">
           <h2 style="margin:0;">Cargas masivas</h2>
           <small class="lm-muted">
-            Nómina, cargas (familiares) o bienes de un plan. FLUJO agrega y actualiza · STOCK además termina
+            Nómina, cargas (familiares), bienes, coberturas o atenciones de un plan. FLUJO agrega y actualiza · STOCK además termina
             lo del plan que no viene en el archivo (Anexo §III). Al terminar se avisa en la aplicación a quienes ejecutan cargas.
           </small>
         </div>
@@ -44,7 +44,7 @@ import type { CargaMasivaResultado, EntidadCargaMasiva, TipoCargaMasiva } from "
           optionLabel="label"
           optionValue="value"
           [style]="{ 'min-width': '180px' }"
-          (onChange)="resultado.set(null)"
+          (onChange)="cambiarEntidad()"
         ></p-select>
         <p-select
           [(ngModel)]="codPlan"
@@ -56,6 +56,7 @@ import type { CargaMasivaResultado, EntidadCargaMasiva, TipoCargaMasiva } from "
         ></p-select>
         <p-select
           [(ngModel)]="tipo"
+          [disabled]="entidad === 'atenciones'"
           [options]="tipoOpts"
           optionLabel="label"
           optionValue="value"
@@ -78,12 +79,33 @@ import type { CargaMasivaResultado, EntidadCargaMasiva, TipoCargaMasiva } from "
         <pre *ngIf="entidad === 'bienes'" style="background:#f5f5f5; padding:8px; border-radius:4px; margin-top:8px;">rut_titular,tipo,identificador,descripcion,comuna,fecha_inicio,fecha_termino
 11111111-1,Vehiculo,ABCD12,Auto familiar,Santiago,2026-01-01,
 11111111-1,Inmueble,123-45,Casa habitación,Ñuñoa,,</pre>
-        <small *ngIf="entidad !== 'afiliados'" class="lm-muted">
+        <ng-container *ngIf="entidad === 'coberturas'">
+          <pre style="background:#f5f5f5; padding:8px; border-radius:4px; margin-top:8px;">competencia,materia,tipo,modalidad,porcentaje,valor_uf
+,,,Porcentaje,50,
+Laboral,Despido injustificado,Juicio,ValorUF,,"1,5"
+Familia,Alimentos,,SinCobertura,,</pre>
+          <small class="lm-muted">
+            Competencia y materia vacías = regla para todas las materias; tipo vacío = todos los tipos (Consulta, Asesoria, Juicio,
+            PosesionEfectiva). Modalidad: Porcentaje (porcentaje cubierto), ValorUF (lo que paga el afiliado) o SinCobertura.
+            Una regla existente para la misma materia y tipo se reemplaza; STOCK desactiva las reglas del plan que no vienen.
+            Requiere el permiso de administrar coberturas.
+          </small>
+        </ng-container>
+        <ng-container *ngIf="entidad === 'atenciones'">
+          <pre style="background:#f5f5f5; padding:8px; border-radius:4px; margin-top:8px;">rut,tipo,competencia,materia,asunto,abogado,rut_carga
+11111111-1,Consulta,Laboral,Despido injustificado,Consulta por finiquito,,
+11111111-1,Juicio,Laboral,Despido injustificado,Demanda por despido,abogado&#64;legalchile.cl,</pre>
+          <small class="lm-muted">
+            Solo FLUJO. Cada fila crea una atención con las mismas reglas que el formulario: el RUT debe tener el plan vigente y
+            la materia debe aplicar al tipo. Abogado (correo) y rut_carga son opcionales. Máximo 2.000 filas por archivo.
+          </small>
+        </ng-container>
+        <small *ngIf="entidad === 'cargas' || entidad === 'bienes'" class="lm-muted">
           El titular debe estar en la nómina del plan. Parentesco: Conyuge, ConvivienteCivil, Hijo, Padre, Madre u Otro. Tipo de bien: Inmueble, Vehiculo u Otro.
         </small>
         <pre *ngIf="entidad === 'afiliados'" style="background:#f5f5f5; padding:8px; border-radius:4px; margin-top:8px;">rut,nombres,apellido_paterno,apellido_materno,email,telefono,direccion,comuna,ciudad,region,fecha_nacimiento,fecha_inicio,fecha_termino
-11111111-1,Juan,Pérez,Soto,juan&#64;ejemplo.cl,+56912345678,Santiago,RM,1985-04-12,2026-01-01,2026-12-31
-22222222-2,María,González,,maria&#64;ejemplo.cl,,,,,,</pre>
+11111111-1,Juan,Pérez,Soto,juan&#64;ejemplo.cl,+56912345678,Av. Principal 123,Providencia,Santiago,Metropolitana de Santiago,1985-04-12,2026-01-01,2026-12-31
+22222222-2,María,González,,maria&#64;ejemplo.cl,,,,,,,,</pre>
         <small *ngIf="entidad === 'afiliados'" class="lm-muted">
           Si el RUT ya existe no se modifican sus datos personales. Sin fecha_inicio se usa la fecha de hoy.
         </small>
@@ -127,7 +149,14 @@ export class CargasMasivasComponent implements OnInit {
     { label: "Nómina (afiliados)", value: "afiliados" },
     { label: "Cargas", value: "cargas" },
     { label: "Bienes", value: "bienes" },
+    { label: "Coberturas", value: "coberturas" },
+    { label: "Atenciones", value: "atenciones" },
   ];
+
+  cambiarEntidad() {
+    this.resultado.set(null);
+    if (this.entidad === "atenciones") this.tipo = "FLUJO";
+  }
   protected codPlan: string | null = null;
   protected planOpts = signal<{ label: string; value: string }[]>([]);
   protected file = signal<File | null>(null);

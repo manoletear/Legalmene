@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, BadRequestException, NotFoundException } from "@nestjs/common";
+import { ForbiddenException, HttpException, Inject, Injectable, Logger, BadRequestException, NotFoundException } from "@nestjs/common";
 import { parse } from "csv-parse/sync";
 import { and, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
@@ -7,12 +7,20 @@ import { perfilPermisos, perfiles, usuarios } from "../../db/schema/usuarios";
 import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
 import { libroXlsx } from "../exports/xlsx";
 import { planes } from "../../db/schema/planes";
+import { coberturas } from "../../db/schema/aranceles";
+import { competencias, materias } from "../../db/schema/maestros";
+import { AtencionesService } from "../atenciones/atenciones.service";
+import type { AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 import { formatearRut, rutValido } from "../../common/utils/rut";
 import { hoyChile } from "../afiliados/vigencia";
 import {
+  CreateAtencionSchema,
+  CreateCoberturaSchema,
   PARENTESCO_LABEL,
   ParentescoEnum,
   PERFIL_ADMIN,
+  PLANES_SIN_COBERTURA,
+  type TipoAtencion,
   TipoBienEnum,
   type CargaMasivaResultado,
   type EntidadCargaMasiva,
@@ -36,6 +44,24 @@ interface FilaCSV {
 }
 
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_ATENCIONES_POR_CARGA = 2000;
+const MODALIDADES = ["Porcentaje", "ValorUF", "SinCobertura"] as const;
+
+// Sin tildes, mayúsculas ni espacios repetidos, para comparar nombres de maestros.
+function normalizar(v: string): string {
+  return v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+const TIPOS: Record<string, TipoAtencion> = {
+  consulta: "Consulta",
+  asesoria: "Asesoria",
+  juicio: "Juicio",
+  posesionefectiva: "PosesionEfectiva",
+  "posesion efectiva": "PosesionEfectiva",
+};
+function tipoAtencion(v: string): TipoAtencion | null {
+  return TIPOS[normalizar(v)] ?? null;
+}
 
 interface RegistroValido {
   fila: number;
@@ -51,7 +77,186 @@ export class CargasMasivasService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     @Inject(NotifInboxService) private readonly notif: NotifInboxService,
+    @Inject(AtencionesService) private readonly atenciones: AtencionesService,
   ) {}
+
+  // Materias vigentes por "competencia|materia" normalizado (sin tildes ni mayúsculas).
+  private async materiasPorNombre(): Promise<Map<string, { competenciaId: string; materiaId: string }>> {
+    const rows = await this.db
+      .select({ competenciaId: competencias.id, competencia: competencias.nombre, materiaId: materias.id, materia: materias.nombre })
+      .from(materias)
+      .innerJoin(competencias, eq(competencias.id, materias.competenciaId))
+      .where(and(eq(materias.vigente, true), eq(competencias.vigente, true)));
+    return new Map(rows.map((r) => [`${normalizar(r.competencia)}|${normalizar(r.materia)}`, { competenciaId: r.competenciaId, materiaId: r.materiaId }]));
+  }
+
+  /**
+   * Coberturas de un plan (Anexo §I l.54). Columnas: modalidad (Porcentaje, ValorUF, SinCobertura);
+   * opcionales competencia + materia (vacías = todas las materias), tipo (vacío = todos),
+   * porcentaje (0–100) y valor_uf (p. ej. 1,5). FLUJO agrega o reemplaza la regla de la misma
+   * materia y tipo; STOCK además desactiva las reglas vigentes del plan que no vienen en el archivo.
+   */
+  async cargarCoberturas(codPlan: string, tipo: TipoCargaMasiva, csvBuffer: Buffer, usuario: AuthenticatedUser): Promise<CargaMasivaResultado> {
+    if (!usuario.permisos.includes("coberturas.administrar")) throw new ForbiddenException("Requiere permiso coberturas.administrar");
+    if ((PLANES_SIN_COBERTURA as readonly string[]).includes(codPlan)) {
+      throw new BadRequestException(`El plan ${codPlan} es sin cobertura y no lleva reglas`);
+    }
+    const inicio = Date.now();
+    await this.validarPlan(codPlan);
+    const filas = this.leerCsv(csvBuffer);
+    const r = this.resultadoVacio("coberturas", tipo, codPlan, filas.length);
+    const porNombre = await this.materiasPorNombre();
+    const reglas: { codPlan: string; materiaId: string | null; tipo: TipoAtencion | null; modalidad: "Porcentaje" | "ValorUF" | "SinCobertura"; porcentaje: number | null; valorUfCentesimas: number | null }[] = [];
+    const vistas = new Set<string>();
+    filas.forEach((f, i) => {
+      const fila = i + 2;
+      const error = (mensaje: string) => r.errores.push({ fila, mensaje });
+      let materiaId: string | null = null;
+      if (f.competencia || f.materia) {
+        const m = porNombre.get(`${normalizar(f.competencia ?? "")}|${normalizar(f.materia ?? "")}`);
+        if (!m) return error(`Materia no encontrada o no vigente: ${f.competencia ?? ""} / ${f.materia ?? ""}`);
+        materiaId = m.materiaId;
+      }
+      const t = f.tipo ? tipoAtencion(f.tipo) : null;
+      if (f.tipo && !t) return error(`Tipo inválido: ${f.tipo} (Consulta, Asesoria, Juicio, PosesionEfectiva o vacío)`);
+      const modalidad = MODALIDADES.find((m) => normalizar(m) === normalizar(f.modalidad ?? ""));
+      if (!modalidad) return error(`Modalidad inválida: ${f.modalidad ?? ""} (Porcentaje, ValorUF o SinCobertura)`);
+      const porcentaje = f.porcentaje ? Number(f.porcentaje.replace(",", ".")) : null;
+      const uf = f.valor_uf ? Number(f.valor_uf.replace(",", ".")) : null;
+      if (porcentaje !== null && !Number.isInteger(porcentaje)) return error(`Porcentaje inválido: ${f.porcentaje}`);
+      if (uf !== null && !Number.isFinite(uf)) return error(`valor_uf inválido: ${f.valor_uf}`);
+      const regla = {
+        codPlan,
+        materiaId,
+        tipo: t,
+        modalidad,
+        porcentaje: modalidad === "Porcentaje" ? porcentaje : null,
+        valorUfCentesimas: modalidad === "ValorUF" && uf !== null ? Math.round(uf * 100) : null,
+      };
+      const v = CreateCoberturaSchema.safeParse(regla);
+      if (!v.success) return error(v.error.issues.map((x) => `${x.path.join(".")}: ${x.message}`).join("; "));
+      const clave = `${materiaId}|${t}`;
+      if (vistas.has(clave)) return error("Regla duplicada en el archivo (misma materia y tipo)");
+      vistas.add(clave);
+      reglas.push(regla);
+    });
+
+    if (tipo === "STOCK" && reglas.length === 0) {
+      r.errores.push({ fila: 0, mensaje: "STOCK sin reglas válidas: no se desactivó ninguna regla del plan" });
+    } else {
+      await this.db.transaction(async (tx) => {
+        const filasDb = reglas.length
+          ? await tx
+              .insert(coberturas)
+              .values(reglas.map((x) => ({ ...x, vigente: true })))
+              .onConflictDoUpdate({
+                target: [coberturas.codPlan, coberturas.materiaId, coberturas.tipo],
+                set: {
+                  modalidad: sql`excluded.modalidad`,
+                  porcentaje: sql`excluded.porcentaje`,
+                  valorUfCentesimas: sql`excluded.valor_uf_centesimas`,
+                  vigente: true,
+                  updatedAt: new Date(),
+                },
+              })
+              .returning({ id: coberturas.id, insertado: sql<boolean>`(xmax = 0)` })
+          : [];
+        r.insertados = filasDb.filter((x) => x.insertado).length;
+        r.actualizados = filasDb.length - r.insertados;
+        if (tipo === "STOCK") {
+          const desactivadas = await tx
+            .update(coberturas)
+            .set({ vigente: false, updatedAt: new Date() })
+            .where(
+              and(
+                eq(coberturas.codPlan, codPlan),
+                eq(coberturas.vigente, true),
+                filasDb.length ? notInArray(coberturas.id, filasDb.map((x) => x.id)) : undefined,
+              ),
+            )
+            .returning({ id: coberturas.id });
+          r.eliminados = desactivadas.length;
+        }
+      });
+    }
+    r.duracionMs = Date.now() - inicio;
+    await this.notificar(r);
+    return r;
+  }
+
+  /**
+   * Atenciones del plan (Anexo §II l.141), solo FLUJO: cada fila crea una atención por el mismo
+   * camino que la web (plan vigente del RUT, materia del tipo, correlativo, cobertura). Columnas:
+   * rut, tipo (Consulta, Asesoria o Juicio), competencia, materia, asunto; opcionales
+   * abogado (correo) y rut_carga.
+   */
+  async cargarAtenciones(codPlan: string, tipo: TipoCargaMasiva, csvBuffer: Buffer, usuario: AuthenticatedUser): Promise<CargaMasivaResultado> {
+    if (tipo !== "FLUJO") throw new BadRequestException("Las atenciones solo se cargan en modalidad FLUJO");
+    const inicio = Date.now();
+    await this.validarPlan(codPlan);
+    const filas = this.leerCsv(csvBuffer);
+    if (filas.length > MAX_ATENCIONES_POR_CARGA) {
+      throw new BadRequestException(`El archivo supera ${MAX_ATENCIONES_POR_CARGA} atenciones; divídalo`);
+    }
+    const r = this.resultadoVacio("atenciones", tipo, codPlan, filas.length);
+    const porNombre = await this.materiasPorNombre();
+    const ruts = [...new Set(filas.map((f) => f.rut).filter((x): x is string => !!x && rutValido(x)).map(formatearRut))];
+    const personas = ruts.length
+      ? await this.db.select({ id: afiliados.id, rut: afiliados.rut }).from(afiliados).where(inArray(afiliados.rut, ruts))
+      : [];
+    const idPorRut = new Map(personas.map((p) => [p.rut, p.id]));
+    const correos = [...new Set(filas.map((f) => f.abogado?.toLowerCase()).filter((x): x is string => !!x))];
+    const abogados = correos.length
+      ? await this.db.select({ id: usuarios.id, email: usuarios.email }).from(usuarios).where(inArray(sql`lower(${usuarios.email})`, correos))
+      : [];
+    const idPorCorreo = new Map(abogados.map((u) => [u.email.toLowerCase(), u.id]));
+
+    for (const [i, f] of filas.entries()) {
+      const fila = i + 2;
+      const error = (mensaje: string) => r.errores.push({ fila, mensaje });
+      if (!f.rut || !rutValido(f.rut)) { error(`RUT inválido: ${f.rut ?? ""}`); continue; }
+      const afiliadoId = idPorRut.get(formatearRut(f.rut));
+      if (!afiliadoId) { error(`El RUT ${formatearRut(f.rut)} no está registrado`); continue; }
+      const t = f.tipo ? tipoAtencion(f.tipo) : null;
+      if (!t || t === "PosesionEfectiva") { error(`Tipo inválido: ${f.tipo ?? ""} (Consulta, Asesoria o Juicio)`); continue; }
+      const permiso = t === "Consulta" ? "atenciones.crear_consulta" : "atenciones.crear_caso";
+      if (!usuario.permisos.includes(permiso)) { error(`Sin permiso ${permiso}`); continue; }
+      const m = porNombre.get(`${normalizar(f.competencia ?? "")}|${normalizar(f.materia ?? "")}`);
+      if (!m) { error(`Materia no encontrada o no vigente: ${f.competencia ?? ""} / ${f.materia ?? ""}`); continue; }
+      if (!f.asunto) { error("asunto es obligatorio"); continue; }
+      let abogadoAsignadoId: string | undefined;
+      if (f.abogado) {
+        abogadoAsignadoId = idPorCorreo.get(f.abogado.toLowerCase());
+        if (!abogadoAsignadoId) { error(`Abogado no encontrado: ${f.abogado}`); continue; }
+      }
+      let cargaId: string | undefined;
+      if (f.rut_carga) {
+        if (!rutValido(f.rut_carga)) { error(`RUT de la carga inválido: ${f.rut_carga}`); continue; }
+        const [c] = await this.db
+          .select({ id: cargasAfiliado.id })
+          .from(cargasAfiliado)
+          .where(and(eq(cargasAfiliado.afiliadoId, afiliadoId), eq(cargasAfiliado.codPlan, codPlan), eq(cargasAfiliado.rut, formatearRut(f.rut_carga))));
+        if (!c) { error(`La carga ${formatearRut(f.rut_carga)} no es del titular en el plan ${codPlan}`); continue; }
+        cargaId = c.id;
+      }
+      // Mismas validaciones y valores por defecto que el formulario.
+      const datos = CreateAtencionSchema.safeParse({
+        codPlan, afiliadoId, competenciaId: m.competenciaId, materiaId: m.materiaId, asunto: f.asunto, abogadoAsignadoId, cargaId,
+      });
+      if (!datos.success) { error(datos.error.issues.map((x) => `${x.path.join(".")}: ${x.message}`).join("; ")); continue; }
+      try {
+        await this.atenciones.crear({ ...datos.data, tipo: t }, usuario);
+        r.insertados++;
+      } catch (e) {
+        if (!(e instanceof HttpException)) throw e;
+        const resp = e.getResponse();
+        error(typeof resp === "string" ? resp : String((resp as { message?: unknown }).message ?? e.message));
+      }
+    }
+    r.duracionMs = Date.now() - inicio;
+    await this.notificar(r);
+    return r;
+  }
 
   /**
    * Anexo §III. Ambas modalidades:
