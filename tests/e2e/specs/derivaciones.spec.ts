@@ -60,6 +60,21 @@ test.describe("Derivación consulta → juicio", () => {
     expect(juicio.tipo).toBe("Juicio");
     expect(juicio.estado).toBe("Asignada");
 
+    // Anexo §XI, Estado Derivación: el listado trae las etapas con sus fechas.
+    expect(lista.data[0]).toMatchObject({ derivadaCorrelativo: juicio.correlativo, derivadaEstado: "Asignada", primerContactoAt: null, terminoAt: null });
+    expect(lista.data[0].resueltaAt).toBeTruthy();
+    // Registrar el contacto con el cliente completa esa etapa.
+    await request.post(`${API}/atenciones/${juicioId}/primer-contacto`, { data: {} });
+    const conContacto = await request.get(`${API}/derivaciones?consultaId=${consulta.id}`).then((r) => r.json());
+    expect(conContacto.data[0].primerContactoAt).toBeTruthy();
+    await page.locator("p-select[name='estado']").click();
+    await page.getByRole("option", { name: "Aprobada" }).click();
+    await page.getByRole("button", { name: "Buscar" }).click();
+    const etapas = page.locator("tr", { hasText: consulta.correlativo }).getByTestId("etapas-derivacion");
+    await expect(etapas).toContainText("Aprobación");
+    await expect(etapas).toContainText("Contacto con cliente");
+    await expect(etapas).toContainText(juicio.correlativo);
+
     // Requisitos por etapa: sin tribunal ni ROL el juicio no pasa a Pendiente.
     const pend = await request.post(`${API}/atenciones/${juicioId}/estado`, { data: { estado: "Pendiente" } });
     expect(pend.status()).toBe(400);

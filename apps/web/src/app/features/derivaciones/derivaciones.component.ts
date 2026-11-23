@@ -50,7 +50,7 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
       <p-table *ngIf="criterios()" [value]="data()" [loading]="loading()" styleClass="p-datatable-sm" [style]="{ 'margin-top': '16px' }">
         <ng-template pTemplate="header">
           <tr>
-            <th>Consulta</th><th>Derivar a</th><th>Motivo</th><th>Estado</th><th>Solicitada por</th><th>Fecha</th><th></th>
+            <th>Consulta</th><th>Derivar a</th><th>Motivo</th><th>Estado</th><th>Solicitada por</th><th>Etapas</th><th></th>
           </tr>
         </ng-template>
         <ng-template pTemplate="body" let-d>
@@ -60,7 +60,15 @@ type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast
             <td>{{ d.motivo }}<div *ngIf="d.observacion" class="lm-small lm-muted">{{ d.observacion }}</div></td>
             <td><p-tag [value]="d.estado" [severity]="severidad(d.estado)"></p-tag></td>
             <td class="lm-small">{{ d.solicitadaPorEmail }}</td>
-            <td class="lm-small">{{ d.createdAt | date: 'dd/MM/yyyy' }}</td>
+            <td class="lm-small" data-testid="etapas-derivacion">
+              <!-- Anexo §XI: todas las etapas del flujo con sus fechas -->
+              <div *ngFor="let e of etapas(d)" [class.lm-muted]="!e.fecha" style="white-space:nowrap;">
+                <i class="pi" [ngClass]="e.fecha ? 'pi-check-circle' : 'pi-circle'" [style.color]="e.fecha ? '#16a34a' : '#cbd5e1'" style="font-size:11px;"></i>
+                {{ e.etiqueta }}: {{ e.fecha ? (e.fecha | date: 'dd/MM/yyyy') : '—' }}
+              </div>
+              <a *ngIf="d.atencionDerivadaId" [routerLink]="['/atenciones', d.atencionDerivadaId]" class="lm-mono">{{ d.derivadaCorrelativo }}</a>
+              <span *ngIf="d.derivadaEstado" class="lm-muted"> · {{ d.derivadaEstado }}</span>
+            </td>
             <td style="text-align:right; white-space:nowrap;">
               <ng-container *ngIf="d.estado === 'Solicitada' && esJefatura()">
                 <button pButton type="button" class="p-button-sm p-button-success p-button-text" label="Aprobar" (click)="aprobar(d)"></button>
@@ -141,6 +149,22 @@ export class DerivacionesComponent {
       },
       error: (e) => this.error(e),
     });
+  }
+
+  // Etapas del flujo de derivación en orden; la resolución muestra si fue aprobada o rechazada.
+  protected etapas(d: DerivacionRow): { etiqueta: string; fecha: string | null }[] {
+    const base = [
+      { etiqueta: "Solicitud", fecha: d.createdAt },
+      { etiqueta: d.estado === "Rechazada" ? "Rechazo" : "Aprobación", fecha: d.resueltaAt },
+    ];
+    if (d.estado === "Rechazada") return base;
+    return [
+      ...base,
+      { etiqueta: "Contacto con cliente", fecha: d.primerContactoAt },
+      { etiqueta: "Pago de arancel", fecha: d.arancelPagadoEn },
+      { etiqueta: "Primera gestión", fecha: d.primeraGestionAt },
+      { etiqueta: "Término", fecha: d.terminoAt },
+    ];
   }
 
   severidad(e: string): Severity {

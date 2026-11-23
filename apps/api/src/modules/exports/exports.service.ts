@@ -11,6 +11,7 @@ import {
 } from "@legalmene/shared";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { filtroAtenciones } from "../../common/acceso/alcance";
+import { atencionDerivada, columnasEtapasDerivacion } from "../atenciones/etapas-derivacion";
 import { accesoActual } from "../../common/acceso/contexto";
 import { condicionAtencion, condicionBien, rutComparable } from "../../common/busqueda/criterios";
 import { afiliados, planesAfiliado } from "../../db/schema/afiliados";
@@ -53,7 +54,6 @@ const ufTexto = (centesimas: number | null | undefined) => (centesimas == null ?
 
 const abogado = alias(usuarios, "abogado");
 const solicitante = alias(usuarios, "solicitante");
-const derivada = alias(atenciones, "derivada");
 
 // Atenciones con los nombres que muestran búsquedas e informes (afiliado, plan, canal, abogado…).
 export function filasAtencionDetalle(db: Database, where: SQL | undefined) {
@@ -296,13 +296,13 @@ export class ExportsService {
         solicitadaPor: solicitante.nombre,
         creada: derivaciones.createdAt,
         resuelta: derivaciones.resueltaAt,
-        derivada: derivada.correlativo,
+        ...columnasEtapasDerivacion,
       })
       .from(derivaciones)
       .innerJoin(atenciones, eq(atenciones.id, derivaciones.consultaId))
       .innerJoin(afiliados, eq(afiliados.id, atenciones.afiliadoId))
       .leftJoin(solicitante, eq(solicitante.id, derivaciones.solicitadaPorId))
-      .leftJoin(derivada, eq(derivada.id, derivaciones.atencionDerivadaId))
+      .leftJoin(atencionDerivada, eq(atencionDerivada.id, derivaciones.atencionDerivadaId))
       .where(where)
       .orderBy(desc(derivaciones.createdAt));
     return this.libro(
@@ -316,7 +316,12 @@ export class ExportsService {
         { titulo: "Solicitada por", valor: (r) => r.solicitadaPor, ancho: 22 },
         { titulo: "Fecha solicitud", valor: (r) => fechaCl(r.creada) },
         { titulo: "Fecha resolución", valor: (r) => fechaCl(r.resuelta) },
-        { titulo: "Atención derivada", valor: (r) => r.derivada, ancho: 18 },
+        { titulo: "Atención derivada", valor: (r) => r.derivadaCorrelativo, ancho: 18 },
+        { titulo: "Estado atención derivada", valor: (r) => r.derivadaEstado },
+        { titulo: "Primer contacto", valor: (r) => fechaCl(r.primerContactoAt) },
+        { titulo: "Pago arancel", valor: (r) => fechaCl(r.arancelPagadoEn) },
+        { titulo: "Primera gestión", valor: (r) => fechaCl(r.primeraGestionAt) },
+        { titulo: "Término", valor: (r) => fechaCl(r.terminoAt) },
       ],
       filas,
     );
