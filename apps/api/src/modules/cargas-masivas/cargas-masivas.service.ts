@@ -103,10 +103,14 @@ export class CargasMasivasService {
 
     // Validar y normalizar todas las filas antes de tocar la DB.
     const rutsValidos = new Set<string>();
+    // RUT presentes en el archivo aunque su fila tenga otro error: STOCK no los da de baja
+    // (Anexo §III: solo se terminan las relaciones "no consideradas en el archivo").
+    const rutsEnArchivo = new Set<string>();
     const registros: RegistroValido[] = [];
 
     filas.forEach((fila, idx) => {
       const nroLinea = idx + 2; // +1 por header, +1 por base 1.
+      if (fila.rut && rutValido(fila.rut)) rutsEnArchivo.add(formatearRut(fila.rut));
       if (!fila.rut) {
         resultado.errores.push({
           fila: nroLinea,
@@ -201,13 +205,17 @@ export class CargasMasivasService {
       resultado.actualizados = relaciones.length - resultado.insertados;
 
       if (tipo === "STOCK") {
+        const presentes = await tx
+          .select({ id: afiliados.id })
+          .from(afiliados)
+          .where(inArray(afiliados.rut, Array.from(rutsEnArchivo)));
         const terminadas = await tx
           .update(planesAfiliado)
           .set({ fechaTermino: sql`${hoyChile}`, vigencia: "Eliminado", updatedAt: new Date() })
           .where(
             and(
               eq(planesAfiliado.codPlan, codPlan),
-              notInArray(planesAfiliado.afiliadoId, Array.from(idPorRut.values())),
+              notInArray(planesAfiliado.afiliadoId, presentes.map((x) => x.id)),
               ne(planesAfiliado.vigencia, "Eliminado"),
             ),
           )
@@ -279,9 +287,14 @@ export class CargasMasivasService {
     }
     const validas: { fila: number; titular: string; rut: string; f: Fila; parentesco: string | null }[] = [];
     const vistos = new Set<string>();
+    // Registros identificables del archivo (aunque su fila tenga error): STOCK no los da de baja.
+    const enArchivo = new Set<string>();
     filas.forEach((f, i) => {
       const fila = i + 2;
       const error = (mensaje: string) => r.errores.push({ fila, mensaje });
+      if (f.rut_titular && rutValido(f.rut_titular) && f.rut && rutValido(f.rut)) {
+        enArchivo.add(`${formatearRut(f.rut_titular)}|${formatearRut(f.rut)}`);
+      }
       if (!f.rut_titular || !rutValido(f.rut_titular)) return error(`RUT titular inválido: ${f.rut_titular ?? ""}`);
       if (!f.rut || !rutValido(f.rut)) return error(`RUT de la carga inválido: ${f.rut ?? ""}`);
       if (!f.nombres || !f.apellido_paterno) return error("nombres y apellido_paterno son obligatorios");
@@ -339,18 +352,26 @@ export class CargasMasivasService {
       r.insertados = filasDb.filter((x) => x.isNew).length;
       r.actualizados = filasDb.length - r.insertados;
       if (tipo === "STOCK") {
-        const terminadas = await tx
-          .update(cargasAfiliado)
-          .set({ fechaTermino: sql`${hoyChile}`, vigencia: "Eliminado", updatedAt: new Date() })
-          .where(
-            and(
-              eq(cargasAfiliado.codPlan, codPlan),
-              ne(cargasAfiliado.vigencia, "Eliminado"),
-              filasDb.length ? notInArray(cargasAfiliado.id, filasDb.map((x) => x.id)) : undefined,
-            ),
-          )
-          .returning({ id: cargasAfiliado.id });
-        r.eliminados = terminadas.length;
+        // Solo se dan de baja las cargas que no vienen en el archivo (aunque su fila tenga error,
+        // una carga identificable se conserva). Sin registros identificables no se da de baja nada.
+        if (enArchivo.size === 0) {
+          r.errores.push({ fila: 0, mensaje: "Carga STOCK sin registros identificables: no se dio de baja ninguna carga" });
+        } else {
+          const actuales = await tx
+            .select({ id: cargasAfiliado.id, rut: cargasAfiliado.rut, titular: afiliados.rut })
+            .from(cargasAfiliado)
+            .innerJoin(afiliados, eq(afiliados.id, cargasAfiliado.afiliadoId))
+            .where(and(eq(cargasAfiliado.codPlan, codPlan), ne(cargasAfiliado.vigencia, "Eliminado")));
+          const bajas = actuales.filter((c) => !enArchivo.has(`${c.titular}|${c.rut}`)).map((c) => c.id);
+          if (bajas.length) {
+            const terminadas = await tx
+              .update(cargasAfiliado)
+              .set({ fechaTermino: sql`${hoyChile}`, vigencia: "Eliminado", updatedAt: new Date() })
+              .where(inArray(cargasAfiliado.id, bajas))
+              .returning({ id: cargasAfiliado.id });
+            r.eliminados = terminadas.length;
+          }
+        }
       }
     });
     r.duracionMs = Date.now() - inicio;
@@ -373,11 +394,16 @@ export class CargasMasivasService {
     tipos.set("vehículo", "Vehiculo");
     const validas: { fila: number; titular: string; tipo: TipoBien; identificador: string; f: Fila }[] = [];
     const vistos = new Set<string>();
+    // Registros identificables del archivo (aunque su fila tenga error): STOCK no los da de baja.
+    const enArchivo = new Set<string>();
     filas.forEach((f, i) => {
       const fila = i + 2;
       const error = (mensaje: string) => r.errores.push({ fila, mensaje });
-      if (!f.rut_titular || !rutValido(f.rut_titular)) return error(`RUT titular inválido: ${f.rut_titular ?? ""}`);
       const t = f.tipo ? tipos.get(f.tipo.toLowerCase()) : undefined;
+      if (f.rut_titular && rutValido(f.rut_titular) && t && f.identificador) {
+        enArchivo.add(`${formatearRut(f.rut_titular)}|${t}|${f.identificador.trim().toUpperCase()}`);
+      }
+      if (!f.rut_titular || !rutValido(f.rut_titular)) return error(`RUT titular inválido: ${f.rut_titular ?? ""}`);
       if (!t) return error(`Tipo de bien inválido: ${f.tipo ?? ""} (${TipoBienEnum.options.join(", ")})`);
       if (!f.identificador) return error("identificador es obligatorio");
       const fechas = this.fechasInvalidas(f, ["fecha_inicio", "fecha_termino"]);
@@ -428,18 +454,25 @@ export class CargasMasivasService {
       r.insertados = filasDb.filter((x) => x.isNew).length;
       r.actualizados = filasDb.length - r.insertados;
       if (tipo === "STOCK") {
-        const terminadas = await tx
-          .update(bienesAfiliado)
-          .set({ fechaTermino: sql`${hoyChile}`, vigencia: "Eliminado", updatedAt: new Date() })
-          .where(
-            and(
-              eq(bienesAfiliado.codPlan, codPlan),
-              ne(bienesAfiliado.vigencia, "Eliminado"),
-              filasDb.length ? notInArray(bienesAfiliado.id, filasDb.map((x) => x.id)) : undefined,
-            ),
-          )
-          .returning({ id: bienesAfiliado.id });
-        r.eliminados = terminadas.length;
+        // Igual que las cargas: se conservan los bienes identificables del archivo.
+        if (enArchivo.size === 0) {
+          r.errores.push({ fila: 0, mensaje: "Carga STOCK sin registros identificables: no se dio de baja ningún bien" });
+        } else {
+          const actuales = await tx
+            .select({ id: bienesAfiliado.id, tipo: bienesAfiliado.tipo, identificador: bienesAfiliado.identificador, titular: afiliados.rut })
+            .from(bienesAfiliado)
+            .innerJoin(afiliados, eq(afiliados.id, bienesAfiliado.afiliadoId))
+            .where(and(eq(bienesAfiliado.codPlan, codPlan), ne(bienesAfiliado.vigencia, "Eliminado")));
+          const bajas = actuales.filter((b) => !enArchivo.has(`${b.titular}|${b.tipo}|${b.identificador}`)).map((b) => b.id);
+          if (bajas.length) {
+            const terminadas = await tx
+              .update(bienesAfiliado)
+              .set({ fechaTermino: sql`${hoyChile}`, vigencia: "Eliminado", updatedAt: new Date() })
+              .where(inArray(bienesAfiliado.id, bajas))
+              .returning({ id: bienesAfiliado.id });
+            r.eliminados = terminadas.length;
+          }
+        }
       }
     });
     r.duracionMs = Date.now() - inicio;

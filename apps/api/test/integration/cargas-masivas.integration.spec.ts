@@ -136,6 +136,20 @@ const RUN = !!process.env.DATABASE_URL;
     expect((await relacion(JUAN, OTRO_PLAN)).vigencia).toBe("Activo");
   });
 
+  it("STOCK no da de baja un RUT que viene en el archivo con error de validación (Anexo §III)", async () => {
+    const res = await service.cargarAfiliados(
+      TEST_PLAN,
+      "STOCK",
+      csv([
+        [JUAN, "", "", "", "", ""], // viene en el archivo, pero sin nombres: error
+        [CARLOS, "Carlos", "Nuevo", "carlos@test.cl", "", ""],
+      ]),
+    );
+    expect(res.errores.map((e) => e.fila)).toEqual([2]);
+    expect(res.eliminados).toBe(0);
+    expect((await relacion(JUAN, TEST_PLAN)).vigencia).toBe("Activo");
+  });
+
   it("rechaza RUT duplicado dentro del mismo archivo", async () => {
     const res = await service.cargarAfiliados(
       TEST_PLAN,
@@ -217,6 +231,31 @@ const RUN = !!process.env.DATABASE_URL;
       await wb.xlsx.load((await service.resumenXlsx(r)) as unknown as ArrayBuffer);
       expect(wb.worksheets.map((w) => w.name)).toEqual(["Resumen", "Errores"]);
       expect(wb.getWorksheet("Errores")!.rowCount).toBe(3);
+    });
+
+    it("STOCK de cargas y bienes conserva lo identificable aunque su fila tenga error, y sin nada identificable no da de baja", async () => {
+      // Parentesco inválido: error, pero la carga es identificable y no se da de baja.
+      const r1 = await service.cargarCargas(OTRO_PLAN, "STOCK", buf(["rut_titular,rut,nombres,apellido_paterno,parentesco", `${JUAN},${CARGA1},Ana,Pérez,Primo`]));
+      expect(r1.errores).toHaveLength(1);
+      expect(r1.eliminados).toBe(0);
+      const db = drizzle(pool);
+      const carga1 = await db.execute(sql`SELECT vigencia FROM cargas_afiliado WHERE cod_plan = ${OTRO_PLAN} AND rut = ${CARGA1}`);
+      expect(carga1.rows[0]).toMatchObject({ vigencia: "Activo" });
+
+      // Ningún registro identificable (RUT inválidos): no se da de baja nada y se informa.
+      const r2 = await service.cargarCargas(OTRO_PLAN, "STOCK", buf(["rut_titular,rut,nombres,apellido_paterno", "1-1,2-2,X,Y"]));
+      expect(r2.eliminados).toBe(0);
+      expect(r2.errores.some((e) => /sin registros identificables/.test(e.mensaje))).toBe(true);
+      expect((await db.execute(sql`SELECT vigencia FROM cargas_afiliado WHERE cod_plan = ${OTRO_PLAN} AND rut = ${CARGA1}`)).rows[0]).toMatchObject({
+        vigencia: "Activo",
+      });
+
+      // Bienes: fecha inválida en la fila del vehículo existente; se conserva.
+      const r3 = await service.cargarBienes(OTRO_PLAN, "STOCK", buf(["rut_titular,tipo,identificador,fecha_inicio", `${JUAN},Vehiculo,ab-cd-12,31-12-2024`]));
+      expect(r3.errores).toHaveLength(1);
+      expect(r3.eliminados).toBe(0);
+      const bien = await db.execute(sql`SELECT vigencia FROM bienes_afiliado WHERE cod_plan = ${OTRO_PLAN} AND identificador = 'AB-CD-12'`);
+      expect(bien.rows[0]).toMatchObject({ vigencia: "Activo" });
     });
   });
 });

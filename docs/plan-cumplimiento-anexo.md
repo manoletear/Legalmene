@@ -92,7 +92,7 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 - [ ] Estado de derivación con todas las etapas y fechas. (§XI ~l.1905)
 - [ ] Informe de afiliados con selección de campos y hoja resumen; listados de atenciones y RUT en reportes. (§XII, §XIII)
 - [ ] Carga masiva de coberturas y de atenciones; campo Ciudad; maestros región/ciudad/comuna; canales editables. (§I l.54, §II l.141, l.150)
-- [ ] Stock: no dar de baja un RUT que viene en el archivo con error de validación. (§III l.293)
+- [x] Stock: no dar de baja un RUT que viene en el archivo con error de validación. (§III l.293)
 
 ## Fase 6 — Agenda, comité y telefonía (~2 semanas; requiere levantamiento)
 
@@ -136,4 +136,5 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 | 2026-11-23 | 4 | Comprobantes PDF de pago del arancel y de recepción de provisión (2 copias); rendición al cliente pendiente con el cierre | 37ee781 |
 | 2026-11-23 | 4 | Cierre con el cliente: reingreso del saldo por el contador (Reingresado), Rendir cliente, cheque por el saldo total, comprobante de rendición (3 copias) y Rendido a cliente (migración 0025) | b32eab9 |
 | 2026-11-23 | 4 | Pagos de arancel y provisión: diálogo con medio, fecha, cuotas y referencia (obligatoria en transferencias; migración 0026) | bb13679 |
-| 2026-11-23 | 4 | Cuenta corriente por abogado, comprobante de entrega de fondos (2 copias) y perfil Ejecutivo de Finanzas separado de Gerencia de Finanzas (migración 0027). Fase 4 completa salvo WebPay | ver commit |
+| 2026-11-23 | 4 | Cuenta corriente por abogado, comprobante de entrega de fondos (2 copias) y perfil Ejecutivo de Finanzas separado de Gerencia de Finanzas (migración 0027). Fase 4 completa salvo WebPay | 94632f0 (PR #15) |
+| 2026-11-23 | 5 | STOCK conserva lo que viene en el archivo aunque su fila tenga error; cargas y bienes ya no dan de baja todo el plan si ninguna fila es válida | ver commit |
