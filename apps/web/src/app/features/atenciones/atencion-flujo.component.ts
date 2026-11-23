@@ -1,7 +1,7 @@
 import { Component, OnInit, computed, effect, inject, input, output, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
-import { RouterLink } from "@angular/router";
+import { Router, RouterLink } from "@angular/router";
 import { ButtonModule } from "primeng/button";
 import { CheckboxModule } from "primeng/checkbox";
 import { InputNumberModule } from "primeng/inputnumber";
@@ -9,6 +9,7 @@ import { InputTextModule } from "primeng/inputtext";
 import { SelectModule } from "primeng/select";
 import { TagModule } from "primeng/tag";
 import { TextareaModule } from "primeng/textarea";
+import { DialogModule } from "primeng/dialog";
 import { MessageService } from "primeng/api";
 import {
   ESTADO_LABEL,
@@ -16,6 +17,8 @@ import {
   transicionesPermitidas,
   type AtencionConMaestros,
   type CanalContacto,
+  type Competencia,
+  type Materia,
   type Contraparte,
   type DerivacionRow,
   type EstadoAtencion,
@@ -45,6 +48,7 @@ const MONEDAS: MonedaCuantia[] = ["CLP", "UF", "UTM", "USD"];
   selector: "lm-atencion-flujo",
   standalone: true,
   imports: [
+    DialogModule,
     CommonModule,
     FormsModule,
     RouterLink,
@@ -213,6 +217,29 @@ const MONEDAS: MonedaCuantia[] = ["CLP", "UF", "UTM", "USD"];
         </div>
       </div>
     </ng-container>
+
+    <!-- Anexo §VI 3.5.1: otra consulta en la misma llamada; puede tener otra competencia y materia. -->
+    <p-dialog header="Nuevo correlativo" [visible]="ncVisible()" (visibleChange)="ncVisible.set($event)" [modal]="true" [style]="{ width: '520px', maxWidth: '95vw' }">
+      <div class="lm-col" style="gap:12px;">
+        <small class="lm-muted">Nueva consulta en la misma llamada: mismo afiliado, plan, canal y grabación.</small>
+        <label class="lm-col" style="gap:4px;">Competencia *
+          <p-select name="ncCompetencia" [(ngModel)]="nc.competenciaId" [options]="ncCompetencias()" optionLabel="nombre" optionValue="id"
+            [filter]="true" filterBy="nombre" appendTo="body" (onChange)="ncCargarMaterias()"></p-select>
+        </label>
+        <label class="lm-col" style="gap:4px;">Materia *
+          <p-select name="ncMateria" [(ngModel)]="nc.materiaId" [options]="ncMaterias()" optionLabel="nombre" optionValue="id"
+            [filter]="true" filterBy="nombre" appendTo="body" placeholder="Seleccione" emptyMessage="La competencia no tiene materias para consultas"></p-select>
+        </label>
+        <label class="lm-col" style="gap:4px;">Asunto *<input pInputText name="ncAsunto" [(ngModel)]="nc.asunto" maxlength="250" /></label>
+        <label class="lm-col" style="gap:4px;">Tipo de consulta
+          <p-select name="ncTipo" [(ngModel)]="nc.tipoConsultaId" [options]="tiposConsulta()" optionLabel="nombre" optionValue="id" [showClear]="true" placeholder="El de esta consulta" appendTo="body"></p-select>
+        </label>
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button pButton label="Cancelar" [text]="true" (click)="ncVisible.set(false)"></button>
+          <button pButton label="Crear correlativo" icon="pi pi-check" [disabled]="!nc.competenciaId || !nc.materiaId || !nc.asunto.trim()" [loading]="ncGuardando()" (click)="crearNuevoCorrelativo()"></button>
+        </div>
+      </div>
+    </p-dialog>
   `,
 })
 export class AtencionFlujoComponent implements OnInit {
@@ -224,6 +251,7 @@ export class AtencionFlujoComponent implements OnInit {
   private me = inject(MeService);
   private msg = inject(MessageService);
   private prompt = inject(PromptService);
+  private router = inject(Router);
 
   protected canales = CANALES;
   protected monedas = MONEDAS;
@@ -235,6 +263,12 @@ export class AtencionFlujoComponent implements OnInit {
   protected tribunales = signal<Tribunal[]>([]);
   protected procedimientos = signal<Procedimiento[]>([]);
   protected derivaciones = signal<DerivacionRow[]>([]);
+  protected ncVisible = signal(false);
+  protected ncGuardando = signal(false);
+  protected ncCompetencias = signal<Competencia[]>([]);
+  protected ncMaterias = signal<Materia[]>([]);
+  protected nc = { competenciaId: "", materiaId: "", asunto: "", tipoConsultaId: null as string | null };
+  private ncOrigen: AtencionConMaestros | null = null;
   protected contrapartes = signal<Contraparte[]>([]);
 
   protected destino: EstadoAtencion | null = null;
@@ -357,14 +391,52 @@ export class AtencionFlujoComponent implements OnInit {
     this.api.actualizar(a.id, patch).subscribe({ next: () => this.ok("Datos guardados"), error: (e) => this.error(e) });
   }
 
-  async nuevoCorrelativo(a: AtencionConMaestros) {
-    const asunto = await this.prompt.open({ header: "Nuevo correlativo", label: "Asunto de la nueva consulta (misma llamada)", required: true });
-    if (!asunto) return;
+  nuevoCorrelativo(a: AtencionConMaestros) {
+    this.ncOrigen = a;
+    this.nc = { competenciaId: a.competenciaId, materiaId: a.materiaId, asunto: "", tipoConsultaId: null };
+    if (!this.ncCompetencias().length) {
+      this.maestros.listar("competencias", { vigente: true }).subscribe((c) => this.ncCompetencias.set(c));
+    }
+    this.ncCargarMaterias();
+    this.ncVisible.set(true);
+  }
+
+  // Materias vigentes de la competencia que aplican a consultas.
+  protected ncCargarMaterias() {
+    const competenciaId = this.nc.competenciaId;
+    if (!competenciaId) {
+      this.ncMaterias.set([]);
+      this.nc.materiaId = "";
+      return;
+    }
+    this.maestros.listar("materias", { competenciaId, vigente: true, aplicaA: "Consulta" }).subscribe((m) => {
+      this.ncMaterias.set(m);
+      if (!m.some((x) => x.id === this.nc.materiaId)) this.nc.materiaId = "";
+    });
+  }
+
+  protected crearNuevoCorrelativo() {
+    const a = this.ncOrigen;
+    if (!a) return;
+    this.ncGuardando.set(true);
     this.api
-      .nuevoCorrelativo(a.id, { competenciaId: a.competenciaId, materiaId: a.materiaId, asunto })
+      .nuevoCorrelativo(a.id, {
+        competenciaId: this.nc.competenciaId,
+        materiaId: this.nc.materiaId,
+        asunto: this.nc.asunto.trim(),
+        tipoConsultaId: this.nc.tipoConsultaId,
+      })
       .subscribe({
-        next: (n) => this.msg.add({ severity: "success", summary: `Creada ${n.correlativo}`, detail: "Ajusta su materia en la nueva ficha si corresponde", life: 4000 }),
-        error: (e) => this.error(e),
+        next: (n) => {
+          this.ncGuardando.set(false);
+          this.ncVisible.set(false);
+          this.msg.add({ severity: "success", summary: `Creada ${n.correlativo}`, life: 4000 });
+          void this.router.navigate(["/atenciones", n.id]);
+        },
+        error: (e) => {
+          this.ncGuardando.set(false);
+          this.error(e);
+        },
       });
   }
 

@@ -1,5 +1,6 @@
 import { PosesionPanelComponent } from "./posesion-panel.component";
-import { Component, OnInit, inject, signal, computed } from "@angular/core";
+import { Component, DestroyRef, OnInit, inject, signal, computed } from "@angular/core";
+import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { CommonModule } from "@angular/common";
 import { FormBuilder, ReactiveFormsModule, Validators } from "@angular/forms";
 import { ActivatedRoute, RouterLink } from "@angular/router";
@@ -531,10 +532,19 @@ export class AtencionDetailComponent implements OnInit {
     }));
   });
 
+  private destroyRef = inject(DestroyRef);
+
   ngOnInit() {
     this.usuariosApi.opciones().subscribe((us) => this.nombres.set(new Map(us.map((u) => [u.id, u.nombre]))));
-    const id = this.route.snapshot.paramMap.get("id");
-    if (id) this.cargar(id);
+    // Se escucha el parámetro (no el snapshot): ir de una atención a otra (nuevo correlativo,
+    // atención derivada) reutiliza este componente.
+    this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((pm) => {
+      const id = pm.get("id");
+      if (!id) return;
+      this.atencion.set(null);
+      this.pestana.set("gestiones");
+      this.cargar(id);
+    });
   }
 
   cargar(id: string) {
