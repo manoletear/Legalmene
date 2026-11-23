@@ -1,0 +1,1 @@
+ALTER TABLE "atenciones" ADD COLUMN "fecha_primer_contacto" timestamp with time zone;

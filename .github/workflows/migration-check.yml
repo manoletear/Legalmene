@@ -1,0 +1,43 @@
+name: Migration safety
+
+# Falla si el schema TS divergió de las migraciones SQL committeadas.
+# Atrapa el caso "alguien tocó el schema pero olvidó pnpm db:generate".
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/api/src/db/schema/**"
+      - "apps/api/drizzle/**"
+      - "apps/api/drizzle.config.ts"
+
+jobs:
+  drift-check:
+    name: Schema vs migrations drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "9.15.0"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @legalmene/shared build
+
+      - name: Generate migrations
+        working-directory: apps/api
+        env:
+          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
+        run: pnpm db:generate
+
+      - name: Verify no uncommitted drift
+        run: |
+          if [ -n "$(git status --porcelain apps/api/drizzle)" ]; then
+            echo "::error::Schema drift detected. Run pnpm db:generate and commit the migration."
+            git --no-pager diff apps/api/drizzle
+            exit 1
+          fi
+          echo "Schema y migrations alineadas."

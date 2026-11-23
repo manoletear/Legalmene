@@ -1,0 +1,42 @@
+# API demo en Render. Postgres externo (Neon): pegar DATABASE_URL al crear el blueprint.
+services:
+  - type: web
+    name: legalmene-api
+    runtime: node
+    plan: free
+    region: virginia
+    buildCommand: >-
+      corepack enable &&
+      pnpm install --frozen-lockfile --prod=false &&
+      pnpm --filter @legalmene/shared build &&
+      pnpm --filter @legalmene/api build
+    # El plan free no tiene preDeployCommand; migrate y seed son idempotentes.
+    startCommand: >-
+      pnpm --filter @legalmene/api db:migrate &&
+      pnpm --filter @legalmene/api db:seed &&
+      node apps/api/dist/apps/api/src/main.js
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: DATABASE_URL
+        sync: false
+      # Demo sin Entra ID: cualquiera con la URL entra como usuario mock. No cargar datos reales.
+      - key: AUTH_DISABLED
+        value: "true"
+      # Casos ficticios re-anclados a hoy en cada arranque (seed-demo.ts). Solo para esta demo.
+      - key: SEED_DEMO
+        value: "true"
+      - key: WEB_ORIGIN
+        value: https://legalmene.pages.dev,https://deploy-preview-1--animated-croissant-28f5ca.netlify.app,https://animated-croissant-28f5ca.netlify.app
+      - key: STORAGE_BACKEND
+        value: local
+      - key: DOCUMENTS_LOCAL_DIR
+        value: ./data/docs
+      - key: DOCUMENTS_LOCAL_SECRET
+        generateValue: true
+      # Firma las sesiones del login con enlace de acceso (en demo el enlace se muestra en pantalla).
+      - key: SESSION_JWT_SECRET
+        generateValue: true
+      - key: API_PUBLIC_URL
+        value: https://legalmene-api.onrender.com

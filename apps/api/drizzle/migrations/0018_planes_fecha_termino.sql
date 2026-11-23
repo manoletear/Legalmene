@@ -1,0 +1,1 @@
+ALTER TABLE "planes" ADD COLUMN "fecha_termino" date;
