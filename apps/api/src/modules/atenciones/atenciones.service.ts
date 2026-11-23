@@ -6,12 +6,17 @@ import {
   ConflictException,
   ForbiddenException,
 } from "@nestjs/common";
-import { and, eq, count, inArray, sql, desc, getTableColumns } from "drizzle-orm";
+import { and, eq, count, inArray, isNull, sql, desc, getTableColumns } from "drizzle-orm";
 import {
   ESTADOS_PROVISION_ABIERTOS,
   ESTADO_INICIAL,
   PLANES_SIN_COBERTURA,
   riesgoTotal,
+  transicionesPermitidas,
+  TIPOS_CON_VB_TERMINO,
+  type EstadoAtencion,
+  type SolicitarTermino,
+  type SolicitudTermino,
   type FichaAtencion,
   type CambiarEstado,
   type CreateContraparte,
@@ -76,6 +81,8 @@ const CAMPOS_CASO = [
 
 // Quién ejecuta la operación (para FKs y permisos puntuales como "Revisado por comité").
 export type Actor = Pick<AuthenticatedUser, "id"> & { permisos?: readonly string[] };
+
+const requiereVistoBueno = (tipo: TipoAtencion) => (TIPOS_CON_VB_TERMINO as readonly string[]).includes(tipo);
 
 @Injectable()
 export class AtencionesService {
@@ -360,20 +367,57 @@ export class AtencionesService {
     return row;
   }
 
-  async cambiarEstado(id: string, input: CambiarEstado, actor?: Actor): Promise<Atencion> {
+  async cambiarEstado(
+    id: string,
+    input: CambiarEstado,
+    actor?: Actor,
+    opciones: { vistoBueno?: boolean } = {},
+  ): Promise<Atencion> {
     const actual = await this.fila(id);
-    if (input.fechaTermino) {
-      // Fecha real de término (Anexo §VII l.757): no futura ni anterior a la apertura.
-      const f = new Date(input.fechaTermino);
-      if (f.getTime() > Date.now() + 60_000) throw new BadRequestException("La fecha de término no puede ser futura");
-      if (f < actual.createdAt) throw new BadRequestException("La fecha de término no puede ser anterior a la apertura de la atención");
-    }
+    if (input.fechaTermino) this.validarFechaTermino(actual, input.fechaTermino);
     const causaTerminoId = input.causaTerminoId ?? actual.causaTerminoId;
     if (input.causaTerminoId) {
       const [c] = await this.db.select({ id: causasTermino.id }).from(causasTermino).where(eq(causasTermino.id, input.causaTerminoId));
       if (!c) throw new BadRequestException(`Causa de término ${input.causaTerminoId} no existe`);
     }
 
+    if (input.estado === "Terminada" && requiereVistoBueno(actual.tipo) && !opciones.vistoBueno) {
+      throw new BadRequestException("Terminar una asesoría o un juicio requiere el V°B° de jefatura: use 'Solicitar término'");
+    }
+    await this.asegurarRequisitos(actual, input.estado, causaTerminoId);
+
+    const ahora = new Date();
+    const cierra = ["Terminada", "Abandonada"].includes(input.estado);
+    const set: Partial<NuevaAtencion> = {
+      estado: input.estado,
+      causaTerminoId,
+      updatedAt: ahora,
+    };
+    if (cierra) {
+      set.fechaCierre = input.fechaTermino ? new Date(input.fechaTermino) : ahora;
+      set.solicitudTermino = null;
+    }
+    if (actual.tipo === "Consulta" && ["Respondida", "Terminada"].includes(input.estado) && !actual.horaTermino) {
+      set.horaTermino = ahora;
+    }
+    if (input.observacion) {
+      set.metadata = { ...(actual.metadata ?? {}), ultimaObservacionEstado: input.observacion };
+    }
+    // Solo desde el estado leído: si otro usuario lo cambió entretanto, 409 (regla auditoría run-2).
+    const [row] = await this.db
+      .update(atenciones)
+      .set(set)
+      .where(and(eq(atenciones.id, id), eq(atenciones.estado, actual.estado)))
+      .returning();
+    if (!row) throw new ConflictException("La atención cambió de estado mientras se procesaba; actualice y reintente");
+    if (row.estado === "Terminada") await cerrarProvisionesDeAtencion(this.db, id, actor?.id ?? null);
+    await this.webhooks.emitir(row.codPlan, "atencion.estado", { atencionId: id, desde: actual.estado, hasta: row.estado });
+    return row;
+  }
+
+  // Requisitos de la etapa destino (gestiones, comité, provisiones, arancel, posesión). 400 si falta algo.
+  private async asegurarRequisitos(actual: Atencion, destino: EstadoAtencion, causaTerminoId: string | null): Promise<void> {
+    const id = actual.id;
     const [[g], [c], [p], bloqueoArancel] = await Promise.all([
       this.db
         .select({ n: count() })
@@ -399,39 +443,95 @@ export class AtencionesService {
       posesion = { causante: pe ?? null, herederos: Number(h?.n ?? 0) };
     }
 
-    const faltan = validarTransicion({ ...actual, causaTerminoId }, input.estado, {
+    const faltan = validarTransicion({ ...actual, causaTerminoId }, destino, {
       gestionesPendientes: Number(g?.n ?? 0),
       comitesAbiertos: Number(c?.n ?? 0),
       provisionesAbiertas: Number(p?.n ?? 0),
       bloqueoArancel,
       posesion,
     });
-    if (faltan.length > 0) throw new BadRequestException(mensajeFaltantes(input.estado, faltan));
+    if (faltan.length > 0) throw new BadRequestException(mensajeFaltantes(destino, faltan));
+  }
 
-    const ahora = new Date();
-    const cierra = ["Terminada", "Abandonada"].includes(input.estado);
-    const set: Partial<NuevaAtencion> = {
-      estado: input.estado,
-      causaTerminoId,
-      updatedAt: ahora,
-    };
-    if (cierra) set.fechaCierre = input.fechaTermino ? new Date(input.fechaTermino) : ahora;
-    if (actual.tipo === "Consulta" && ["Respondida", "Terminada"].includes(input.estado) && !actual.horaTermino) {
-      set.horaTermino = ahora;
+  // V°B°: el abogado solicita el término; queda registrado hasta que una jefatura lo resuelva.
+  async solicitarTermino(id: string, input: SolicitarTermino, actor: Actor): Promise<Atencion> {
+    const actual = await this.fila(id);
+    if (!requiereVistoBueno(actual.tipo)) throw new BadRequestException("Solo asesorías y juicios requieren V°B° para terminar");
+    if (!transicionesPermitidas(actual.tipo, actual.estado).includes("Terminada")) {
+      throw new BadRequestException(`Una atención en estado ${actual.estado} no puede terminarse`);
     }
-    if (input.observacion) {
-      set.metadata = { ...(actual.metadata ?? {}), ultimaObservacionEstado: input.observacion };
-    }
-    // Solo desde el estado leído: si otro usuario lo cambió entretanto, 409 (regla auditoría run-2).
+    if (input.fechaTermino) this.validarFechaTermino(actual, input.fechaTermino);
+    const [c] = await this.db.select({ id: causasTermino.id }).from(causasTermino).where(eq(causasTermino.id, input.causaTerminoId));
+    if (!c) throw new BadRequestException(`Causa de término ${input.causaTerminoId} no existe`);
+    // Se valida ya, para que la jefatura reciba solo lo que está en condiciones de cerrarse.
+    await this.asegurarRequisitos(actual, "Terminada", input.causaTerminoId);
+    const solicitud: SolicitudTermino = { ...input, solicitadoPorId: actor.id, solicitadoEn: new Date().toISOString() };
     const [row] = await this.db
       .update(atenciones)
-      .set(set)
-      .where(and(eq(atenciones.id, id), eq(atenciones.estado, actual.estado)))
+      .set({ solicitudTermino: solicitud, updatedAt: new Date() })
+      .where(and(eq(atenciones.id, id), eq(atenciones.estado, actual.estado), isNull(atenciones.solicitudTermino)))
       .returning();
-    if (!row) throw new ConflictException("La atención cambió de estado mientras se procesaba; actualice y reintente");
-    if (row.estado === "Terminada") await cerrarProvisionesDeAtencion(this.db, id, actor?.id ?? null);
-    await this.webhooks.emitir(row.codPlan, "atencion.estado", { atencionId: id, desde: actual.estado, hasta: row.estado });
+    if (!row) throw new ConflictException("Ya hay una solicitud de término pendiente o la atención cambió de estado");
+    const [yo] = await this.db.select({ jefeId: usuarios.jefeId, nombre: usuarios.nombre }).from(usuarios).where(eq(usuarios.id, actor.id));
+    if (yo?.jefeId) {
+      await this.notif.crear({
+        codPlan: row.codPlan,
+        usuarioId: yo.jefeId,
+        severidad: "warn",
+        titulo: `V°B° de término pendiente: ${row.correlativo}`,
+        detalle: `${yo.nombre} solicita terminar la atención`,
+        accionUrl: `/atenciones/${row.id}`,
+      });
+    }
     return row;
+  }
+
+  async aprobarTermino(id: string, actor: Actor): Promise<Atencion> {
+    const actual = await this.fila(id);
+    const s = actual.solicitudTermino;
+    if (!s) throw new ConflictException("La atención no tiene una solicitud de término pendiente");
+    if (s.solicitadoPorId === actor.id) throw new ForbiddenException("Quien solicita el término no puede darle el V°B°");
+    const row = await this.cambiarEstado(
+      id,
+      { estado: "Terminada", causaTerminoId: s.causaTerminoId, fechaTermino: s.fechaTermino, observacion: s.observacion },
+      actor,
+      { vistoBueno: true },
+    );
+    const [limpia] = await this.db
+      .update(atenciones)
+      .set({ solicitudTermino: null, metadata: { ...(row.metadata ?? {}), vistoBuenoTermino: { porId: actor.id, en: new Date().toISOString() } } })
+      .where(eq(atenciones.id, id))
+      .returning();
+    return limpia;
+  }
+
+  async rechazarTermino(id: string, motivo: string, actor: Actor): Promise<Atencion> {
+    const actual = await this.fila(id);
+    const s = actual.solicitudTermino;
+    if (!s) throw new ConflictException("La atención no tiene una solicitud de término pendiente");
+    if (s.solicitadoPorId === actor.id) throw new ForbiddenException("Quien solicita el término no puede rechazarlo");
+    const [row] = await this.db
+      .update(atenciones)
+      .set({ solicitudTermino: null, updatedAt: new Date() })
+      .where(and(eq(atenciones.id, id), sql`${atenciones.solicitudTermino}->>'solicitadoEn' = ${s.solicitadoEn}`))
+      .returning();
+    if (!row) throw new ConflictException("La solicitud de término ya fue resuelta");
+    await this.notif.crear({
+      codPlan: row.codPlan,
+      usuarioId: s.solicitadoPorId,
+      severidad: "warn",
+      titulo: `Término rechazado: ${row.correlativo}`,
+      detalle: motivo,
+      accionUrl: `/atenciones/${row.id}`,
+    });
+    return row;
+  }
+
+  private validarFechaTermino(actual: Atencion, fechaTermino: string) {
+    // Fecha real de término (Anexo §VII l.757): no futura ni anterior a la apertura.
+    const f = new Date(fechaTermino);
+    if (f.getTime() > Date.now() + 60_000) throw new BadRequestException("La fecha de término no puede ser futura");
+    if (f < actual.createdAt) throw new BadRequestException("La fecha de término no puede ser anterior a la apertura de la atención");
   }
 
   // Anexo §VI 3.5.1: varias consultas en la misma llamada generan un correlativo cada una.

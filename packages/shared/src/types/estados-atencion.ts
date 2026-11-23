@@ -136,3 +136,15 @@ export const CambiarEstadoSchema = z.object({
   observacion: z.string().max(2000).optional(),
 });
 export type CambiarEstado = z.infer<typeof CambiarEstadoSchema>;
+
+// V°B° de jefatura para terminar asesorías y juicios (Anexo §VII l.904, §VIII l.1192): el abogado
+// solicita y una jefatura con atenciones.aprobar_termino (distinta del solicitante) aprueba.
+export const TIPOS_CON_VB_TERMINO = ["Asesoria", "Juicio"] as const;
+export const SolicitarTerminoSchema = z.object({
+  causaTerminoId: z.string().uuid(),
+  fechaTermino: z.string().datetime().optional(),
+  observacion: z.string().max(2000).optional(),
+});
+export type SolicitarTermino = z.infer<typeof SolicitarTerminoSchema>;
+export const RechazarTerminoSchema = z.object({ motivo: z.string().trim().min(1).max(2000) });
+export type SolicitudTermino = SolicitarTermino & { solicitadoPorId: string; solicitadoEn: string };

@@ -218,13 +218,33 @@ const avisos: { titulo: string; metadata?: Record<string, unknown> }[] = [];
       .insert(gestiones)
       .values({ atencionId: a.id, tipo: "Otra", titulo: "Pendiente", responsableId: abogado.id })
       .returning();
-    await expect(atenciones.cambiarEstado(a.id, { estado: "Terminada", causaTerminoId: causaId })).rejects.toThrow(
-      /1 gestión\(es\) pendiente/,
-    );
+    // Terminar exige el V°B° de jefatura: no se puede pasar a Terminada directamente.
+    await expect(atenciones.cambiarEstado(a.id, { estado: "Terminada", causaTerminoId: causaId }, abogado)).rejects.toThrow(/V°B°/);
+    // La solicitud se valida al pedirla: con gestiones pendientes no se acepta.
+    await expect(atenciones.solicitarTermino(a.id, { causaTerminoId: causaId }, abogado)).rejects.toThrow(/1 gestión\(es\) pendiente/);
     await db.update(gestiones).set({ estado: "Completada" }).where(eq(gestiones.id, g.id));
-    const t = await atenciones.cambiarEstado(a.id, { estado: "Terminada", causaTerminoId: causaId });
-    expect(t.estado).toBe("Terminada");
+    const s = await atenciones.solicitarTermino(a.id, { causaTerminoId: causaId, observacion: "Asesoría entregada" }, abogado);
+    expect(s.solicitudTermino).toMatchObject({ solicitadoPorId: abogado.id, causaTerminoId: causaId });
+    await expect(atenciones.solicitarTermino(a.id, { causaTerminoId: causaId }, abogado)).rejects.toBeInstanceOf(ConflictException);
+    // Cuatro ojos: quien solicita no da el V°B°.
+    await expect(atenciones.aprobarTermino(a.id, abogado)).rejects.toThrow(/no puede darle el V°B°/);
+    const t = await atenciones.aprobarTermino(a.id, jefe);
+    expect(t).toMatchObject({ estado: "Terminada", solicitudTermino: null, causaTerminoId: causaId });
     expect(t.fechaCierre).toBeTruthy();
+    expect((t.metadata as { vistoBuenoTermino?: { porId: string } }).vistoBuenoTermino?.porId).toBe(jefe.id);
+  });
+
+  it("V°B° rechazado: la solicitud se limpia y el abogado puede volver a pedirla", async () => {
+    const j = await atenciones.crear({ ...base(), tipo: "Asesoria", ...cm, asunto: "Rechazo VB" });
+    await atenciones.cambiarEstado(j.id, { estado: "Pendiente" });
+    await atenciones.solicitarTermino(j.id, { causaTerminoId: causaId }, abogado);
+    await expect(atenciones.rechazarTermino(j.id, "x", abogado)).rejects.toThrow(/no puede rechazarlo/);
+    const r = await atenciones.rechazarTermino(j.id, "Falta entregar documentos al cliente", jefe);
+    expect(r).toMatchObject({ estado: "Pendiente", solicitudTermino: null });
+    await expect(atenciones.rechazarTermino(j.id, "otra vez", jefe)).rejects.toBeInstanceOf(ConflictException);
+    // Una consulta no usa V°B°.
+    const c = await atenciones.crear({ ...base(), tipo: "Consulta", ...cm, asunto: "Consulta" });
+    await expect(atenciones.solicitarTermino(c.id, { causaTerminoId: causaId }, abogado)).rejects.toThrow(/Solo asesorías y juicios/);
   });
 
   it("abandonar con riesgo ≥ 20 exige revisión de comité, que solo marca la jefatura", async () => {

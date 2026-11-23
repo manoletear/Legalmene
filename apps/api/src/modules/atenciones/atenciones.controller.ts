@@ -15,7 +15,7 @@ import {
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { createZodDto } from "nestjs-zod";
-import { RegistrarContactoSchema } from "@legalmene/shared";
+import { RechazarTerminoSchema, RegistrarContactoSchema, SolicitarTerminoSchema } from "@legalmene/shared";
 import { AtencionesService } from "./atenciones.service";
 import { PlazosService } from "./plazos.service";
 import {
@@ -32,6 +32,8 @@ import { PermisosGuard } from "../../common/guards/permisos.guard";
 import { CurrentUser, AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 
 class RegistrarContactoDto extends createZodDto(RegistrarContactoSchema) {}
+class SolicitarTerminoDto extends createZodDto(SolicitarTerminoSchema) {}
+class RechazarTerminoDto extends createZodDto(RechazarTerminoSchema) {}
 
 @ApiTags("atenciones")
 @ApiBearerAuth("EntraID")
@@ -91,6 +93,25 @@ export class AtencionesController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.service.actualizar(id, body, user);
+  }
+
+  // V°B° de jefatura para terminar asesorías y juicios (Anexo §VII l.904, §VIII l.1192).
+  @Post("atenciones/:id/termino/solicitar")
+  @Permiso("atenciones.cambiar_estado")
+  solicitarTermino(@Param("id", ParseUUIDPipe) id: string, @Body() body: SolicitarTerminoDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.solicitarTermino(id, body, user);
+  }
+
+  @Post("atenciones/:id/termino/aprobar")
+  @Permiso("atenciones.aprobar_termino")
+  aprobarTermino(@Param("id", ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.aprobarTermino(id, user);
+  }
+
+  @Post("atenciones/:id/termino/rechazar")
+  @Permiso("atenciones.aprobar_termino")
+  rechazarTermino(@Param("id", ParseUUIDPipe) id: string, @Body() body: RechazarTerminoDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.rechazarTermino(id, body.motivo, user);
   }
 
   @Post("atenciones/:id/estado")

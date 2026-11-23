@@ -27,11 +27,13 @@ import {
   type Procedimiento,
   type Tribunal,
   type UpdateAtencion,
+  TIPOS_CON_VB_TERMINO,
 } from "@legalmene/shared";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { MaestrosApiService } from "../../core/services/maestros.service";
 import { MeService } from "../../core/services/me.service";
 import { PromptService } from "../../shared/prompt.service";
+import { UsuariosAdminService } from "../../core/services/usuarios-admin.service";
 
 const CANALES: { label: string; value: CanalContacto }[] = [
   { label: "Telefónico", value: "Telefonico" },
@@ -65,6 +67,17 @@ const MONEDAS: MonedaCuantia[] = ["CLP", "UF", "UTM", "USD"];
       <!-- Cambio de estado -->
       <div class="lm-info-card" style="margin-bottom:16px;">
         <div class="lm-info-card-header"><i class="pi pi-flag"></i> Cambiar estado</div>
+        <!-- V°B° de jefatura (Anexo §VII l.904, §VIII l.1192) -->
+        <div *ngIf="a.solicitudTermino as s" class="lm-small" data-testid="solicitud-termino"
+          style="background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:10px; margin-bottom:10px;">
+          <strong>Término solicitado</strong> por {{ nombreUsuario(s.solicitadoPorId) }} el {{ s.solicitadoEn | date: 'dd/MM/yyyy HH:mm' }}
+          · causa: {{ nombreCausa(s.causaTerminoId) }}<ng-container *ngIf="s.observacion"> · {{ s.observacion }}</ng-container>.
+          <span class="lm-muted">Espera el V°B° de jefatura.</span>
+          <div *ngIf="puedeDarVB(s.solicitadoPorId)" class="lm-row" style="gap:8px; margin-top:8px;">
+            <button pButton label="Dar V°B° y terminar" icon="pi pi-check" size="small" (click)="aprobarTermino(a)"></button>
+            <button pButton label="Rechazar" icon="pi pi-times" size="small" severity="danger" [outlined]="true" (click)="rechazarTermino(a)"></button>
+          </div>
+        </div>
         <div *ngIf="destinos().length === 0" class="lm-small lm-muted">
           La atención está en {{ etiqueta(a.estado) }} y no admite más cambios de estado.
         </div>
@@ -94,7 +107,8 @@ const MONEDAS: MonedaCuantia[] = ["CLP", "UF", "UTM", "USD"];
             <input pInputText type="date" id="fechaTerminoEstado" [(ngModel)]="fechaTermino" [max]="hoy" [min]="a.createdAt.slice(0, 10)" style="width:150px;" />
           </span>
           <input pInputText [(ngModel)]="observacionEstado" placeholder="Observación (opcional)" style="flex:1; min-width:180px;" />
-          <button pButton label="Aplicar" icon="pi pi-check" [disabled]="!destino" (click)="cambiarEstado(a)"></button>
+          <button *ngIf="!terminoConVB(a)" pButton label="Aplicar" icon="pi pi-check" [disabled]="!destino" (click)="cambiarEstado(a)"></button>
+          <button *ngIf="terminoConVB(a)" pButton label="Solicitar término (V°B°)" icon="pi pi-send" [disabled]="!causaTerminoId || !!a.solicitudTermino" (click)="solicitarTermino(a)"></button>
         </div>
       </div>
 
@@ -260,6 +274,8 @@ export class AtencionFlujoComponent implements OnInit {
   private msg = inject(MessageService);
   private prompt = inject(PromptService);
   private router = inject(Router);
+  private usuariosApi = inject(UsuariosAdminService);
+  protected nombres = signal(new Map<string, string>());
 
   protected canales = CANALES;
   protected monedas = MONEDAS;
@@ -331,6 +347,7 @@ export class AtencionFlujoComponent implements OnInit {
   ngOnInit() {
     const a = this.atencion();
     this.maestros.listar("causas-termino", { vigente: true }).subscribe((r) => this.causas.set(r));
+    this.usuariosApi.opciones().subscribe((us) => this.nombres.set(new Map(us.map((u) => [u.id, u.nombre]))));
     if (a.tipo === "Consulta") {
       this.maestros.listar("tipos-consulta", { vigente: true }).subscribe((r) => this.tiposConsulta.set(r));
       this.cargarDerivaciones(a.id);
@@ -367,6 +384,51 @@ export class AtencionFlujoComponent implements OnInit {
     this.cambio.emit();
   }
 
+  // Asesorías y juicios no pasan a Terminada directo: se solicita y una jefatura da el V°B°.
+  protected terminoConVB(a: AtencionConMaestros): boolean {
+    return this.destino === "Terminada" && (TIPOS_CON_VB_TERMINO as readonly string[]).includes(a.tipo);
+  }
+
+  protected puedeDarVB(solicitanteId: string): boolean {
+    return this.me.tiene("atenciones.aprobar_termino") && this.me.user()?.id !== solicitanteId;
+  }
+
+  protected nombreUsuario(id: string): string {
+    return this.nombres().get(id) ?? "otro usuario";
+  }
+
+  protected nombreCausa(id: string): string {
+    return this.causas().find((c) => c.id === id)?.nombre ?? "—";
+  }
+
+  private fechaTerminoIso(): string | undefined {
+    // Hoy = ahora (con hora); otro día = mediodía de ese día.
+    return this.fechaTermino && this.fechaTermino !== this.hoy ? new Date(`${this.fechaTermino}T12:00:00`).toISOString() : undefined;
+  }
+
+  solicitarTermino(a: AtencionConMaestros) {
+    if (!this.causaTerminoId) return;
+    this.api
+      .solicitarTermino(a.id, { causaTerminoId: this.causaTerminoId, fechaTermino: this.fechaTerminoIso(), observacion: this.observacionEstado || undefined })
+      .subscribe({
+        next: () => {
+          this.observacionEstado = "";
+          this.ok("Término solicitado; queda a la espera del V°B° de jefatura");
+        },
+        error: (e) => this.error(e),
+      });
+  }
+
+  aprobarTermino(a: AtencionConMaestros) {
+    this.api.aprobarTermino(a.id).subscribe({ next: () => this.ok("V°B° registrado: atención terminada"), error: (e) => this.error(e) });
+  }
+
+  async rechazarTermino(a: AtencionConMaestros) {
+    const motivo = await this.prompt.open({ header: "Rechazar término", label: "Motivo (se informa al abogado)", multiline: true, required: true });
+    if (!motivo) return;
+    this.api.rechazarTermino(a.id, motivo.trim()).subscribe({ next: () => this.ok("Solicitud de término rechazada"), error: (e) => this.error(e) });
+  }
+
   cambiarEstado(a: AtencionConMaestros) {
     if (!this.destino) return;
     this.api
@@ -374,8 +436,7 @@ export class AtencionFlujoComponent implements OnInit {
         estado: this.destino,
         causaTerminoId: this.requiereCausa() ? (this.causaTerminoId ?? undefined) : undefined,
         observacion: this.observacionEstado || undefined,
-        // Hoy = ahora (con hora); otro día = mediodía de ese día.
-        fechaTermino: this.requiereCausa() && this.fechaTermino && this.fechaTermino !== this.hoy ? new Date(`${this.fechaTermino}T12:00:00`).toISOString() : undefined,
+        fechaTermino: this.requiereCausa() ? this.fechaTerminoIso() : undefined,
       })
       .subscribe({
         next: () => {

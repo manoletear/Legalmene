@@ -155,7 +155,7 @@ const FECHA_PAGO = "2001-03-15";
       const a = await nuevaAsesoria();
       await atencionesSrv.cambiarEstado(a.id, { estado: "Pendiente" });
       const p = await provisionesSrv.solicitar(a.id, abogado.id, { monto: 10_000, motivo: "Gasto" });
-      await expect(atencionesSrv.cambiarEstado(a.id, { estado: "Terminada", causaTerminoId: causaId })).rejects.toThrow(
+      await expect(atencionesSrv.solicitarTermino(a.id, { causaTerminoId: causaId }, abogado)).rejects.toThrow(
         /provisión\(es\) de fondos sin rendir/,
       );
       await provisionesSrv.registrarPagoCliente(p.id, jefe.id, "Transferencia");
@@ -166,7 +166,8 @@ const FECHA_PAGO = "2001-03-15";
       await provisionesSrv.entregar(p.id, jefe.id);
       await provisionesSrv.registrarMovimiento(p.id, abogado.id, { tipo: "Gasto", monto: 10_000, glosa: "Receptor" });
       await provisionesSrv.rendir(p.id, abogado.id);
-      const t = await atencionesSrv.cambiarEstado(a.id, { estado: "Terminada", causaTerminoId: causaId }, abogado);
+      await atencionesSrv.solicitarTermino(a.id, { causaTerminoId: causaId }, abogado);
+      const t = await atencionesSrv.aprobarTermino(a.id, jefe);
       expect(t.estado).toBe("Terminada");
       const { data } = await provisionesSrv.listarPorAtencion(a.id);
       expect(data[0].estado).toBe("Cerrada");

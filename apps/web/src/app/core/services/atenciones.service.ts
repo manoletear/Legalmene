@@ -30,6 +30,7 @@ import type {
   CriteriosBusqueda,
   TipoAtencion,
   PlazoAtencion,
+  SolicitarTermino,
 } from "@legalmene/shared";
 
 export interface BuscarAtencionesOpts extends Partial<CriteriosBusqueda> {
@@ -69,6 +70,19 @@ export class AtencionesApiService {
 
   cambiarEstado(id: string, payload: CambiarEstado): Observable<Atencion> {
     return this.http.post<Atencion>(`${this.base}/${id}/estado`, payload);
+  }
+
+  // V°B° de jefatura para terminar asesorías y juicios.
+  solicitarTermino(id: string, payload: SolicitarTermino): Observable<Atencion> {
+    return this.http.post<Atencion>(`${this.base}/${id}/termino/solicitar`, payload);
+  }
+
+  aprobarTermino(id: string): Observable<Atencion> {
+    return this.http.post<Atencion>(`${this.base}/${id}/termino/aprobar`, {});
+  }
+
+  rechazarTermino(id: string, motivo: string): Observable<Atencion> {
+    return this.http.post<Atencion>(`${this.base}/${id}/termino/rechazar`, { motivo });
   }
 
   nuevoCorrelativo(id: string, payload: NuevoCorrelativo): Observable<Atencion> {

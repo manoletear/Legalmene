@@ -1,3 +1,4 @@
+import type { SolicitudTermino } from "@legalmene/shared";
 import {
   pgTable,
   uuid,
@@ -92,6 +93,8 @@ export const atenciones = pgTable(
     fechaUltimaGestion: timestamp("fecha_ultima_gestion", { withTimezone: true }),
     // Primer contacto del abogado con el cliente (Anexo §VII l.765, §VIII l.984: ≤ 24 h hábiles).
     fechaPrimerContacto: timestamp("fecha_primer_contacto", { withTimezone: true }),
+    // Término solicitado, a la espera del V°B° de jefatura (null si no hay solicitud).
+    solicitudTermino: jsonb("solicitud_termino").$type<SolicitudTermino>(),
     prioridad: prioridadEnum("prioridad").notNull().default("Media"),
     origen: varchar("origen", { length: 80 }),
     // Consultas (Anexo §VI).

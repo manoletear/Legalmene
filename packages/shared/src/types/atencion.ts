@@ -30,6 +30,17 @@ export const AtencionSchema = z.object({
   fechaCierre: z.string().datetime().optional().nullable(),
   fechaUltimaGestion: z.string().datetime().optional().nullable(),
   fechaPrimerContacto: z.string().datetime().optional().nullable(),
+  // Solicitud de término pendiente de V°B° de jefatura (asesorías y juicios).
+  solicitudTermino: z
+    .object({
+      causaTerminoId: z.string().uuid(),
+      fechaTermino: z.string().datetime().optional(),
+      observacion: z.string().optional(),
+      solicitadoPorId: z.string().uuid(),
+      solicitadoEn: z.string().datetime(),
+    })
+    .optional()
+    .nullable(),
   prioridad: z.enum(["Baja", "Media", "Alta", "Urgente"]).default("Media"),
   origen: z.string().max(80).optional().nullable(),
   // Consultas (Anexo §VI).
@@ -99,6 +110,7 @@ export const CreateAtencionSchema = AtencionSchema.omit({
   fechaCierre: true,
   fechaUltimaGestion: true,
   fechaPrimerContacto: true,
+  solicitudTermino: true,
   horaInicio: true,
   horaTermino: true,
   revisadoPorComite: true,

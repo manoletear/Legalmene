@@ -130,7 +130,9 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
 - **Estados de atención**: nunca escribir `atenciones.estado` a mano en un flujo nuevo; usar
   `AtencionesService.cambiarEstado()` (valida el mapa de `estados-atencion.ts` y los requisitos
   por etapa de `modules/atenciones/estados.ts`). "Derivada" solo la asigna la aprobación de una
-  derivación. Las actualizaciones automáticas (gestión creada, comité) solo avanzan desde el
+  derivación. Asesorías y juicios pasan a "Terminada" solo con V°B° de jefatura: `solicitarTermino()` (valida
+  requisitos al pedirlo) y `aprobarTermino()`/`rechazarTermino()` (`atenciones.aprobar_termino`, nunca quien
+  solicitó); `cambiarEstado()` rechaza el paso directo. Las actualizaciones automáticas (gestión creada, comité) solo avanzan desde el
   estado esperado (p. ej. Pendiente → EnGestion).
 - **Arancel por atención y provisiones**: transiciones solo vía `ArancelesAtencionService` y
   `ProvisionesService` (mapas `TRANSICIONES_ARANCEL` / `TRANSICIONES_PROVISION` en shared); cada
