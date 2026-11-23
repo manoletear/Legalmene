@@ -8,6 +8,7 @@ import { sql } from "drizzle-orm";
 import { DatabaseModule, PG_POOL } from "../../src/db/database.module";
 import { planes } from "../../src/db/schema/planes";
 import { AfiliadosService } from "../../src/modules/afiliados/afiliados.service";
+import { atenciones as atencionesTabla } from "../../src/db/schema/atenciones";
 import { AtencionesService } from "../../src/modules/atenciones/atenciones.service";
 import { WebhooksService } from "../../src/modules/webhooks/webhooks.service";
 import { NotifInboxService } from "../../src/modules/notif-inbox/notif-inbox.service";
@@ -225,6 +226,24 @@ const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
     await atenciones.actualizar(j.id, { revisadoPorComite: true }, jefe);
     const ab = await atenciones.cambiarEstado(j.id, { estado: "Abandonada", causaTerminoId: causaId });
     expect(ab.estado).toBe("Abandonada");
+  });
+
+  it("asesorías y juicios guardan código de grabación; la fecha real de término se valida", async () => {
+    const j = await atenciones.crear({ ...base(), tipo: "Juicio", ...cm, asunto: "Fecha término", codigoGrabacion: "GRAB-J-1" });
+    expect(j.codigoGrabacion).toBe("GRAB-J-1");
+    expect((await atenciones.actualizar(j.id, { codigoGrabacion: "GRAB-J-2" }, abogado)).codigoGrabacion).toBe("GRAB-J-2");
+    const db = drizzle(pool);
+    const hace = (dias: number) => new Date(Date.now() - dias * 86_400_000);
+    await db.update(atencionesTabla).set({ createdAt: hace(10) }).where(eq(atencionesTabla.id, j.id));
+
+    const futura = new Date(Date.now() + 86_400_000).toISOString();
+    await expect(atenciones.cambiarEstado(j.id, { estado: "Abandonada", causaTerminoId: causaId, fechaTermino: futura })).rejects.toThrow(/futura/);
+    await expect(
+      atenciones.cambiarEstado(j.id, { estado: "Abandonada", causaTerminoId: causaId, fechaTermino: hace(20).toISOString() }),
+    ).rejects.toThrow(/anterior a la apertura/);
+    const real = hace(3);
+    const ab = await atenciones.cambiarEstado(j.id, { estado: "Abandonada", causaTerminoId: causaId, fechaTermino: real.toISOString() });
+    expect(ab.fechaCierre?.toISOString()).toBe(real.toISOString());
   });
 
   it("instancia las gestiones predefinidas de la materia con plazo en días hábiles", async () => {

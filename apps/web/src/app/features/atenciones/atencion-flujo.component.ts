@@ -89,6 +89,10 @@ const MONEDAS: MonedaCuantia[] = ["CLP", "UF", "UTM", "USD"];
             appendTo="body"
             [style]="{ width: '240px' }"
           ></p-select>
+          <span *ngIf="requiereCausa()" class="lm-row" style="gap:4px; align-items:center;">
+            <label class="lm-small" for="fechaTerminoEstado">Fecha de término</label>
+            <input pInputText type="date" id="fechaTerminoEstado" [(ngModel)]="fechaTermino" [max]="hoy" [min]="a.createdAt.slice(0, 10)" style="width:150px;" />
+          </span>
           <input pInputText [(ngModel)]="observacionEstado" placeholder="Observación (opcional)" style="flex:1; min-width:180px;" />
           <button pButton label="Aplicar" icon="pi pi-check" [disabled]="!destino" (click)="cambiarEstado(a)"></button>
         </div>
@@ -147,6 +151,10 @@ const MONEDAS: MonedaCuantia[] = ["CLP", "UF", "UTM", "USD"];
           <div class="lm-col">
             <label class="lm-small">Procedimiento</label>
             <p-select [options]="procedimientos()" [(ngModel)]="caso.procedimientoId" optionLabel="nombre" optionValue="id" placeholder="Procedimiento" appendTo="body" [showClear]="true"></p-select>
+          </div>
+          <div class="lm-col">
+            <label class="lm-small" for="grabacionCaso">Código de grabación</label>
+            <input pInputText id="grabacionCaso" [(ngModel)]="caso.codigoGrabacion" placeholder="Entrevista grabada (opcional)" />
           </div>
           <ng-container *ngIf="a.tipo === 'Juicio'">
             <div class="lm-col">
@@ -274,6 +282,9 @@ export class AtencionFlujoComponent implements OnInit {
   protected destino: EstadoAtencion | null = null;
   protected causaTerminoId: string | null = null;
   protected observacionEstado = "";
+  // Fecha real de término al abandonar o terminar (Anexo §VII l.757, §VIII l.1096); hoy por defecto.
+  protected hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(new Date());
+  protected fechaTermino = this.hoy;
   protected consulta: Partial<UpdateAtencion> = {};
   protected caso: Partial<UpdateAtencion> = {};
   protected cuantiaVisible: number | null = null;
@@ -300,6 +311,7 @@ export class AtencionFlujoComponent implements OnInit {
         procedimientoId: a.procedimientoId ?? null,
         tribunalId: a.tribunalId ?? null,
         rolCausa: a.rolCausa ?? null,
+        codigoGrabacion: a.codigoGrabacion ?? null,
         ruc: a.ruc ?? null,
         cuantiaMoneda: a.cuantiaMoneda ?? null,
         calidadProcesalId: a.calidadProcesalId ?? null,
@@ -311,6 +323,7 @@ export class AtencionFlujoComponent implements OnInit {
       this.cuantiaVisible =
         a.cuantiaMonto == null ? null : a.cuantiaMoneda === "CLP" || !a.cuantiaMoneda ? a.cuantiaMonto : a.cuantiaMonto / 100;
       this.destino = null;
+      this.fechaTermino = this.hoy;
       this.causaTerminoId = a.causaTerminoId ?? null;
     });
   }
@@ -361,6 +374,8 @@ export class AtencionFlujoComponent implements OnInit {
         estado: this.destino,
         causaTerminoId: this.requiereCausa() ? (this.causaTerminoId ?? undefined) : undefined,
         observacion: this.observacionEstado || undefined,
+        // Hoy = ahora (con hora); otro día = mediodía de ese día.
+        fechaTermino: this.requiereCausa() && this.fechaTermino && this.fechaTermino !== this.hoy ? new Date(`${this.fechaTermino}T12:00:00`).toISOString() : undefined,
       })
       .subscribe({
         next: () => {

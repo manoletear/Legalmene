@@ -148,11 +148,12 @@ import type { Afiliado, AfiliadoConPlanes, CanalContacto, Competencia, CopagoRes
               <p-select formControlName="tipoConsultaId" [options]="tiposConsulta()" optionLabel="nombre" optionValue="id" appendTo="body" placeholder="Tipo" [showClear]="true"></p-select>
             </div>
           </div>
-          <div class="lm-col" style="gap:4px;">
-            <label>Código de grabación</label>
-            <input pInputText type="text" formControlName="codigoGrabacion" placeholder="Opcional (llamadas grabadas)" />
-          </div>
         </ng-container>
+
+        <div class="lm-col" style="gap:4px;">
+          <label for="codigoGrabacion">Código de grabación</label>
+          <input pInputText id="codigoGrabacion" type="text" formControlName="codigoGrabacion" placeholder="Opcional (llamada o entrevista grabada)" />
+        </div>
 
         <ng-container *ngIf="form.value.tipo === 'PosesionEfectiva'">
           <h3 style="margin:8px 0 0;">Causante</h3>
@@ -432,11 +433,11 @@ export class AtencionFormComponent {
       descripcion: v.descripcion || undefined,
       prioridad: v.prioridad as "Media",
       cargaId: v.cargaId || undefined,
+      codigoGrabacion: v.codigoGrabacion || undefined,
       ...(v.tipo === "Consulta"
         ? {
             canalContacto: (v.canalContacto as CanalContacto) || undefined,
             tipoConsultaId: v.tipoConsultaId || undefined,
-            codigoGrabacion: v.codigoGrabacion || undefined,
           }
         : {}),
     };

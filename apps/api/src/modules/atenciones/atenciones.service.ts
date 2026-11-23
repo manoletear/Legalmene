@@ -57,8 +57,9 @@ const APLICA: Record<TipoAtencion, "aplicaConsulta" | "aplicaAsesoria" | "aplica
   PosesionEfectiva: "aplicaAsesoria",
 };
 
-// Campos que solo existen para un tipo de atención.
-const CAMPOS_CONSULTA = ["canalContacto", "tipoConsultaId", "codigoGrabacion", "respuesta"] as const;
+// Campos que solo existen para un tipo de atención. El código de grabación aplica a todos
+// (llamadas de consultas y entrevistas de asesorías y juicios: Anexo §VII l.947, §VIII l.1251).
+const CAMPOS_CONSULTA = ["canalContacto", "tipoConsultaId", "respuesta"] as const;
 const CAMPOS_CASO = [
   "organismoId",
   "procedimientoId",
@@ -347,6 +348,12 @@ export class AtencionesService {
 
   async cambiarEstado(id: string, input: CambiarEstado, actor?: Actor): Promise<Atencion> {
     const actual = await this.fila(id);
+    if (input.fechaTermino) {
+      // Fecha real de término (Anexo §VII l.757): no futura ni anterior a la apertura.
+      const f = new Date(input.fechaTermino);
+      if (f.getTime() > Date.now() + 60_000) throw new BadRequestException("La fecha de término no puede ser futura");
+      if (f < actual.createdAt) throw new BadRequestException("La fecha de término no puede ser anterior a la apertura de la atención");
+    }
     const causaTerminoId = input.causaTerminoId ?? actual.causaTerminoId;
     if (input.causaTerminoId) {
       const [c] = await this.db.select({ id: causasTermino.id }).from(causasTermino).where(eq(causasTermino.id, input.causaTerminoId));
@@ -397,7 +404,6 @@ export class AtencionesService {
     if (cierra) set.fechaCierre = input.fechaTermino ? new Date(input.fechaTermino) : ahora;
     if (actual.tipo === "Consulta" && ["Respondida", "Terminada"].includes(input.estado) && !actual.horaTermino) {
       set.horaTermino = ahora;
-      if (input.estado === "Terminada") set.fechaCierre = ahora;
     }
     if (input.observacion) {
       set.metadata = { ...(actual.metadata ?? {}), ultimaObservacionEstado: input.observacion };
