@@ -127,6 +127,13 @@
       "when": 1795465547424,
       "tag": "0017_usuarios_cargo",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795465792705,
+      "tag": "0018_planes_fecha_termino",
+      "breakpoints": true
     }
   ]
 }

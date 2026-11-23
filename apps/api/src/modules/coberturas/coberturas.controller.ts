@@ -2,7 +2,7 @@ import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Post, Put, Query, 
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { createZodDto } from "nestjs-zod";
 import { z } from "zod";
-import { CreateCoberturaSchema, TipoAtencionEnum, UpdateCoberturaSchema } from "@legalmene/shared";
+import { CopiarCoberturasSchema, CreateCoberturaSchema, TipoAtencionEnum, UpdateCoberturaSchema } from "@legalmene/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Permiso } from "../../common/decorators/permiso.decorator";
 import { PermisosGuard } from "../../common/guards/permisos.guard";
@@ -10,6 +10,7 @@ import { CoberturasService } from "./coberturas.service";
 
 class CreateCoberturaDto extends createZodDto(CreateCoberturaSchema) {}
 class UpdateCoberturaDto extends createZodDto(UpdateCoberturaSchema) {}
+class CopiarCoberturasDto extends createZodDto(CopiarCoberturasSchema) {}
 
 const FiltroCoberturasSchema = z.object({
   codPlan: z.string().optional(),
@@ -49,6 +50,12 @@ export class CoberturasController {
   @Permiso("coberturas.administrar")
   actualizar(@Param("id", ParseUUIDPipe) id: string, @Body() body: UpdateCoberturaDto) {
     return this.service.actualizar(id, body);
+  }
+
+  @Post("planes/:codPlan/coberturas/copiar")
+  @Permiso("coberturas.administrar")
+  copiar(@Param("codPlan") codPlan: string, @Body() body: CopiarCoberturasDto) {
+    return this.service.copiar(codPlan, body.desde, body.reemplazar);
   }
 
   // Vista previa: cuánto pagaría un afiliado del plan por esa materia y tipo.

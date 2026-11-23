@@ -14,7 +14,6 @@ import type {
   EventoFinanciero,
   PagoArancel,
   Atencion,
-  AtencionConMaestros,
   AtencionListada,
   FichaAtencion,
   CambiarEstado,

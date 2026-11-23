@@ -25,6 +25,7 @@ const RUN = !!process.env.DATABASE_URL;
   let pool: Pool;
   const PLAN = planAleatorio("TC");
   const SUF = PLAN.slice(-6);
+  const DESTINO = planAleatorio("TCD");
   let cm: MateriaPrueba;
   let otraMateriaId: string;
   let afiliadoId: string;
@@ -63,10 +64,10 @@ const RUN = !!process.env.DATABASE_URL;
   afterAll(async () => {
     const db = drizzle(pool);
     await db.execute(sql`DELETE FROM atenciones WHERE id = ${atencionId}`);
-    await db.execute(sql`DELETE FROM coberturas WHERE cod_plan = ${PLAN}`);
+    await db.execute(sql`DELETE FROM coberturas WHERE cod_plan IN (${PLAN}, ${DESTINO})`);
     await db.execute(sql`DELETE FROM afiliados WHERE id = ${afiliadoId}`);
     await borrarMateriaDePrueba(db, cm);
-    await db.execute(sql`DELETE FROM planes WHERE cod_plan = ${PLAN}`);
+    await db.execute(sql`DELETE FROM planes WHERE cod_plan IN (${PLAN}, ${DESTINO})`);
     await moduleRef.close();
   });
 
@@ -134,5 +135,32 @@ const RUN = !!process.env.DATABASE_URL;
     expect(fijo.modalidad).toBe("ValorUF");
     expect(fijo.copagoUfCentesimas).toBe(150);
     expect(fijo.arancel).toBeNull();
+  });
+
+  it("copiar coberturas: conserva las del destino salvo que se pida reemplazar", async () => {
+    const db = drizzle(pool);
+    await db.insert(planes).values({ codPlan: DESTINO, nombre: DESTINO });
+    await coberturasSrv.crear({ codPlan: PLAN, materiaId: otraMateriaId, modalidad: "ValorUF", valorUfCentesimas: 150 }).catch(() => undefined);
+    const origen = await coberturasSrv.listar({ codPlan: PLAN, vigente: true });
+    const general = origen.find((c) => c.materiaId === null && c.tipo === null)!;
+    expect(general).toBeTruthy();
+    // El destino ya tiene una regla general distinta.
+    await coberturasSrv.crear({ codPlan: DESTINO, modalidad: "SinCobertura" });
+
+    const r1 = await coberturasSrv.copiar(DESTINO, PLAN, false);
+    expect(r1).toEqual({ copiadas: origen.length - 1, omitidas: 1 });
+    let destino = await coberturasSrv.listar({ codPlan: DESTINO });
+    expect(destino.find((c) => c.materiaId === null && c.tipo === null)?.modalidad).toBe("SinCobertura");
+    expect(destino.find((c) => c.materiaId === otraMateriaId)?.valorUfCentesimas).toBe(150);
+
+    const r2 = await coberturasSrv.copiar(DESTINO, PLAN, true);
+    expect(r2).toEqual({ copiadas: origen.length, omitidas: 0 });
+    destino = await coberturasSrv.listar({ codPlan: DESTINO });
+    expect(destino.find((c) => c.materiaId === null && c.tipo === null)).toMatchObject({ modalidad: general.modalidad, porcentaje: general.porcentaje });
+    expect(destino).toHaveLength(origen.length);
+
+    await expect(coberturasSrv.copiar(DESTINO, DESTINO, false)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(coberturasSrv.copiar(DESTINO, "NO_EXISTE", false)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(coberturasSrv.copiar("REZAGADO", PLAN, false)).rejects.toBeInstanceOf(BadRequestException);
   });
 });

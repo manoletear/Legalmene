@@ -14,6 +14,7 @@ import { ArancelesAtencionService } from "../../src/modules/coberturas/aranceles
 import { CoberturasService } from "../../src/modules/coberturas/coberturas.service";
 import { ArancelesService } from "../../src/modules/aranceles/aranceles.service";
 import { CargasMasivasService } from "../../src/modules/cargas-masivas/cargas-masivas.service";
+import { PlanesService } from "../../src/modules/planes/planes.service";
 import { WebhooksService } from "../../src/modules/webhooks/webhooks.service";
 import { NotifInboxService } from "../../src/modules/notif-inbox/notif-inbox.service";
 import { borrarMateriaDePrueba, fechaRelativa, materiaDePrueba, planAleatorio, rutAleatorio, type MateriaPrueba } from "./helpers";
@@ -52,6 +53,7 @@ const RUN = !!process.env.DATABASE_URL;
         CoberturasService,
         ArancelesService,
         CargasMasivasService,
+        PlanesService,
         { provide: WebhooksService, useValue: { emitir: async () => undefined } },
         { provide: NotifInboxService, useValue: { crear: async () => null, crearBulk: async () => [] } },
       ],
@@ -126,6 +128,25 @@ const RUN = !!process.env.DATABASE_URL;
     expect((await afiliadosSrv.consultarPorRut(rutConPlanes)).planes.find((p) => p.codPlan === NUEVO)?.vigente).toBe(true);
     await afiliadosSrv.terminarPlan(conPlanesId, NUEVO, fechaRelativa(-3));
     expect((await afiliadosSrv.consultarPorRut(rutConPlanes)).planes.find((p) => p.codPlan === NUEVO)?.vigente).toBe(false);
+  });
+
+  it("un plan con fecha de término pasada deja de dar derecho a atención a todos sus RUT", async () => {
+    const planesSrv = moduleRef.get(PlanesService);
+    const vigenteAntes = async () =>
+      (await afiliadosSrv.consultarPorRut(rutConPlanes)).planes.find((p) => p.codPlan === VIGENTE)?.vigente;
+    try {
+      await planesSrv.actualizar(VIGENTE, { fechaTermino: fechaRelativa(0) });
+      expect(await vigenteAntes()).toBe(true); // el día de término todavía es vigente
+      await planesSrv.actualizar(VIGENTE, { fechaTermino: fechaRelativa(-1) });
+      expect(await vigenteAntes()).toBe(false);
+      expect((await planesSrv.listar()).find((p) => p.codPlan === VIGENTE)?.vigenteHoy).toBe(false);
+      await expect(
+        atencionesSrv.crear({ afiliadoId: conPlanesId, codPlan: VIGENTE, tipo: "Consulta", ...cm, asunto: "Plan terminado" }),
+      ).rejects.toThrow(/vigente/);
+    } finally {
+      await planesSrv.actualizar(VIGENTE, { fechaTermino: null });
+    }
+    expect(await vigenteAntes()).toBe(true);
   });
 
   it("la atención se acepta bajo un plan vigente del RUT", async () => {

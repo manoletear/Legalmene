@@ -134,6 +134,12 @@ export const routes: Routes = [
       import("./features/admin/admin-maestros.component").then((m) => m.AdminMaestrosComponent),
   },
   {
+    path: "admin/planes",
+    canActivate: [permisoGuard("planes.administrar", "coberturas.administrar")],
+    loadComponent: () =>
+      import("./features/admin/admin-planes.component").then((m) => m.AdminPlanesComponent),
+  },
+  {
     path: "admin/coberturas",
     loadComponent: () =>
       import("./features/admin/admin-coberturas.component").then((m) => m.AdminCoberturasComponent),

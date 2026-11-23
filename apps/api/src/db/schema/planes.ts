@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, boolean, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, uuid, varchar, text, boolean, timestamp, uniqueIndex, date } from "drizzle-orm/pg-core";
 
 export const canales = pgTable(
   "canales",
@@ -22,6 +22,8 @@ export const planes = pgTable("planes", {
   descripcion: text("descripcion"),
   canalId: uuid("canal_id").references(() => canales.id, { onDelete: "set null" }),
   vigente: boolean("vigente").notNull().default(true),
+  // Término de vigencia del producto (Anexo §II l.118): desde el día siguiente no admite atenciones.
+  fechaTermino: date("fecha_termino", { mode: "string" }),
   fechaCreacion: timestamp("fecha_creacion", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -206,7 +206,8 @@ export class AfiliadoDetailComponent implements OnInit {
 
   protected abrirAsignar() {
     this.nuevoPlan = { codPlan: "", fechaInicio: hoyChile(), fechaTermino: "" };
-    if (!this.planes().length) this.planesApi.listar().subscribe((p) => this.planes.set(p));
+    // Solo planes vigentes hoy (Anexo §II l.121: un plan no vigente no se ofrece).
+    if (!this.planes().length) this.planesApi.listar().subscribe((p) => this.planes.set(p.filter((x) => x.vigenteHoy)));
     this.asignando.set(true);
   }
 

@@ -1,6 +1,13 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { and, asc, eq, SQL, sql } from "drizzle-orm";
-import type { CopagoResultado, CreateCobertura, TipoAtencion, UpdateCobertura } from "@legalmene/shared";
+import { and, asc, eq, inArray, SQL, sql } from "drizzle-orm";
+import {
+  PLANES_SIN_COBERTURA,
+  type CopagoResultado,
+  type CopiarCoberturasResultado,
+  type CreateCobertura,
+  type TipoAtencion,
+  type UpdateCobertura,
+} from "@legalmene/shared";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { coberturas, CoberturaRow } from "../../db/schema/aranceles";
 import { competencias, materias } from "../../db/schema/maestros";
@@ -44,6 +51,52 @@ export class CoberturasService {
     } catch (err) {
       throw this.traducir(err);
     }
+  }
+
+  // Copia las reglas vigentes de `desde` al plan `codPlan` (Anexo §I l.79). Con `reemplazar`, una
+  // regla existente para la misma materia y tipo toma los valores del origen (y queda vigente);
+  // sin él se conserva. Las reglas del destino que el origen no tiene no se tocan.
+  async copiar(codPlan: string, desde: string, reemplazar: boolean): Promise<CopiarCoberturasResultado> {
+    if (codPlan === desde) throw new BadRequestException("El plan de origen y el de destino son el mismo");
+    if ((PLANES_SIN_COBERTURA as readonly string[]).includes(codPlan)) {
+      throw new BadRequestException(`El plan ${codPlan} es sin cobertura y no lleva reglas`);
+    }
+    const existentes = await this.db.select({ c: planes.codPlan }).from(planes).where(inArray(planes.codPlan, [codPlan, desde]));
+    if (!existentes.some((p) => p.c === codPlan)) throw new NotFoundException(`Plan ${codPlan} no existe`);
+    if (!existentes.some((p) => p.c === desde)) throw new BadRequestException(`Plan ${desde} no existe`);
+
+    return this.db.transaction(async (tx) => {
+      const origen = await tx
+        .select()
+        .from(coberturas)
+        .where(and(eq(coberturas.codPlan, desde), eq(coberturas.vigente, true)));
+      if (!origen.length) return { copiadas: 0, omitidas: 0 };
+      const valores = origen.map((c) => ({
+        codPlan,
+        materiaId: c.materiaId,
+        tipo: c.tipo,
+        modalidad: c.modalidad,
+        porcentaje: c.porcentaje,
+        valorUfCentesimas: c.valorUfCentesimas,
+        vigente: true,
+      }));
+      const insert = tx.insert(coberturas).values(valores);
+      const filas = reemplazar
+        ? await insert
+            .onConflictDoUpdate({
+              target: [coberturas.codPlan, coberturas.materiaId, coberturas.tipo],
+              set: {
+                modalidad: sql`excluded.modalidad`,
+                porcentaje: sql`excluded.porcentaje`,
+                valorUfCentesimas: sql`excluded.valor_uf_centesimas`,
+                vigente: true,
+                updatedAt: new Date(),
+              },
+            })
+            .returning({ id: coberturas.id })
+        : await insert.onConflictDoNothing().returning({ id: coberturas.id });
+      return { copiadas: filas.length, omitidas: origen.length - filas.length };
+    });
   }
 
   async actualizar(id: string, patch: UpdateCobertura): Promise<CoberturaRow> {

@@ -7,11 +7,17 @@ import { planes } from "../../db/schema/planes";
 // Fecha de hoy en Chile: la vigencia RUT–Plan se evalúa por día calendario local.
 export const hoyChile = sql`(now() AT TIME ZONE 'America/Santiago')::date`;
 
+// El producto está vigente: no desactivado y sin término o con término desde hoy en adelante.
+export const planProductoVigenteSql = sql<boolean>`(
+  ${planes.vigente}
+  AND (${planes.fechaTermino} IS NULL OR ${planes.fechaTermino} >= ${hoyChile})
+)`;
+
 export const planVigenteSql = sql<boolean>`(
   ${planesAfiliado.vigencia} = 'Activo'
   AND ${planesAfiliado.fechaInicio} <= ${hoyChile}
   AND (${planesAfiliado.fechaTermino} IS NULL OR ${planesAfiliado.fechaTermino} >= ${hoyChile})
-  AND ${planes.vigente}
+  AND ${planProductoVigenteSql}
 )`;
 
 // Planes de uno o más afiliados, vigentes primero.
