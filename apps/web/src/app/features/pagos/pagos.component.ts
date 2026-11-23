@@ -13,6 +13,7 @@ import { CriteriosBusquedaComponent, type Criterios } from "../../shared/criteri
 import { descargarArchivo } from "../../shared/descarga";
 import { PagosApiService } from "../../core/services/pagos.service";
 import { AfiliadosApiService } from "../../core/services/afiliados.service";
+import { MeService } from "../../core/services/me.service";
 import type { AfiliadoConPlanes, Pago } from "@legalmene/shared";
 
 type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast";
@@ -36,7 +37,8 @@ import type { TableLazyLoadEvent } from "primeng/table";
     CriteriosBusquedaComponent,
   ],
   template: `
-    <p-card [style]="{ 'margin-bottom': '16px', display: 'block' }">
+    <!-- Abogados y jefaturas ven los pagos en solo lectura (Anexo §XI l.2001). -->
+    <p-card *ngIf="puedeIniciar" [style]="{ 'margin-bottom': '16px', display: 'block' }">
       <ng-template pTemplate="header">
         <div style="padding:16px 16px 0;">
           <h2 style="margin:0;">Iniciar pago WebPay</h2>
@@ -168,8 +170,11 @@ export class PagosComponent implements OnInit {
     monto: [10000, [Validators.required, Validators.min(1)]],
   });
 
+  private me = inject(MeService);
+  protected puedeIniciar = this.me.tiene("pagos.iniciar");
+
   ngOnInit() {
-    this.afiliadosApi.buscar({ pageSize: 200 }).subscribe((res) => this.afiliados.set(res.data));
+    if (this.puedeIniciar) this.afiliadosApi.buscar({ pageSize: 200 }).subscribe((res) => this.afiliados.set(res.data));
   }
 
   // "Correlativo" del formulario es el número de orden de compra.

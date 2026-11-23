@@ -82,10 +82,23 @@ test.describe("RBAC", () => {
     expect(conv.status()).toBe(403);
   });
 
-  test("Pagos: Abogado no lista pagos y solo el Administrador confirma a mano (403)", async ({ request }) => {
-    const abogado = { "X-Dev-User": asUser("ABOGADO") };
-    expect((await request.get(`${API}/pagos`, { headers: abogado })).status()).toBe(403);
+  test("Pagos: Abogado los ve en solo lectura y acotados a sus atenciones; solo el Administrador confirma a mano (403)", async ({ request }) => {
+    // Anexo §XI l.2001: abogados y jefaturas consultan WebPay en solo lectura.
+    // Abogado nuevo (sin atenciones): el de otras pruebas ya tiene casos propios.
+    const unico = `abogado-rbac-${Date.now()}`;
+    const claims = { entraOid: `dev-${unico}`, email: `${unico}@test.cl`, nombre: "Abogado nuevo", perfil: "ABOGADO" };
+    const abogado = { "X-Dev-User": Buffer.from(JSON.stringify(claims)).toString("base64") };
+    const res = await request.get(`${API}/pagos?pageSize=200`, { headers: abogado });
+    expect(res.status()).toBe(200);
+    // El abogado de prueba no tiene atenciones: solo ve pagos que no cuelgan de una atención.
+    expect(((await res.json()).data as { atencionId: string | null }[]).every((p) => p.atencionId === null)).toBe(true);
+    expect((await request.post(`${API}/pagos/iniciar`, { headers: abogado, data: {} })).status()).toBe(403);
+    expect((await request.get(`${API}/pagos`, { headers: { "X-Dev-User": asUser("COMERCIAL") } })).status()).toBe(403);
     expect((await request.get(`${API}/pagos`, { headers: { "X-Dev-User": asUser("CONTADOR") } })).ok()).toBeTruthy();
+    // Bandeja de aranceles también en solo lectura, acotada por alcance.
+    const aranceles = await request.get(`${API}/aranceles-atencion`, { headers: abogado });
+    expect(aranceles.status()).toBe(200);
+    expect(await aranceles.json()).toHaveLength(0);
 
     const confirmar = await request.post(`${API}/pagos/confirmar`, {
       headers: { "X-Dev-User": asUser("GERENCIA_FINANZAS"), "Content-Type": "application/json" },

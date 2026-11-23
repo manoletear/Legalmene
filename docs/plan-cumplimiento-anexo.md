@@ -53,7 +53,7 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 - [ ] Gestiones: responsable, fecha de inicio y fecha real de término; botón "Completar" en la ficha. (§VII l.860, §VIII l.1122)
 - [x] Fecha de término al abandonar o terminar (la API ya la acepta). (§VII l.757, §VIII l.1096)
 - [x] Código de grabación en asesorías y juicios, no solo en consultas. (§VI l.694, §VII l.947, §VIII l.1251)
-- [ ] Lectura de aranceles y WebPay para abogados y jefaturas (migración de permisos). (§XI l.1967, l.2001)
+- [x] Lectura de aranceles y WebPay para abogados y jefaturas (migración de permisos). (§XI l.1967, l.2001)
 - [ ] Selector de abogado al crear la atención (tramitador asigna). (§IV l.387)
 
 ## Fase 2 — Comunicaciones por correo (~1,5 semanas)
@@ -123,4 +123,5 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 | 2026-11-23 | 1 | Usuarios: alta desde Administración con cargo (migración 0017); vínculo con Entra ID por correo | 8feae22 |
 | 2026-11-23 | 1 | Planes: pantalla de alta/edición, fecha de término (migración 0018) que corta la vigencia de todos sus RUT, copiar coberturas | 016694c |
 | 2026-11-23 | 1 | Nuevo correlativo con competencia/materia/tipo; la ficha recarga al pasar de una atención a otra | 1f0f0c9 |
-| 2026-11-23 | 1 | Fecha real de término al abandonar/terminar (validada); código de grabación en todos los tipos | ver commit |
+| 2026-11-23 | 1 | Fecha real de término al abandonar/terminar (validada); código de grabación en todos los tipos | fb29b5f |
+| 2026-11-23 | 1 | Abogados y jefaturas: lectura de aranceles y pagos WebPay acotada a sus atenciones (migración 0019) | ver commit |

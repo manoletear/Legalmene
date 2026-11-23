@@ -134,6 +134,13 @@
       "when": 1795465792705,
       "tag": "0018_planes_fecha_termino",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795465793705,
+      "tag": "0019_lectura_finanzas_abogados",
+      "breakpoints": true
     }
   ]
 }

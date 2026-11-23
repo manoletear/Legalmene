@@ -129,6 +129,9 @@ const OPERACION_ATENCION: Permiso[] = [
   "provisiones.solicitar",
   "provisiones.registrar_movimientos",
   "provisiones.rendir",
+  // Solo lectura de aranceles y pagos WebPay de sus atenciones (Anexo §XI l.1967, l.2001).
+  "finanzas.ver",
+  "pagos.ver",
 ];
 
 const JEFATURA: Permiso[] = [
