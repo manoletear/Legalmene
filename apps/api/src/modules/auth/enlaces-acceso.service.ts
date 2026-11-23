@@ -13,7 +13,7 @@ import { DRIZZLE, Database } from "../../db/database.module";
 import { enlacesAcceso, perfiles, usuarios, type Usuario } from "../../db/schema/usuarios";
 import { AuditService } from "../audit/audit.service";
 import { NotificacionesService } from "../notificaciones/notificaciones.service";
-import { UsuariosService, UsuarioNoHabilitadoError, esAdminBootstrap } from "../usuarios/usuarios.service";
+import { PREFIJO_OID_PENDIENTE, UsuariosService, UsuarioNoHabilitadoError, esAdminBootstrap } from "../usuarios/usuarios.service";
 import { dominioPermitido } from "./dominio";
 import { firmarSesion } from "./sesion";
 
@@ -136,7 +136,7 @@ export class EnlacesAccesoService {
     if (!perfil) return null;
     const [u] = await this.db
       .insert(usuarios)
-      .values({ entraOid: `enlace:${correo}`, email: correo, nombre: correo, perfilId: perfil.id, activo: true })
+      .values({ entraOid: `${PREFIJO_OID_PENDIENTE}${correo}`, email: correo, nombre: correo, perfilId: perfil.id, activo: true })
       .onConflictDoNothing()
       .returning();
     return u ?? (await this.buscarPorEmail(correo));

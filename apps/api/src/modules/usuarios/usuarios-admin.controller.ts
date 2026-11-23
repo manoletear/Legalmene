@@ -4,6 +4,7 @@ import { createZodDto } from "nestjs-zod";
 import {
   BloqueoUsuarioSchema,
   CreatePerfilSchema,
+  CreateUsuarioAdminSchema,
   UpdatePerfilSchema,
   UpdateUsuarioAdminSchema,
 } from "@legalmene/shared";
@@ -14,6 +15,7 @@ import { CurrentUser, AuthenticatedUser } from "../../common/decorators/current-
 import { UsuariosService } from "./usuarios.service";
 import { PerfilesService } from "./perfiles.service";
 
+class CreateUsuarioAdminDto extends createZodDto(CreateUsuarioAdminSchema) {}
 class UpdateUsuarioAdminDto extends createZodDto(UpdateUsuarioAdminSchema) {}
 class BloqueoUsuarioDto extends createZodDto(BloqueoUsuarioSchema) {}
 class CreatePerfilDto extends createZodDto(CreatePerfilSchema) {}
@@ -42,6 +44,12 @@ export class UsuariosAdminController {
       perfilId,
       activo: activo === "true" ? true : activo === "false" ? false : undefined,
     });
+  }
+
+  @Post()
+  @Permiso("usuarios.administrar")
+  crear(@CurrentUser() user: AuthenticatedUser, @Body() body: CreateUsuarioAdminDto) {
+    return this.service.crearPorAdmin(body, user.id);
   }
 
   @Patch(":id")

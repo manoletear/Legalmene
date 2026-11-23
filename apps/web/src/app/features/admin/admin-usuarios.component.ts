@@ -8,9 +8,10 @@ import { ButtonModule } from "primeng/button";
 import { InputTextModule } from "primeng/inputtext";
 import { SelectModule } from "primeng/select";
 import { ToggleSwitchModule } from "primeng/toggleswitch";
+import { DialogModule } from "primeng/dialog";
 import { MessageService } from "primeng/api";
 import type { TableLazyLoadEvent } from "primeng/table";
-import type { Perfil, UpdateUsuarioAdmin } from "@legalmene/shared";
+import { CreateUsuarioAdminSchema, type Perfil, type UpdateUsuarioAdmin } from "@legalmene/shared";
 import {
   PerfilesApiService,
   UsuarioAdmin,
@@ -32,13 +33,15 @@ import { PromptService } from "../../shared/prompt.service";
     InputTextModule,
     SelectModule,
     ToggleSwitchModule,
+    DialogModule,
   ],
   template: `
     <div class="lm-row" style="margin-bottom:16px; align-items:flex-end;">
       <div style="flex:1;">
         <h1 style="margin:0 0 4px 0;">Usuarios</h1>
-        <small class="lm-muted">Perfil, jefatura directa y anexo de cada usuario. Quien se desactiva o bloquea no puede operar.</small>
+        <small class="lm-muted">Perfil, cargo, jefatura directa y anexo de cada usuario. Quien se desactiva o bloquea no puede operar.</small>
       </div>
+      <button pButton icon="pi pi-user-plus" label="Nuevo usuario" (click)="abrirNuevo()"></button>
     </div>
 
     <p-card>
@@ -90,6 +93,7 @@ import { PromptService } from "../../shared/prompt.service";
         <ng-template pTemplate="header">
           <tr>
             <th>Usuario</th>
+            <th>Cargo</th>
             <th>Perfil</th>
             <th>Jefatura</th>
             <th>Anexo</th>
@@ -103,6 +107,16 @@ import { PromptService } from "../../shared/prompt.service";
             <td>
               <div>{{ u.nombre }}</div>
               <small class="lm-muted">{{ u.email }}</small>
+            </td>
+            <td>
+              <input
+                pInputText
+                [ngModel]="u.cargo"
+                (change)="guardar(u, { cargo: $any($event.target).value.trim() || null })"
+                maxlength="100"
+                style="width:160px;"
+                aria-label="Cargo"
+              />
             </td>
             <td>
               <p-select
@@ -157,10 +171,31 @@ import { PromptService } from "../../shared/prompt.service";
           </tr>
         </ng-template>
         <ng-template pTemplate="emptymessage">
-          <tr><td colspan="7" style="text-align:center; padding:24px;" class="lm-muted">Sin usuarios.</td></tr>
+          <tr><td colspan="8" style="text-align:center; padding:24px;" class="lm-muted">Sin usuarios.</td></tr>
         </ng-template>
       </p-table>
     </p-card>
+
+    <p-dialog header="Nuevo usuario" [visible]="nuevoVisible()" (visibleChange)="nuevoVisible.set($event)" [modal]="true" [style]="{ width: '520px', maxWidth: '95vw' }">
+      <form class="lm-col" style="gap:12px;" (ngSubmit)="crear()">
+        <label class="lm-col" style="gap:4px;">Correo *<input pInputText type="email" name="email" [(ngModel)]="nuevo.email" /></label>
+        <label class="lm-col" style="gap:4px;">Nombre *<input pInputText name="nombre" [(ngModel)]="nuevo.nombre" /></label>
+        <label class="lm-col" style="gap:4px;">Cargo<input pInputText name="cargo" [(ngModel)]="nuevo.cargo" maxlength="100" placeholder="Ej. Abogado, Jefe de Asesorías" /></label>
+        <label class="lm-col" style="gap:4px;">Perfil *
+          <p-select name="perfilId" [(ngModel)]="nuevo.perfilId" [options]="perfilOptsVigentes()" optionLabel="label" optionValue="value" placeholder="Seleccione" appendTo="body"></p-select>
+        </label>
+        <label class="lm-col" style="gap:4px;">Jefatura
+          <p-select name="jefeId" [(ngModel)]="nuevo.jefeId" [options]="jefeOpts('')" optionLabel="label" optionValue="value" [filter]="true" filterBy="label" [showClear]="true" placeholder="Sin jefatura" appendTo="body"></p-select>
+        </label>
+        <label class="lm-col" style="gap:4px;">Anexo<input pInputText name="anexo" [(ngModel)]="nuevo.anexo" maxlength="10" /></label>
+        <small class="lm-muted">Ingresa con un enlace de acceso enviado a su correo. El perfil define qué puede hacer.</small>
+        <p *ngIf="errorNuevo()" role="alert" style="color:var(--p-red-600,#c62828); margin:0;">{{ errorNuevo() }}</p>
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button pButton type="button" label="Cancelar" [text]="true" (click)="nuevoVisible.set(false)"></button>
+          <button pButton type="submit" label="Crear usuario" icon="pi pi-check" [loading]="creando()"></button>
+        </div>
+      </form>
+    </p-dialog>
   `,
 })
 export class AdminUsuariosComponent implements OnInit {
@@ -177,6 +212,10 @@ export class AdminUsuariosComponent implements OnInit {
   protected perfiles = signal<Perfil[]>([]);
   protected opciones = signal<UsuarioOpcion[]>([]);
   protected q = "";
+  protected nuevoVisible = signal(false);
+  protected creando = signal(false);
+  protected errorNuevo = signal<string | null>(null);
+  protected nuevo = { email: "", nombre: "", cargo: "", perfilId: "", jefeId: null as string | null, anexo: "" };
   protected filtroPerfil: string | undefined;
   protected filtroActivo: boolean | undefined;
 
@@ -222,6 +261,45 @@ export class AdminUsuariosComponent implements OnInit {
     this.page.set(Math.floor((ev.first ?? 0) / rows) + 1);
     this.pageSize.set(rows);
     this.recargar();
+  }
+
+  abrirNuevo() {
+    this.nuevo = { email: "", nombre: "", cargo: "", perfilId: "", jefeId: null, anexo: "" };
+    this.errorNuevo.set(null);
+    this.nuevoVisible.set(true);
+  }
+
+  crear() {
+    const datos = {
+      email: this.nuevo.email,
+      nombre: this.nuevo.nombre,
+      cargo: this.nuevo.cargo.trim() || null,
+      perfilId: this.nuevo.perfilId,
+      jefeId: this.nuevo.jefeId || null,
+      anexo: this.nuevo.anexo.trim() || null,
+    };
+    const v = CreateUsuarioAdminSchema.safeParse(datos);
+    if (!v.success) {
+      const i = v.error.issues[0];
+      const campo: Record<string, string> = { email: "Correo", nombre: "Nombre", perfilId: "Perfil", cargo: "Cargo", anexo: "Anexo" };
+      this.errorNuevo.set(`${campo[String(i.path[0])] ?? i.path.join(".")}: ${i.message}`);
+      return;
+    }
+    this.errorNuevo.set(null);
+    this.creando.set(true);
+    this.api.crear(v.data).subscribe({
+      next: (u) => {
+        this.creando.set(false);
+        this.nuevoVisible.set(false);
+        this.msg.add({ severity: "success", summary: "Usuario creado", detail: u.email, life: 3000 });
+        this.api.opciones().subscribe((o) => this.opciones.set(o));
+        this.recargar();
+      },
+      error: (err) => {
+        this.creando.set(false);
+        this.errorNuevo.set(err.error?.message ?? err.message);
+      },
+    });
   }
 
   guardar(u: UsuarioAdmin, patch: UpdateUsuarioAdmin) {

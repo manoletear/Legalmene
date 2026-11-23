@@ -120,6 +120,13 @@
       "when": 1793927873846,
       "tag": "0016_seguridad_sesion_version",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795465547424,
+      "tag": "0017_usuarios_cargo",
+      "breakpoints": true
     }
   ]
 }

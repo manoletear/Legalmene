@@ -1,7 +1,7 @@
 import { Injectable, inject } from "@angular/core";
 import { HttpClient, HttpParams } from "@angular/common/http";
 import { Observable } from "rxjs";
-import type { CreatePerfil, Perfil, UpdatePerfil, UpdateUsuarioAdmin, UsuarioAdmin } from "@legalmene/shared";
+import type { CreatePerfil, CreateUsuarioAdmin, Perfil, UpdatePerfil, UpdateUsuarioAdmin, UsuarioAdmin } from "@legalmene/shared";
 import { environment } from "../../../environments/environment";
 
 export type { UsuarioAdmin };
@@ -32,6 +32,10 @@ export class UsuariosAdminService {
       if (v !== undefined && v !== null && v !== "") params = params.set(k, String(v));
     });
     return this.http.get<UsuariosPage>(this.base, { params });
+  }
+
+  crear(payload: CreateUsuarioAdmin): Observable<UsuarioAdmin> {
+    return this.http.post<UsuarioAdmin>(this.base, payload);
   }
 
   actualizar(id: string, patch: UpdateUsuarioAdmin): Observable<UsuarioAdmin> {

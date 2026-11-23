@@ -229,6 +229,43 @@ const como = (u: UsuarioPrueba): Acceso => ({ usuarioId: u.id, permisos: new Set
     expect(ctx.permisos).toContain("usuarios.administrar");
   });
 
+  it("alta de usuario desde Administración: cargo, dominio, duplicado, delegación y vínculo con Entra", async () => {
+    const db = drizzle(pool);
+    const admin = await usuarioDePrueba(db, PERFIL_ADMIN);
+    const gestor = await usuarioDePrueba(db, "GERENCIA_SERVICIOS");
+    creados.push(admin.id, gestor.id);
+    const [abogadoPerfil] = await db.select().from(perfiles).where(eq(perfiles.codigo, "ABOGADO"));
+    const [adminPerfil] = await db.select().from(perfiles).where(eq(perfiles.codigo, PERFIL_ADMIN));
+    const dominio = (process.env.ALLOWED_EMAIL_DOMAIN ?? "legalchile.cl").split(",")[0].trim();
+    const email = `alta-${Date.now()}@${dominio}`;
+
+    const nuevo = await usuariosSrv.crearPorAdmin(
+      { email: email.toUpperCase(), nombre: "Ana Alta", cargo: "Abogada senior", perfilId: abogadoPerfil.id, jefeId: gestor.id },
+      admin.id,
+    );
+    creados.push(nuevo.id);
+    expect(nuevo).toMatchObject({ email, cargo: "Abogada senior", activo: true, jefeId: gestor.id });
+    expect(nuevo.entraOid.startsWith("enlace:")).toBe(true);
+
+    await expect(usuariosSrv.crearPorAdmin({ email, nombre: "Otra", perfilId: abogadoPerfil.id }, admin.id)).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      usuariosSrv.crearPorAdmin({ email: `x-${Date.now()}@dominio-ajeno.example`, nombre: "X", perfilId: abogadoPerfil.id }, admin.id),
+    ).rejects.toThrow(/dominio/);
+    // Quien no es ADMIN no crea usuarios con permisos que no tiene.
+    await expect(
+      usuariosSrv.crearPorAdmin({ email: `y-${Date.now()}@${dominio}`, nombre: "Y", perfilId: adminPerfil.id }, gestor.id),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    // Primer ingreso con Microsoft: se vincula por correo y conserva perfil y cargo.
+    const oid = `oid-real-${Date.now()}`;
+    const vinculado = await usuariosSrv.resolveByEntraOid({ entraOid: oid, email, nombre: "Ana Alta" });
+    expect(vinculado).toMatchObject({ id: nuevo.id, entraOid: oid, perfilId: abogadoPerfil.id, cargo: "Abogada senior" });
+    // Un oid real no se reasigna a otro ingreso con el mismo correo.
+    await expect(usuariosSrv.resolveByEntraOid({ entraOid: `${oid}-otro`, email, nombre: "Ana" })).rejects.toThrow();
+    const [fila] = await db.select().from(usuarios).where(eq(usuarios.id, nuevo.id));
+    expect(fila.entraOid).toBe(oid);
+  });
+
   it("un perfil nuevo copia permisos y se aplica al usuario", async () => {
     const db = drizzle(pool);
     const [abogadoPerfil] = await db.select().from(perfiles).where(eq(perfiles.codigo, "ABOGADO"));

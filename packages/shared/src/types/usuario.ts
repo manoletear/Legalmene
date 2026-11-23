@@ -6,6 +6,7 @@ export const UsuarioSchema = z.object({
   entraOid: z.string(),
   email: z.string().email(),
   nombre: z.string(),
+  cargo: z.string().nullable(),
   perfilId: z.string().uuid(),
   jefeId: z.string().uuid().nullable(),
   anexo: z.string().nullable(),
@@ -36,12 +37,26 @@ export interface UsuarioActual {
 }
 
 export const UpdateUsuarioAdminSchema = z.object({
+  nombre: z.string().trim().min(1).max(200).optional(),
+  cargo: z.string().trim().max(100).nullable().optional(),
   perfilId: z.string().uuid().optional(),
   jefeId: z.string().uuid().nullable().optional(),
   anexo: z.string().trim().max(10).nullable().optional(),
   activo: z.boolean().optional(),
 });
 export type UpdateUsuarioAdmin = z.infer<typeof UpdateUsuarioAdminSchema>;
+
+// Alta desde Administración. El usuario entra con enlace de acceso a su correo (o con Microsoft,
+// que lo vincula por correo en su primer ingreso).
+export const CreateUsuarioAdminSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(200),
+  nombre: z.string().trim().min(1).max(200),
+  cargo: z.string().trim().max(100).nullable().optional(),
+  perfilId: z.string().uuid(),
+  jefeId: z.string().uuid().nullable().optional(),
+  anexo: z.string().trim().max(10).nullable().optional(),
+});
+export type CreateUsuarioAdmin = z.infer<typeof CreateUsuarioAdminSchema>;
 
 export const BloqueoUsuarioSchema = z.object({
   bloqueado: z.boolean(),

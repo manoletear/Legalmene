@@ -47,6 +47,8 @@ export const usuarios = pgTable(
     entraOid: varchar("entra_oid", { length: 128 }).notNull().unique(),
     email: varchar("email", { length: 200 }).notNull().unique(),
     nombre: varchar("nombre", { length: 200 }).notNull(),
+    // Cargo en la organización (Anexo §II l.106, §IV l.338); el acceso lo define el perfil, no el cargo.
+    cargo: varchar("cargo", { length: 100 }),
     perfilId: uuid("perfil_id")
       .notNull()
       .references(() => perfiles.id, { onDelete: "restrict" }),

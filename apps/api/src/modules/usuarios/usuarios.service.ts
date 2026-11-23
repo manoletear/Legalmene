@@ -11,12 +11,18 @@ import {
   PERFIL_ADMIN,
   PERFIL_POR_DEFECTO,
   permisosDePerfil,
+  type CreateUsuarioAdmin,
   type UpdateUsuarioAdmin,
   type UsuarioActual,
 } from "@legalmene/shared";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { perfiles, perfilPermisos, usuarios, Usuario } from "../../db/schema/usuarios";
 import type { AuthenticatedUser } from "../../common/decorators/current-user.decorator";
+import { dominioPermitido } from "../auth/dominio";
+
+// entraOid de un usuario que aún no ingresa con Microsoft (alta por enlace o desde Administración).
+// En su primer ingreso con Entra ID se reemplaza por el oid real (ver resolveByEntraOid).
+export const PREFIJO_OID_PENDIENTE = "enlace:";
 
 // BOOTSTRAP_ADMIN_EMAILS: correos exactos o dominios completos con "@" inicial
 // (p. ej. "ana@legalchile.cl,@tooxs.com"). Quien calce entra como Administrador activo en su
@@ -144,7 +150,7 @@ export class UsuariosService {
     const pageSize = Math.min(filtro.pageSize ?? 25, 200);
     const where = and(
       filtro.q
-        ? or(ilike(usuarios.email, `%${filtro.q}%`), ilike(usuarios.nombre, `%${filtro.q}%`))
+        ? or(ilike(usuarios.email, `%${filtro.q}%`), ilike(usuarios.nombre, `%${filtro.q}%`), ilike(usuarios.cargo, `%${filtro.q}%`))
         : undefined,
       filtro.perfilId ? eq(usuarios.perfilId, filtro.perfilId) : undefined,
       typeof filtro.activo === "boolean" ? eq(usuarios.activo, filtro.activo) : undefined,
@@ -156,6 +162,7 @@ export class UsuariosService {
           entraOid: usuarios.entraOid,
           email: usuarios.email,
           nombre: usuarios.nombre,
+          cargo: usuarios.cargo,
           perfilId: usuarios.perfilId,
           jefeId: usuarios.jefeId,
           anexo: usuarios.anexo,
@@ -219,11 +226,7 @@ export class UsuariosService {
       const jefe = await this.obtenerPorId(patch.jefeId);
       if (!jefe) throw new BadRequestException(`Jefe ${patch.jefeId} no existe`);
     }
-    if (patch.perfilId) {
-      const [p] = await this.db.select().from(perfiles).where(eq(perfiles.id, patch.perfilId));
-      if (!p) throw new BadRequestException(`Perfil ${patch.perfilId} no existe`);
-      if (!p.vigente) throw new BadRequestException(`El perfil ${p.nombre} está desactivado`);
-    }
+    if (patch.perfilId) await this.validarPerfil(patch.perfilId);
     const quitaAdmin =
       (await this.esAdmin(actual)) &&
       ((patch.perfilId !== undefined && patch.perfilId !== actual.perfilId) || patch.activo === false);
@@ -236,18 +239,7 @@ export class UsuariosService {
       // Delegación acotada: nadie cambia su propio perfil ni asigna permisos que no tiene
       // (si no, usuarios.administrar bastaría para asignarse ADMIN).
       if (id === actorId) throw new ForbiddenException("No puede cambiar su propio perfil");
-      const actor = await this.contextoAcceso(actorId);
-      if (actor.perfilCodigo !== PERFIL_ADMIN) {
-        const [destino] = await this.db.select({ codigo: perfiles.codigo }).from(perfiles).where(eq(perfiles.id, patch.perfilId));
-        const asignados = await this.db
-          .select({ permiso: perfilPermisos.permiso })
-          .from(perfilPermisos)
-          .where(eq(perfilPermisos.perfilId, patch.perfilId));
-        const otorga = permisosDePerfil(destino.codigo, asignados.map((a) => a.permiso));
-        if (otorga.some((x) => !actor.permisos.includes(x))) {
-          throw new ForbiddenException("No puede asignar un perfil con permisos que usted no tiene");
-        }
-      }
+      await this.asegurarPuedeAsignar(patch.perfilId, actorId);
     }
 
     const [row] = await this.db
@@ -255,6 +247,57 @@ export class UsuariosService {
       .set({ ...patch, updatedAt: new Date() })
       .where(eq(usuarios.id, id))
       .returning();
+    return row;
+  }
+
+  private async validarPerfil(perfilId: string): Promise<void> {
+    const [p] = await this.db.select().from(perfiles).where(eq(perfiles.id, perfilId));
+    if (!p) throw new BadRequestException(`Perfil ${perfilId} no existe`);
+    if (!p.vigente) throw new BadRequestException(`El perfil ${p.nombre} está desactivado`);
+  }
+
+  // Delegación acotada: quien no es ADMIN solo asigna perfiles cuyos permisos ya tiene.
+  private async asegurarPuedeAsignar(perfilId: string, actorId: string): Promise<void> {
+    const actor = await this.contextoAcceso(actorId);
+    if (actor.perfilCodigo === PERFIL_ADMIN) return;
+    const [destino] = await this.db.select({ codigo: perfiles.codigo }).from(perfiles).where(eq(perfiles.id, perfilId));
+    const asignados = await this.db
+      .select({ permiso: perfilPermisos.permiso })
+      .from(perfilPermisos)
+      .where(eq(perfilPermisos.perfilId, perfilId));
+    const otorga = permisosDePerfil(destino.codigo, asignados.map((a) => a.permiso));
+    if (otorga.some((x) => !actor.permisos.includes(x))) {
+      throw new ForbiddenException("No puede asignar un perfil con permisos que usted no tiene");
+    }
+  }
+
+  // Alta desde Administración (Anexo §II l.106). Queda activo y entra con enlace de acceso a su
+  // correo; si luego ingresa con Microsoft, resolveByEntraOid lo vincula por correo.
+  async crearPorAdmin(input: CreateUsuarioAdmin, actorId: string): Promise<Usuario> {
+    const email = input.email.trim().toLowerCase();
+    if (!dominioPermitido(email) && !esAdminBootstrap(email)) {
+      throw new BadRequestException("El correo no pertenece a un dominio habilitado para ingresar");
+    }
+    await this.validarPerfil(input.perfilId);
+    await this.asegurarPuedeAsignar(input.perfilId, actorId);
+    if (input.jefeId && !(await this.obtenerPorId(input.jefeId))) {
+      throw new BadRequestException(`Jefe ${input.jefeId} no existe`);
+    }
+    const [row] = await this.db
+      .insert(usuarios)
+      .values({
+        entraOid: `${PREFIJO_OID_PENDIENTE}${email}`,
+        email,
+        nombre: input.nombre,
+        cargo: input.cargo || null,
+        perfilId: input.perfilId,
+        jefeId: input.jefeId ?? null,
+        anexo: input.anexo || null,
+        activo: true,
+      })
+      .onConflictDoNothing()
+      .returning();
+    if (!row) throw new ConflictException(`Ya existe un usuario con el correo ${email}`);
     return row;
   }
 
@@ -278,6 +321,12 @@ export class UsuariosService {
   // entran como administradores activos para poder hacer la primera habilitación.
   // El perfil lo administra la aplicación y nunca se sobrescribe desde el token.
   async resolveByEntraOid(claims: ClaimsSpec): Promise<Usuario> {
+    // Un usuario creado antes de su primer ingreso con Microsoft se vincula por correo, una sola
+    // vez: solo si su entraOid sigue pendiente (nunca se reasigna un oid real).
+    await this.db
+      .update(usuarios)
+      .set({ entraOid: claims.entraOid, updatedAt: new Date() })
+      .where(and(eq(usuarios.email, claims.email.trim().toLowerCase()), sql`${usuarios.entraOid} like ${PREFIJO_OID_PENDIENTE + "%"}`));
     const esBootstrap = esAdminBootstrap(claims.email);
     const perfilId = await this.perfilIdPorCodigo(esBootstrap ? PERFIL_ADMIN : PERFIL_POR_DEFECTO);
     const [row] = await this.db
