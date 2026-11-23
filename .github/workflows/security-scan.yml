@@ -52,7 +52,7 @@ jobs:
           curl -sf http://localhost:3001/api/v1/health || (cat api.log && exit 1)
 
       - name: Run OWASP ZAP baseline scan
-        uses: zaproxy/action-baseline@v0.13.0
+        uses: zaproxy/action-baseline@v0.15.0
         with:
           target: "http://localhost:3001"
           rules_file_name: ".github/zap-rules.tsv"
