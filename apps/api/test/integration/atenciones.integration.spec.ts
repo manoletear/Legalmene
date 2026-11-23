@@ -9,6 +9,7 @@ import { DatabaseModule, PG_POOL } from "../../src/db/database.module";
 import { planes } from "../../src/db/schema/planes";
 import { AfiliadosService } from "../../src/modules/afiliados/afiliados.service";
 import { atenciones as atencionesTabla } from "../../src/db/schema/atenciones";
+import { usuarios } from "../../src/db/schema/usuarios";
 import { AtencionesService } from "../../src/modules/atenciones/atenciones.service";
 import { WebhooksService } from "../../src/modules/webhooks/webhooks.service";
 import { NotifInboxService } from "../../src/modules/notif-inbox/notif-inbox.service";
@@ -226,6 +227,25 @@ const numero = (correlativo: string) => parseInt(correlativo.split("-")[2], 10);
     await atenciones.actualizar(j.id, { revisadoPorComite: true }, jefe);
     const ab = await atenciones.cambiarEstado(j.id, { estado: "Abandonada", causaTerminoId: causaId });
     expect(ab.estado).toBe("Abandonada");
+  });
+
+  it("el abogado asignado al crear o reasignar debe existir y estar activo", async () => {
+    const db = drizzle(pool);
+    const inactivo = await usuarioDePrueba(db, "ABOGADO");
+    try {
+      await db.update(usuarios).set({ activo: false }).where(eq(usuarios.id, inactivo.id));
+      await expect(
+        atenciones.crear({ ...base(), tipo: "Juicio", ...cm, asunto: "Asignación", abogadoAsignadoId: inactivo.id }),
+      ).rejects.toThrow(/no está activo/);
+      await expect(
+        atenciones.crear({ ...base(), tipo: "Juicio", ...cm, asunto: "Asignación", abogadoAsignadoId: "00000000-0000-4000-8000-000000000000" }),
+      ).rejects.toThrow(/no existe/);
+      const ok = await atenciones.crear({ ...base(), tipo: "Juicio", ...cm, asunto: "Asignación", abogadoAsignadoId: abogado.id });
+      expect(ok.abogadoAsignadoId).toBe(abogado.id);
+      await expect(atenciones.actualizar(ok.id, { abogadoAsignadoId: inactivo.id }, jefe)).rejects.toThrow(/no está activo/);
+    } finally {
+      await db.execute(sql`DELETE FROM usuarios WHERE id = ${inactivo.id}`);
+    }
   });
 
   it("asesorías y juicios guardan código de grabación; la fecha real de término se valida", async () => {

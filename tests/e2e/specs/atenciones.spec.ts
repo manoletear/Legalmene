@@ -118,4 +118,30 @@ test.describe("Atenciones flow", () => {
     await page.locator(".p-select-overlay .p-select-option", { hasText: "Cobro de prestaciones" }).click();
     await expect(page.locator("p-select[formcontrolname='codPlan']")).toContainText(mejor.codPlan);
   });
+
+  test("el tramitador asigna el abogado al crear la atención", async ({ page, request }) => {
+    const afi = await request.get(`${API}/afiliados?pageSize=200`).then((r) => r.json());
+    type A = { rut: string; vigencia: string; planes: { vigente: boolean }[] };
+    const activo = (afi.data as A[]).find((a) => a.vigencia === "Activo" && a.planes.some((p) => p.vigente))!;
+    const opciones = await request.get(`${API}/usuarios/opciones`).then((r) => r.json());
+    const abogado = opciones.find((u: { perfilCodigo: string }) => u.perfilCodigo === "ABOGADO") ?? opciones[0];
+
+    await page.goto("/atenciones/nueva");
+    await page.locator("#rutAfiliado").fill(activo.rut);
+    await page.getByRole("button", { name: "Buscar" }).click();
+    await expect(page.getByTestId("afiliado-encontrado")).toBeVisible();
+    await page.locator("p-select[formcontrolname='competenciaId']").click();
+    await page.locator(".p-select-overlay .p-select-option", { hasText: "Laboral" }).click();
+    await page.locator("p-select[formcontrolname='materiaId']").click();
+    await page.locator(".p-select-overlay .p-select-option", { hasText: "Despido injustificado" }).click();
+    await page.locator("p-select[formcontrolname='abogadoAsignadoId']").click();
+    await page.locator(".p-select-overlay .p-select-option", { hasText: abogado.email }).click();
+    await page.locator("input[formcontrolname='asunto']").fill("Asignada por tramitador E2E");
+    await page.getByRole("button", { name: /^Crear$/ }).click();
+
+    await expect(page).toHaveURL(/\/atenciones\/[0-9a-f-]{36}$/);
+    const id = page.url().split("/").pop()!;
+    const creada = await request.get(`${API}/atenciones/${id}`).then((r) => r.json());
+    expect(creada.abogadoAsignadoId).toBe(abogado.id);
+  });
 });

@@ -233,6 +233,16 @@ export class AtencionesService {
   }
 
   // La carga debe ser del titular, del plan de la atención y estar vigente hoy (Chile).
+  // El abogado asignado debe ser un usuario activo y no bloqueado (Anexo §IV l.387).
+  private async validarAbogado(abogadoId: string): Promise<void> {
+    const [u] = await this.db
+      .select({ activo: usuarios.activo, bloqueado: usuarios.bloqueado })
+      .from(usuarios)
+      .where(eq(usuarios.id, abogadoId));
+    if (!u) throw new BadRequestException("El abogado asignado no existe");
+    if (!u.activo || u.bloqueado) throw new BadRequestException("El abogado asignado no está activo");
+  }
+
   private async validarCarga(afiliadoId: string, codPlan: string, cargaId: string): Promise<void> {
     const [c] = await this.db
       .select({
@@ -264,6 +274,7 @@ export class AtencionesService {
     await this.validarPlanDeAtencion(input.afiliadoId, codPlan);
     await this.validarMateria(input.competenciaId, input.materiaId, input.tipo);
     if (input.cargaId) await this.validarCarga(input.afiliadoId, codPlan, input.cargaId);
+    if (input.abogadoAsignadoId) await this.validarAbogado(input.abogadoAsignadoId);
 
     const correlativo = await siguienteCorrelativo(this.db, input.tipo);
     const datos = this.limpiarPorTipo(input.tipo, { ...input });
@@ -319,6 +330,9 @@ export class AtencionesService {
         patch.materiaId ?? actual.materiaId,
         actual.tipo,
       );
+    }
+    if (patch.abogadoAsignadoId && patch.abogadoAsignadoId !== actual.abogadoAsignadoId) {
+      await this.validarAbogado(patch.abogadoAsignadoId);
     }
     const datos = this.limpiarPorTipo(actual.tipo, { ...patch });
     const [row] = await this.db

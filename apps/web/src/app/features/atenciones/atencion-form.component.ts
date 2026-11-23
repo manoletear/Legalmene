@@ -12,6 +12,7 @@ import { forkJoin, of } from "rxjs";
 import { catchError, map } from "rxjs/operators";
 import { PermisoDirective } from "../../core/permisos";
 import { AfiliadoFormComponent } from "../afiliados/afiliado-form.component";
+import { UsuariosAdminService } from "../../core/services/usuarios-admin.service";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { AfiliadosApiService } from "../../core/services/afiliados.service";
 import { MaestrosApiService } from "../../core/services/maestros.service";
@@ -133,6 +134,12 @@ import type { Afiliado, AfiliadoConPlanes, CanalContacto, Competencia, CopagoRes
         </div>
 
         <div class="lm-col" style="gap:4px;">
+          <label for="abogadoAsignado">Abogado asignado</label>
+          <p-select inputId="abogadoAsignado" formControlName="abogadoAsignadoId" [options]="abogadoOpts()" optionLabel="label" optionValue="value"
+            [filter]="true" filterBy="label" [showClear]="true" appendTo="body" placeholder="Sin asignar (queda a cargo de quien la crea)"></p-select>
+        </div>
+
+        <div class="lm-col" style="gap:4px;">
           <label>Asunto</label>
           <input pInputText type="text" formControlName="asunto" placeholder="Resumen del caso (ej. Despido de Juan Pérez)" />
         </div>
@@ -211,6 +218,9 @@ export class AtencionFormComponent {
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private msg = inject(MessageService);
+  private usuariosApi = inject(UsuariosAdminService);
+  // Usuarios activos que pueden quedar a cargo (Anexo §IV l.387: el tramitador asigna al abogado).
+  protected abogadoOpts = signal<{ label: string; value: string }[]>([]);
 
   protected competencias = signal<Competencia[]>([]);
   protected materias = signal<Materia[]>([]);
@@ -270,6 +280,7 @@ export class AtencionFormComponent {
     tipoConsultaId: [null as string | null],
     codigoGrabacion: [""],
     cargaId: [null as string | null],
+    abogadoAsignadoId: [null as string | null],
     causanteNombre: [""],
     causanteRut: [""],
     causanteFechaDefuncion: [""],
@@ -286,6 +297,7 @@ export class AtencionFormComponent {
       this.buscarRut();
     }
     this.maestrosApi.listar("competencias", { vigente: true }).subscribe((c) => this.competencias.set(c));
+    this.usuariosApi.opciones().subscribe((us) => this.abogadoOpts.set(us.map((u) => ({ label: `${u.nombre} (${u.email})`, value: u.id }))));
     this.maestrosApi.listar("tipos-consulta", { vigente: true }).subscribe((t) => this.tiposConsulta.set(t));
   }
 
@@ -433,6 +445,7 @@ export class AtencionFormComponent {
       descripcion: v.descripcion || undefined,
       prioridad: v.prioridad as "Media",
       cargaId: v.cargaId || undefined,
+      abogadoAsignadoId: v.abogadoAsignadoId || undefined,
       codigoGrabacion: v.codigoGrabacion || undefined,
       ...(v.tipo === "Consulta"
         ? {
