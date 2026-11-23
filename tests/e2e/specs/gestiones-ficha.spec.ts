@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
+import { crearAsesoria } from "./fixtures";
 
 const API = process.env.API_BASE ?? "http://localhost:3001/api/v1";
 
 test.describe("Gestiones desde la ficha", () => {
   test("se crea una gestión con responsable y fechas, y se completa con fecha real de término", async ({ page, request }) => {
-    const lista = await request.get(`${API}/atenciones?pageSize=20&tipo=Asesoria`).then((r) => r.json());
-    const a = lista.data.find((x: { estado: string }) => !["Terminada", "Abandonada"].includes(x.estado)) ?? lista.data[0];
+    const a = await crearAsesoria(request, `E2E ${Date.now()}`);
     const opciones = await request.get(`${API}/usuarios/opciones`).then((r) => r.json());
     const responsable = opciones.find((u: { perfilCodigo: string }) => u.perfilCodigo === "ABOGADO") ?? opciones[0];
     const titulo = `Entrevista E2E ${Date.now()}`;

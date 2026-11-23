@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
+import { crearAsesoria } from "./fixtures";
 
 const API = process.env.API_BASE ?? "http://localhost:3001/api/v1";
 
 test.describe("Código de grabación y fecha de término", () => {
   test("una asesoría guarda su código de grabación desde la ficha", async ({ page, request }) => {
-    const lista = await request.get(`${API}/atenciones?pageSize=20&tipo=Asesoria`).then((r) => r.json());
-    const a = lista.data.find((x: { estado: string }) => !["Terminada", "Abandonada"].includes(x.estado)) ?? lista.data[0];
+    const a = await crearAsesoria(request, `E2E ${Date.now()}`);
     await page.goto(`/atenciones/${a.id}`);
     const codigo = `GRAB-E2E-${Date.now()}`;
     await page.locator("#grabacionCaso").fill(codigo);
