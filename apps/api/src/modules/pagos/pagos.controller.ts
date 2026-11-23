@@ -4,7 +4,7 @@ import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { PagosService } from "./pagos.service";
 import { Permiso } from "../../common/decorators/permiso.decorator";
 import { PermisosGuard } from "../../common/guards/permisos.guard";
-import { ConfirmarPagoSchema, CriteriosBusquedaSchema, IniciarPagoSchema } from "@legalmene/shared";
+import { ConfirmarPagoSchema, CriteriosBusquedaSchema, TipoPagoEnum, IniciarPagoSchema } from "@legalmene/shared";
 import { z } from "zod";
 import { createZodDto } from "nestjs-zod";
 
@@ -16,6 +16,7 @@ class FiltroPagosDto extends createZodDto(
     pageSize: z.coerce.number().int().min(1).max(200).default(50),
     estado: z.string().optional(),
     ordenCompra: z.string().trim().min(1).optional(),
+    tipoPago: TipoPagoEnum.optional(),
   }),
 ) {}
 

@@ -36,7 +36,7 @@ import { Observable } from "rxjs";
 
     <p-card>
       <lm-criterios-busqueda
-        [campos]="['correlativo', 'rut', 'abogado', 'plan', 'fechas']"
+        [campos]="['correlativo', 'rut', 'tipoAtencion', 'abogado', 'plan', 'fechas']"
         [estados]="estadoOpts"
         [iniciales]="iniciales"
         etiquetaFecha="Solicitud"

@@ -34,6 +34,7 @@ export function condicionAtencion(c: CriteriosBusqueda, columnaFecha: AnyColumn 
     c.canalId ? sql`${atenciones.codPlan} in (select p.cod_plan from planes p where p.canal_id = ${c.canalId})` : undefined,
     c.competenciaId ? eq(atenciones.competenciaId, c.competenciaId) : undefined,
     c.materiaId ? eq(atenciones.materiaId, c.materiaId) : undefined,
+    c.tipoAtencion ? eq(atenciones.tipo, c.tipoAtencion) : undefined,
     c.bien ? sql`${atenciones.afiliadoId} in (${condicionBien(c.bien)})` : undefined,
     rangoFechas(columnaFecha, c.fechaDesde, c.fechaHasta),
   );

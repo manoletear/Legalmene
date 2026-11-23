@@ -68,7 +68,7 @@ const ESTADOS_FINANZAS: EstadoProvision[] = ["Solicitada", "Autorizada", "Dispon
 
     <p-card header="Búsqueda de aranceles por atención" [style]="{ 'margin-top': '16px', display: 'block' }">
       <lm-criterios-busqueda
-        [campos]="['correlativo', 'rut', 'plan', 'canal', 'materia', 'fechas']"
+        [campos]="['correlativo', 'rut', 'tipoAtencion', 'abogado', 'plan', 'canal', 'materia', 'fechas']"
         [estados]="estadoArancelOpts"
         etiquetaFecha="Apertura"
         [exportable]="true"

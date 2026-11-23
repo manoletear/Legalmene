@@ -81,7 +81,7 @@ import type { TableLazyLoadEvent } from "primeng/table";
       </ng-template>
 
       <lm-criterios-busqueda
-        [campos]="['correlativo', 'rut', 'plan', 'fechas']"
+        [campos]="['correlativo', 'rut', 'tipoPago', 'plan', 'fechas']"
         [estados]="estadoOpts"
         etiquetaCorrelativo="Número de orden"
         placeholderCorrelativo="OC-…"

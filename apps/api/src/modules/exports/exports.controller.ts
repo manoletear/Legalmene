@@ -1,7 +1,7 @@
 import { BadRequestException, Controller, Get, Header, Inject, Param, ParseUUIDPipe, Query, Res, UseGuards } from "@nestjs/common";
 import { createZodDto } from "nestjs-zod";
 import { z } from "zod";
-import { BUSQUEDAS_EXPORTABLES, CriteriosBusquedaSchema, type BusquedaExportable } from "@legalmene/shared";
+import { BUSQUEDAS_EXPORTABLES, CriteriosBusquedaSchema, TipoPagoEnum, type BusquedaExportable } from "@legalmene/shared";
 import { MIME_XLSX } from "./xlsx";
 import { Response } from "express";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
@@ -18,6 +18,7 @@ class FiltroExportacionDto extends createZodDto(
     q: z.string().trim().min(1).optional(),
     vigencia: z.string().optional(),
     ordenCompra: z.string().trim().min(1).optional(),
+    tipoPago: TipoPagoEnum.optional(),
   }),
 ) {}
 

@@ -17,7 +17,13 @@ export const CriteriosBusquedaSchema = z.object({
   fechaHasta: fecha.optional(),
   // Identificador o descripción de un bien cubierto del afiliado (rol, patente…).
   bien: z.string().trim().min(1).optional(),
+  // Tipo de atención (Anexo §IX l.1423, §XI: aranceles y provisiones por tipo).
+  tipoAtencion: TipoAtencionEnum.optional(),
 });
+
+// Pagos WebPay por tipo (Anexo §XI l.1993): de una atención (arancel) o del plan.
+export const TipoPagoEnum = z.enum(["Arancel", "Plan"]);
+export type TipoPago = z.infer<typeof TipoPagoEnum>;
 export type CriteriosBusqueda = z.infer<typeof CriteriosBusquedaSchema>;
 
 // Una búsqueda sin ningún criterio no se ejecuta (Anexo §XI: "no deberán presentar precarga").

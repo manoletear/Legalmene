@@ -1,9 +1,9 @@
 import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { and, count, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, ilike, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import { ulid } from "ulid";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { pagos, NuevoPago, Pago } from "../../db/schema/pagos";
-import type { CriteriosBusqueda, IniciarPago } from "@legalmene/shared";
+import type { CriteriosBusqueda, IniciarPago, TipoPago } from "@legalmene/shared";
 import { rangoFechas, rutComparable } from "../../common/busqueda/criterios";
 import { asegurarAtencionVisible, filtroAtenciones } from "../../common/acceso/alcance";
 import { atenciones } from "../../db/schema/atenciones";
@@ -16,6 +16,7 @@ export function alcancePagos(): SQL | undefined {
 }
 
 export interface FiltroPagos extends Pick<CriteriosBusqueda, "rut" | "codPlan" | "fechaDesde" | "fechaHasta"> {
+  tipoPago?: TipoPago;
   page?: number;
   pageSize?: number;
   estado?: string;
@@ -27,6 +28,7 @@ export function condicionPagos(f: FiltroPagos): SQL | undefined {
   return and(
     alcancePagos(),
     f.codPlan ? eq(pagos.codPlan, f.codPlan) : undefined,
+    f.tipoPago === "Arancel" ? isNotNull(pagos.atencionId) : f.tipoPago === "Plan" ? isNull(pagos.atencionId) : undefined,
     f.estado ? eq(pagos.estado, f.estado as "Iniciado") : undefined,
     f.ordenCompra ? ilike(pagos.ordenCompra, `%${f.ordenCompra}%`) : undefined,
     rut
