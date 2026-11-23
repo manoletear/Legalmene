@@ -62,6 +62,11 @@ test.describe("Aranceles y provisiones", () => {
 
     expect((await paso("pago-cliente", abogado, { medio: "Transferencia" })).status()).toBe(403);
     expect((await paso("pago-cliente", contador, { medio: "Transferencia" })).ok()).toBeTruthy();
+    // Anexo §X 05.1: recibo del dinero para el cliente (PDF, 2 copias).
+    const recibo = await request.get(`${API}/exports/comprobantes/provision/${provision.id}.pdf`, { headers: contador });
+    expect(recibo.status()).toBe(200);
+    expect(recibo.headers()["content-type"]).toContain("application/pdf");
+    expect((await recibo.body()).toString("latin1").match(/\/Type \/Page\b/g)).toHaveLength(2);
     expect((await paso("solicitar-entrega", abogado)).ok()).toBeTruthy();
     expect((await paso("autorizar", abogado)).status()).toBe(403);
     expect((await paso("autorizar", supervisor, { observacion: "OK" })).ok()).toBeTruthy();

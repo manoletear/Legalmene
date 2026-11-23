@@ -11,6 +11,7 @@ import { planes } from "../../src/db/schema/planes";
 import { afiliados } from "../../src/db/schema/afiliados";
 import { atenciones } from "../../src/db/schema/atenciones";
 import { provisiones } from "../../src/db/schema/provisiones";
+import { ComprobantesPdfService } from "../../src/modules/exports/comprobantes-pdf.service";
 import { ProvisionesService } from "../../src/modules/provisiones/provisiones.service";
 import { NotifInboxService } from "../../src/modules/notif-inbox/notif-inbox.service";
 import {
@@ -72,6 +73,7 @@ const RUN = !!process.env.DATABASE_URL;
       imports: [ConfigModule.forRoot({ isGlobal: true }), DatabaseModule],
       providers: [
         ProvisionesService,
+        ComprobantesPdfService,
         {
           provide: NotifInboxService,
           useValue: { crear: async (n: { usuarioId: string; titulo: string }) => notifs.push(n) },
@@ -112,7 +114,13 @@ const RUN = !!process.env.DATABASE_URL;
     const p = await service.solicitar(atencionId, abogado, { monto: 450_000, motivo: "Peritaje" });
     expect((await service.resumenAtencion(atencionId)).pendientePago).toBe(450_000);
 
+    const comprobantes = moduleRef.get(ComprobantesPdfService);
+    await expect(comprobantes.reciboProvision(p.id)).rejects.toThrow(/aún no registra el pago/);
     expect((await service.registrarPagoCliente(p.id, jefe, "CasaCentral")).estado).toBe("Pagada");
+    // Anexo §X 05.1: recibo del dinero en dos copias.
+    const recibo = await comprobantes.reciboProvision(p.id);
+    expect(recibo.copias).toHaveLength(2);
+    expect(recibo.secciones[1].filas).toEqual(expect.arrayContaining([["Monto recibido", "$ 450.000"], ["Forma de pago", "Pago en casa central"]]));
     expect((await service.solicitarEntrega(p.id, abogado)).estado).toBe("EnAprobacion");
     expect((await service.autorizar(p.id, jefe, "Procede")).estado).toBe("Autorizada");
     expect((await service.marcarDisponible(p.id, jefe)).estado).toBe("Disponible");

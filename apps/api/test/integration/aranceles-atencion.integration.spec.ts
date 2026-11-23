@@ -17,6 +17,8 @@ import { ArancelesAtencionService } from "../../src/modules/coberturas/aranceles
 import { CoberturasService } from "../../src/modules/coberturas/coberturas.service";
 import { ArancelesService } from "../../src/modules/aranceles/aranceles.service";
 import { GestionesService } from "../../src/modules/gestiones/gestiones.service";
+import { ComprobantesPdfService, dibujarComprobante } from "../../src/modules/exports/comprobantes-pdf.service";
+import { PassThrough } from "stream";
 import { ProvisionesService } from "../../src/modules/provisiones/provisiones.service";
 import { WebhooksService } from "../../src/modules/webhooks/webhooks.service";
 import { NotifInboxService } from "../../src/modules/notif-inbox/notif-inbox.service";
@@ -59,6 +61,7 @@ const FECHA_PAGO = "2001-03-15";
         ArancelesService,
         ProvisionesService,
         GestionesService,
+        ComprobantesPdfService,
         { provide: WebhooksService, useValue: { emitir: async () => undefined } },
         { provide: NotifInboxService, useValue: { crear: async () => null, crearSiNoExisteUnseen: async () => null, crearBulk: async () => [] } },
       ],
@@ -111,6 +114,9 @@ const FECHA_PAGO = "2001-03-15";
     expect(ar?.copagoUfCentesimas).toBe(600);
     expect(ar?.coberturaPorcentaje).toBe(40);
 
+    const comprobantes = moduleRef.get(ComprobantesPdfService);
+    await expect(comprobantes.reciboArancel(a.id)).rejects.toBeInstanceOf(ConflictException); // aún sin pago
+
     // Detenida: solo gestiones de contacto con el cliente mientras el arancel esté impago.
     const gestionesSrv = moduleRef.get(GestionesService);
     const nueva = (tipo: "EscritoJudicial" | "LlamadaTelefonica") =>
@@ -140,6 +146,21 @@ const FECHA_PAGO = "2001-03-15";
     expect(pagado.estado).toBe("Pagado");
     expect(pagado.montoClp).toBe(96_000); // 6 UF × $16.000
     expect(pagado.ufValorCentavos).toBe(1_600_000);
+
+    // Anexo §IX 5.4: comprobante en dos copias con el monto en pesos y la forma de pago.
+    const recibo = await comprobantes.reciboArancel(a.id);
+    expect(recibo.copias).toEqual(["Administración", "Cliente"]);
+    const pago = recibo.secciones.find((s) => s.titulo === "Pago")!.filas;
+    expect(pago).toEqual(expect.arrayContaining([["Monto pagado", "$ 96.000"], ["Forma de pago", "Pago en casa central"], ["Copago", "6,00 UF"]]));
+    const pdf = await new Promise<Buffer>((resolve) => {
+      const out = new PassThrough();
+      const partes: Buffer[] = [];
+      out.on("data", (c: Buffer) => partes.push(c));
+      out.on("end", () => resolve(Buffer.concat(partes)));
+      dibujarComprobante(recibo, out);
+    });
+    expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(pdf.toString("latin1").match(/\/Type \/Page\b/g)).toHaveLength(2);
 
     expect((await atencionesSrv.cambiarEstado(a.id, { estado: "Pendiente" })).estado).toBe("Pendiente");
     expect((await nueva("EscritoJudicial")).estado).toBe("Pendiente");

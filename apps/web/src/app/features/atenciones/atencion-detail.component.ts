@@ -17,6 +17,7 @@ import { DividerModule } from "primeng/divider";
 import { TabsModule } from "primeng/tabs";
 import { MessageService } from "primeng/api";
 import { PromptService } from "../../shared/prompt.service";
+import { descargarArchivo } from "../../shared/descarga";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { GestionesApiService } from "../../core/services/gestiones.service";
 import { ComitesApiService } from "../../core/services/comites.service";
@@ -219,6 +220,10 @@ interface PipelineStep {
                 <div *ngIf="ar.estado === 'Pagado'" class="lm-small lm-muted">
                   Pagado {{ ar.fechaPago | date: 'dd/MM/yyyy' }} · {{ ar.medioPago }} · $ {{ ar.montoClp | number }}
                 </div>
+                <ng-container *ngIf="ar.estado === 'Pagado' && ar.medioPago !== 'WebPay'">
+                  <button *lmPermiso="'finanzas.ver'" pButton size="small" [text]="true" icon="pi pi-print" label="Imprimir comprobante"
+                    (click)="imprimirComprobanteArancel(a.id, a.correlativo)"></button>
+                </ng-container>
                 <div class="lm-row" style="gap:4px; flex-wrap:wrap; margin-top:6px;">
                   <button *ngIf="ar.estado === 'Requerido' && me.tiene('aranceles_atencion.enviar')" pButton size="small" [outlined]="true" label="Enviar a aprobación" (click)="accionArancel(a.id, 'enviar')"></button>
                   <ng-container *ngIf="ar.estado === 'EnAprobacion' && me.tiene('aranceles_atencion.aprobar')">
@@ -758,6 +763,15 @@ export class AtencionDetailComponent implements OnInit {
       a.download = doc.nombre;
       a.click();
     });
+  }
+
+  // Anexo §IX 5.4: comprobante del pago del arancel (dos copias en el PDF).
+  async imprimirComprobanteArancel(atencionId: string, correlativo: string) {
+    try {
+      await descargarArchivo(`/exports/comprobantes/arancel/${atencionId}.pdf`, `comprobante-arancel-${correlativo}.pdf`);
+    } catch (e) {
+      this.msg.add({ severity: "error", summary: "No se pudo generar el comprobante", detail: (e as Error).message, life: 5000 });
+    }
   }
 
   protected tipoPlazo(t: PlazoAtencion["tipo"]): string {
