@@ -1,4 +1,4 @@
-import type { SolicitudTermino } from "@legalmene/shared";
+import type { AutorizacionCobertura, SolicitudTermino } from "@legalmene/shared";
 import {
   pgTable,
   uuid,
@@ -95,6 +95,8 @@ export const atenciones = pgTable(
     fechaPrimerContacto: timestamp("fecha_primer_contacto", { withTimezone: true }),
     // Término solicitado, a la espera del V°B° de jefatura (null si no hay solicitud).
     solicitudTermino: jsonb("solicitud_termino").$type<SolicitudTermino>(),
+    // Sin cobertura del plan: autorización de Gerencia de Servicios (null si el plan cubre).
+    autorizacionCobertura: jsonb("autorizacion_cobertura").$type<AutorizacionCobertura>(),
     prioridad: prioridadEnum("prioridad").notNull().default("Media"),
     origen: varchar("origen", { length: 80 }),
     // Consultas (Anexo §VI).

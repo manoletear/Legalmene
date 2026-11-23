@@ -67,6 +67,21 @@ const MONEDAS: MonedaCuantia[] = ["CLP", "UF", "UTM", "USD"];
       <!-- Cambio de estado -->
       <div class="lm-info-card" style="margin-bottom:16px;">
         <div class="lm-info-card-header"><i class="pi pi-flag"></i> Cambiar estado</div>
+        <!-- Sin cobertura del plan (Anexo §VII 01.2–01.3) -->
+        <div *ngIf="a.autorizacionCobertura as c" class="lm-small" data-testid="autorizacion-cobertura"
+          [style.background]="c.estado === 'Autorizada' ? '#f0fdf4' : c.estado === 'Rechazada' ? '#fef2f2' : '#fff7ed'"
+          style="border:1px solid #e2e8f0; border-radius:8px; padding:10px; margin-bottom:10px;">
+          <ng-container [ngSwitch]="c.estado">
+            <span *ngSwitchCase="'Pendiente'"><strong>Sin cobertura del plan.</strong> La atención espera la autorización de Gerencia de Servicios.</span>
+            <span *ngSwitchCase="'Autorizada'"><strong>Autorizada sin cobertura</strong> por {{ nombreUsuario(c.resueltaPorId!) }} el {{ c.resueltaEn | date: 'dd/MM/yyyy' }}.</span>
+            <span *ngSwitchCase="'Rechazada'"><strong>No autorizada</strong> por Gerencia de Servicios: corresponde abandonar la atención.</span>
+          </ng-container>
+          <ng-container *ngIf="c.observacion"> {{ c.observacion }}</ng-container>
+          <div *ngIf="c.estado === 'Pendiente' && puedeAutorizarCobertura()" class="lm-row" style="gap:8px; margin-top:8px;">
+            <button pButton label="Autorizar atención" icon="pi pi-check" size="small" (click)="resolverCobertura(a, true)"></button>
+            <button pButton label="No autorizar" icon="pi pi-times" size="small" severity="danger" [outlined]="true" (click)="resolverCobertura(a, false)"></button>
+          </div>
+        </div>
         <!-- V°B° de jefatura (Anexo §VII l.904, §VIII l.1192) -->
         <div *ngIf="a.solicitudTermino as s" class="lm-small" data-testid="solicitud-termino"
           style="background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:10px; margin-bottom:10px;">
@@ -387,6 +402,22 @@ export class AtencionFlujoComponent implements OnInit {
   // Asesorías y juicios no pasan a Terminada directo: se solicita y una jefatura da el V°B°.
   protected terminoConVB(a: AtencionConMaestros): boolean {
     return this.destino === "Terminada" && (TIPOS_CON_VB_TERMINO as readonly string[]).includes(a.tipo);
+  }
+
+  protected puedeAutorizarCobertura = computed(() => this.me.tiene("atenciones.autorizar_sin_cobertura"));
+
+  async resolverCobertura(a: AtencionConMaestros, autoriza: boolean) {
+    const observacion = await this.prompt.open({
+      header: autoriza ? "Autorizar atención sin cobertura" : "No autorizar la atención",
+      label: autoriza ? "Observación (opcional)" : "Motivo (se informa al abogado)",
+      multiline: true,
+      required: !autoriza,
+    });
+    if (observacion === null) return;
+    this.api.resolverCobertura(a.id, autoriza, observacion.trim() || undefined).subscribe({
+      next: () => this.ok(autoriza ? "Atención autorizada" : "Atención no autorizada"),
+      error: (e) => this.error(e),
+    });
   }
 
   protected puedeDarVB(solicitanteId: string): boolean {

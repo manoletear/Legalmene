@@ -30,6 +30,17 @@ export const AtencionSchema = z.object({
   fechaCierre: z.string().datetime().optional().nullable(),
   fechaUltimaGestion: z.string().datetime().optional().nullable(),
   fechaPrimerContacto: z.string().datetime().optional().nullable(),
+  // Autorización de Gerencia de Servicios cuando el plan no cubre la materia.
+  autorizacionCobertura: z
+    .object({
+      estado: z.enum(["Pendiente", "Autorizada", "Rechazada"]),
+      desde: z.string().datetime(),
+      resueltaPorId: z.string().uuid().optional(),
+      resueltaEn: z.string().datetime().optional(),
+      observacion: z.string().optional(),
+    })
+    .optional()
+    .nullable(),
   // Solicitud de término pendiente de V°B° de jefatura (asesorías y juicios).
   solicitudTermino: z
     .object({
@@ -111,6 +122,7 @@ export const CreateAtencionSchema = AtencionSchema.omit({
   fechaUltimaGestion: true,
   fechaPrimerContacto: true,
   solicitudTermino: true,
+  autorizacionCobertura: true,
   horaInicio: true,
   horaTermino: true,
   revisadoPorComite: true,

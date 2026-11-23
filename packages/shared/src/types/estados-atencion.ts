@@ -148,3 +148,15 @@ export const SolicitarTerminoSchema = z.object({
 export type SolicitarTermino = z.infer<typeof SolicitarTerminoSchema>;
 export const RechazarTerminoSchema = z.object({ motivo: z.string().trim().min(1).max(2000) });
 export type SolicitudTermino = SolicitarTermino & { solicitadoPorId: string; solicitadoEn: string };
+
+// Anexo §VII 01.2–01.3: sin cobertura del plan para la materia, Gerencia de Servicios puede
+// autorizar la atención; si no la autoriza, corresponde abandonarla.
+export type AutorizacionCobertura = {
+  estado: "Pendiente" | "Autorizada" | "Rechazada";
+  desde: string;
+  resueltaPorId?: string;
+  resueltaEn?: string;
+  observacion?: string;
+};
+export const ResolverCoberturaSchema = z.object({ observacion: z.string().trim().max(2000).optional() });
+export const RechazarCoberturaSchema = z.object({ observacion: z.string().trim().min(1).max(2000) });

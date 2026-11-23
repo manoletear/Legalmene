@@ -28,6 +28,8 @@ export interface ContextoTransicion {
   comitesAbiertos: number;
   // Provisiones de fondos sin rendir ni cerrar (Anexo §VIII 10: cuentas cerradas al terminar).
   provisionesAbiertas?: number;
+  // Autorización de Gerencia de Servicios si el plan no cubre la materia (null si no aplica).
+  autorizacionCobertura?: "Pendiente" | "Autorizada" | "Rechazada" | null;
   // Provisiones solicitadas que el cliente aún no paga (Anexo §VIII l.1076).
   provisionesImpagas?: number;
   // Motivo de retención por arancel impago; null si no aplica.
@@ -65,6 +67,10 @@ export function validarTransicion(
   if (a.tipo === "Consulta") return faltan;
 
   if (ctx.bloqueoArancel && ESTADOS_DE_TRABAJO.includes(destino)) faltan.push(ctx.bloqueoArancel);
+  if (ESTADOS_DE_TRABAJO.includes(destino)) {
+    if (ctx.autorizacionCobertura === "Pendiente") faltan.push("autorización de Gerencia de Servicios (el plan no cubre la materia)");
+    if (ctx.autorizacionCobertura === "Rechazada") faltan.push("autorización de Gerencia de Servicios: fue rechazada; corresponde abandonar la atención");
+  }
 
   if (a.tipo === "PosesionEfectiva" && ["EnPreparacion", "DocumentosPendientes", "ListaEmision", "Terminada"].includes(destino)) {
     faltan.push(...faltantesCausante(ctx.posesion?.causante));

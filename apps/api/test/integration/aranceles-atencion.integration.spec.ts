@@ -186,4 +186,33 @@ const FECHA_PAGO = "2001-03-15";
       await db.execute(sql`UPDATE coberturas SET porcentaje = 40 WHERE cod_plan = ${PLAN}`);
     }
   });
+
+  it("sin cobertura del plan: espera la autorización de Gerencia de Servicios; rechazada, solo se abandona", async () => {
+    const db = drizzle(pool);
+    const coberturasSrv = moduleRef.get(CoberturasService);
+    const regla = await coberturasSrv.crear({ codPlan: PLAN, materiaId: cm.materiaId, modalidad: "SinCobertura" });
+    try {
+      const a = await nuevaAsesoria();
+      expect(a.autorizacionCobertura).toBeFalsy(); // la fila devuelta es previa a la sincronización
+      const leida = await atencionesSrv.obtener(a.id);
+      expect(leida.autorizacionCobertura?.estado).toBe("Pendiente");
+      await expect(atencionesSrv.cambiarEstado(a.id, { estado: "Pendiente" })).rejects.toThrow(/Gerencia de Servicios/);
+
+      const ok = await atencionesSrv.resolverCobertura(a.id, true, "Excepción comercial", jefe);
+      expect(ok.autorizacionCobertura).toMatchObject({ estado: "Autorizada", resueltaPorId: jefe.id, observacion: "Excepción comercial" });
+      await expect(atencionesSrv.resolverCobertura(a.id, false, "x", jefe)).rejects.toBeInstanceOf(ConflictException);
+      // Autorizada, sigue el flujo normal: solo falta el arancel (completo, sin cobertura).
+      const err = await atencionesSrv.cambiarEstado(a.id, { estado: "Pendiente" }).catch((e: Error) => e);
+      expect((err as Error).message).toMatch(/pago del arancel/);
+      expect((err as Error).message).not.toMatch(/Gerencia de Servicios/);
+
+      const b = await nuevaAsesoria();
+      const rech = await atencionesSrv.resolverCobertura(b.id, false, "Fuera de política", jefe);
+      expect(rech.autorizacionCobertura?.estado).toBe("Rechazada");
+      await expect(atencionesSrv.cambiarEstado(b.id, { estado: "Pendiente" })).rejects.toThrow(/corresponde abandonar/);
+      expect((await atencionesSrv.cambiarEstado(b.id, { estado: "Abandonada", causaTerminoId: causaId })).estado).toBe("Abandonada");
+    } finally {
+      await db.execute(sql`DELETE FROM coberturas WHERE id = ${regla.id}`);
+    }
+  });
 });

@@ -72,6 +72,11 @@ export class AtencionesApiService {
     return this.http.post<Atencion>(`${this.base}/${id}/estado`, payload);
   }
 
+  // Sin cobertura del plan: Gerencia de Servicios autoriza o no la atención.
+  resolverCobertura(id: string, autoriza: boolean, observacion?: string): Observable<Atencion> {
+    return this.http.post<Atencion>(`${this.base}/${id}/cobertura/${autoriza ? "autorizar" : "rechazar"}`, observacion ? { observacion } : {});
+  }
+
   // V°B° de jefatura para terminar asesorías y juicios.
   solicitarTermino(id: string, payload: SolicitarTermino): Observable<Atencion> {
     return this.http.post<Atencion>(`${this.base}/${id}/termino/solicitar`, payload);

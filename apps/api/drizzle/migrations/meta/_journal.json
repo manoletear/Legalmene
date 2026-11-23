@@ -162,6 +162,13 @@
       "when": 1795471981501,
       "tag": "0022_vb_termino",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1795472489533,
+      "tag": "0023_autorizacion_cobertura",
+      "breakpoints": true
     }
   ]
 }

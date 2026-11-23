@@ -17,6 +17,7 @@ import {
   type EstadoAtencion,
   type SolicitarTermino,
   type SolicitudTermino,
+  type AutorizacionCobertura,
   type FichaAtencion,
   type CambiarEstado,
   type CreateContraparte,
@@ -28,7 +29,7 @@ import { DRIZZLE, Database } from "../../db/database.module";
 import { atenciones, contrapartes, Atencion, ContraparteRow, NuevaAtencion } from "../../db/schema/atenciones";
 import { afiliados, cargasAfiliado } from "../../db/schema/afiliados";
 import { herederosPosesion, posesionesEfectivas } from "../../db/schema/posesiones";
-import { usuarios } from "../../db/schema/usuarios";
+import { perfilPermisos, usuarios } from "../../db/schema/usuarios";
 import { gestiones } from "../../db/schema/gestiones";
 import { comites } from "../../db/schema/comites";
 import { provisiones } from "../../db/schema/provisiones";
@@ -300,6 +301,7 @@ export class AtencionesService {
     if (row.tipo !== "Consulta") {
       // El copago del plan define si la atención queda detenida esperando el arancel.
       await this.arancelesAtencion.crearParaAtencion(row.id, actor?.id ?? null);
+      await this.sincronizarCobertura(row.id);
       const responsableId = row.abogadoAsignadoId ?? actor?.id;
       if (responsableId) {
         await this.plantillas.instanciar({
@@ -350,6 +352,7 @@ export class AtencionesService {
 
     if (row.tipo !== "Consulta" && row.materiaId !== actual.materiaId) {
       await this.arancelesAtencion.recalcular(row.id, actor?.id ?? null);
+      await this.sincronizarCobertura(row.id);
     }
 
     // Al definir el procedimiento de un juicio se agregan sus gestiones predefinidas.
@@ -452,6 +455,7 @@ export class AtencionesService {
       comitesAbiertos: Number(c?.n ?? 0),
       provisionesAbiertas: Number(p?.n ?? 0),
       provisionesImpagas: Number(impagas?.n ?? 0),
+      autorizacionCobertura: actual.autorizacionCobertura?.estado ?? null,
       bloqueoArancel,
       posesion,
     });
@@ -537,6 +541,74 @@ export class AtencionesService {
     const f = new Date(fechaTermino);
     if (f.getTime() > Date.now() + 60_000) throw new BadRequestException("La fecha de término no puede ser futura");
     if (f < actual.createdAt) throw new BadRequestException("La fecha de término no puede ser anterior a la apertura de la atención");
+  }
+
+  // Anexo §VII 01.1–01.3: si el plan no cubre la materia (regla "sin cobertura" o sin regla, con
+  // arancel definido), la atención espera la autorización de Gerencia de Servicios. Si cambia la
+  // materia y pasa a tener cobertura, la autorización pendiente deja de aplicar.
+  private async sincronizarCobertura(atencionId: string): Promise<void> {
+    const ar = await this.arancelesAtencion.obtener(atencionId);
+    const sinCobertura = !!ar?.arancelId && ar.coberturaModalidad === "SinCobertura";
+    const [a] = await this.db.select().from(atenciones).where(eq(atenciones.id, atencionId));
+    if (!a) return;
+    if (sinCobertura && !a.autorizacionCobertura) {
+      await this.db
+        .update(atenciones)
+        .set({ autorizacionCobertura: { estado: "Pendiente", desde: new Date().toISOString() } })
+        .where(and(eq(atenciones.id, atencionId), isNull(atenciones.autorizacionCobertura)));
+      // Aviso a quienes pueden autorizar (permiso explícito; el administrador no se incluye).
+      const autorizadores = await this.db
+        .selectDistinct({ id: usuarios.id })
+        .from(usuarios)
+        .innerJoin(perfilPermisos, eq(perfilPermisos.perfilId, usuarios.perfilId))
+        .where(and(eq(perfilPermisos.permiso, "atenciones.autorizar_sin_cobertura"), eq(usuarios.activo, true), eq(usuarios.bloqueado, false)));
+      for (const u of autorizadores) {
+        await this.notif.crear({
+          codPlan: a.codPlan,
+          usuarioId: u.id,
+          severidad: "warn",
+          titulo: `Atención sin cobertura: ${a.correlativo}`,
+          detalle: "El plan no cubre la materia; requiere autorización de Gerencia de Servicios",
+          accionUrl: `/atenciones/${a.id}`,
+        });
+      }
+    } else if (!sinCobertura && a.autorizacionCobertura?.estado === "Pendiente") {
+      await this.db
+        .update(atenciones)
+        .set({ autorizacionCobertura: null })
+        .where(and(eq(atenciones.id, atencionId), sql`${atenciones.autorizacionCobertura}->>'estado' = 'Pendiente'`));
+    }
+  }
+
+  async resolverCobertura(id: string, autoriza: boolean, observacion: string | undefined, actor: Actor): Promise<Atencion> {
+    const actual = await this.fila(id);
+    const aut = actual.autorizacionCobertura;
+    if (!aut || aut.estado !== "Pendiente") throw new ConflictException("La atención no tiene una autorización de cobertura pendiente");
+    const resuelta: AutorizacionCobertura = {
+      ...aut,
+      estado: autoriza ? "Autorizada" : "Rechazada",
+      resueltaPorId: actor.id,
+      resueltaEn: new Date().toISOString(),
+      ...(observacion ? { observacion } : {}),
+    };
+    const [row] = await this.db
+      .update(atenciones)
+      .set({ autorizacionCobertura: resuelta, updatedAt: new Date() })
+      .where(and(eq(atenciones.id, id), sql`${atenciones.autorizacionCobertura}->>'estado' = 'Pendiente'`))
+      .returning();
+    if (!row) throw new ConflictException("La autorización ya fue resuelta");
+    const responsable = row.abogadoAsignadoId ?? row.creadoPorId;
+    if (responsable) {
+      await this.notif.crear({
+        codPlan: row.codPlan,
+        usuarioId: responsable,
+        severidad: autoriza ? "info" : "warn",
+        titulo: `${autoriza ? "Atención autorizada" : "Atención no autorizada"} sin cobertura: ${row.correlativo}`,
+        detalle: autoriza ? observacion : `Corresponde abandonar la atención. ${observacion ?? ""}`.trim(),
+        accionUrl: `/atenciones/${row.id}`,
+      });
+    }
+    return row;
   }
 
   // Anexo §VI 3.5.1: varias consultas en la misma llamada generan un correlativo cada una.

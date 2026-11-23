@@ -15,7 +15,13 @@ import {
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { createZodDto } from "nestjs-zod";
-import { RechazarTerminoSchema, RegistrarContactoSchema, SolicitarTerminoSchema } from "@legalmene/shared";
+import {
+  RechazarCoberturaSchema,
+  RechazarTerminoSchema,
+  RegistrarContactoSchema,
+  ResolverCoberturaSchema,
+  SolicitarTerminoSchema,
+} from "@legalmene/shared";
 import { AtencionesService } from "./atenciones.service";
 import { PlazosService } from "./plazos.service";
 import {
@@ -34,6 +40,8 @@ import { CurrentUser, AuthenticatedUser } from "../../common/decorators/current-
 class RegistrarContactoDto extends createZodDto(RegistrarContactoSchema) {}
 class SolicitarTerminoDto extends createZodDto(SolicitarTerminoSchema) {}
 class RechazarTerminoDto extends createZodDto(RechazarTerminoSchema) {}
+class ResolverCoberturaDto extends createZodDto(ResolverCoberturaSchema) {}
+class RechazarCoberturaDto extends createZodDto(RechazarCoberturaSchema) {}
 
 @ApiTags("atenciones")
 @ApiBearerAuth("EntraID")
@@ -93,6 +101,19 @@ export class AtencionesController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.service.actualizar(id, body, user);
+  }
+
+  // Sin cobertura del plan: Gerencia de Servicios autoriza o no la atención (Anexo §VII 01.2).
+  @Post("atenciones/:id/cobertura/autorizar")
+  @Permiso("atenciones.autorizar_sin_cobertura")
+  autorizarCobertura(@Param("id", ParseUUIDPipe) id: string, @Body() body: ResolverCoberturaDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.resolverCobertura(id, true, body.observacion, user);
+  }
+
+  @Post("atenciones/:id/cobertura/rechazar")
+  @Permiso("atenciones.autorizar_sin_cobertura")
+  rechazarCobertura(@Param("id", ParseUUIDPipe) id: string, @Body() body: RechazarCoberturaDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.resolverCobertura(id, false, body.observacion, user);
   }
 
   // V°B° de jefatura para terminar asesorías y juicios (Anexo §VII l.904, §VIII l.1192).
