@@ -18,9 +18,9 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.717.0",
-    "@aws-sdk/client-ses": "^3.717.0",
-    "@aws-sdk/s3-request-presigner": "^3.717.0",
+    "@aws-sdk/client-s3": "^3.1174.0",
+    "@aws-sdk/client-ses": "^3.1174.0",
+    "@aws-sdk/s3-request-presigner": "^3.1174.0",
     "@legalmene/shared": "workspace:*",
     "@nestjs/cache-manager": "^2.3.0",
     "@nestjs/common": "^10.4.15",
