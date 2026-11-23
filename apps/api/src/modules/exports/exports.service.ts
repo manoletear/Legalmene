@@ -12,6 +12,7 @@ import {
 import { DRIZZLE, Database } from "../../db/database.module";
 import { filtroAtenciones } from "../../common/acceso/alcance";
 import { atencionDerivada, columnasEtapasDerivacion } from "../atenciones/etapas-derivacion";
+import { bienesDeAtencionSql, estadoDerivacionSql } from "../atenciones/columnas-busqueda";
 import { accesoActual } from "../../common/acceso/contexto";
 import { condicionAtencion, condicionBien, rutComparable } from "../../common/busqueda/criterios";
 import { afiliados, planesAfiliado } from "../../db/schema/afiliados";
@@ -81,7 +82,8 @@ export function filasAtencionDetalle(db: Database, where: SQL | undefined) {
       organismo: organismos.nombre,
       tribunal: tribunales.nombre,
       rolCausa: atenciones.rolCausa,
-      estadoDerivacion: sql<string | null>`(select d.estado from derivaciones d where d.consulta_id = ${atenciones.id} order by d.created_at desc limit 1)`,
+      estadoDerivacion: estadoDerivacionSql,
+      bienes: bienesDeAtencionSql,
     })
     .from(atenciones)
     .innerJoin(afiliados, eq(afiliados.id, atenciones.afiliadoId))
@@ -193,11 +195,12 @@ export class ExportsService {
         { titulo: "Tipo consulta", valor: (r) => r.tipoConsulta },
         { titulo: "Código grabación", valor: (r) => r.codigoGrabacion },
       ],
-      Asesoria: [...comunes, { titulo: "Organismo", valor: (r) => r.organismo, ancho: 22 }],
+      Asesoria: [...comunes, { titulo: "Organismo", valor: (r) => r.organismo, ancho: 22 }, { titulo: "Bienes", valor: (r) => r.bienes ?? "", ancho: 24 }],
       Juicio: [
         ...comunes,
         { titulo: "Tribunal", valor: (r) => r.tribunal, ancho: 24 },
         { titulo: "ROL/RIT", valor: (r) => r.rolCausa },
+        { titulo: "Bienes", valor: (r) => r.bienes ?? "", ancho: 24 },
       ],
       PosesionEfectiva: [
         ...comunes,

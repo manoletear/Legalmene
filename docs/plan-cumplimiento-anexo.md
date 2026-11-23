@@ -86,7 +86,7 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 
 ## Fase 5 — Búsquedas, reportes y cargas (~1 semana)
 
-- [ ] Columnas en pantalla equivalentes al Excel; columna "Bienes" en asesorías y juicios. (§XI)
+- [x] Columnas en pantalla equivalentes al Excel; columna "Bienes" en asesorías y juicios. (§XI)
 - [x] Filtros "tipo de atención" (aranceles, provisiones) y "tipo de pago" (WebPay). (§IX l.1423, §XI)
 - [ ] Búsquedas de afiliados con coberturas y materias del plan; solo planes vigentes. (§XI l.1926–1955)
 - [x] Estado de derivación con todas las etapas y fechas. (§XI ~l.1905)
@@ -139,4 +139,5 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 | 2026-11-23 | 4 | Cuenta corriente por abogado, comprobante de entrega de fondos (2 copias) y perfil Ejecutivo de Finanzas separado de Gerencia de Finanzas (migración 0027). Fase 4 completa salvo WebPay | 94632f0 (PR #15) |
 | 2026-11-23 | 5 | STOCK conserva lo que viene en el archivo aunque su fila tenga error; cargas y bienes ya no dan de baja todo el plan si ninguna fila es válida | 28a3682 |
 | 2026-11-23 | 5 | Filtro por tipo de atención en aranceles y provisiones (pantalla y Excel) y por tipo de pago en WebPay | 1679bc1 |
-| 2026-11-23 | 5 | Estado de derivación con todas las etapas y fechas (solicitud, resolución, contacto, arancel, primera gestión, término) en pantalla y Excel | ver commit |
+| 2026-11-23 | 5 | Estado de derivación con todas las etapas y fechas (solicitud, resolución, contacto, arancel, primera gestión, término) en pantalla y Excel | 36b785e |
+| 2026-11-23 | 5 | Búsquedas de consultas, asesorías y juicios con las columnas del Excel (afiliado, plan/canal, abogado, organismo/tribunal, derivación) y columna Bienes en pantalla y Excel | ver commit |

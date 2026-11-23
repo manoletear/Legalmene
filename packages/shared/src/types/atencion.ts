@@ -93,7 +93,18 @@ export type AtencionConMaestros = Atencion & {
 
 // Ficha de la atención: además trae afiliado, plan y responsable para mostrarlos.
 // Fila del listado/búsqueda de atenciones: agrega datos de despliegue del afiliado.
-export type AtencionListada = AtencionConMaestros & { afiliadoNombre: string; afiliadoRut: string };
+export type AtencionListada = AtencionConMaestros & {
+  afiliadoNombre: string;
+  afiliadoRut: string;
+  // Columnas de la búsqueda (Anexo §XI), iguales a las del Excel.
+  canalNombre: string | null;
+  abogadoNombre: string | null;
+  tipoConsultaNombre: string | null;
+  organismoNombre: string | null;
+  tribunalNombre: string | null;
+  estadoDerivacion: string | null;
+  bienes: string | null;
+};
 
 export type FichaAtencion = AtencionConMaestros & {
   afiliado: { rut: string; nombre: string; email: string | null; telefono: string | null };

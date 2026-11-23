@@ -46,6 +46,7 @@ import type { AuthenticatedUser } from "../../common/decorators/current-user.dec
 import { asegurarAtencionVisible, filtroAtenciones } from "../../common/acceso/alcance";
 import { mensajeFaltantes, validarTransicion } from "./estados";
 import { condicionAtencion } from "../../common/busqueda/criterios";
+import { bienesDeAtencionSql, estadoDerivacionSql } from "./columnas-busqueda";
 import type { CreateAtencionDto, UpdateAtencionDto, FiltroAtencionesDto } from "./dto";
 
 // Columnas de la atención + nombres de competencia y materia para mostrar.
@@ -120,6 +121,14 @@ export class AtencionesService {
           ...columnasConMaestros,
           afiliadoNombre: sql<string>`${afiliados.nombres} || ' ' || ${afiliados.apellidoPaterno}`,
           afiliadoRut: afiliados.rut,
+          // Columnas de la búsqueda del Anexo §XI (las mismas del Excel).
+          canalNombre: sql<string | null>`(select c.nombre from planes p join canales c on c.id = p.canal_id where p.cod_plan = ${atenciones.codPlan})`,
+          abogadoNombre: sql<string | null>`(select u.nombre from usuarios u where u.id = ${atenciones.abogadoAsignadoId})`,
+          tipoConsultaNombre: sql<string | null>`(select t.nombre from tipos_consulta t where t.id = ${atenciones.tipoConsultaId})`,
+          organismoNombre: sql<string | null>`(select o.nombre from organismos o where o.id = ${atenciones.organismoId})`,
+          tribunalNombre: sql<string | null>`(select t.nombre from tribunales t where t.id = ${atenciones.tribunalId})`,
+          estadoDerivacion: estadoDerivacionSql,
+          bienes: bienesDeAtencionSql,
         })
         .from(atenciones)
         .innerJoin(competencias, eq(competencias.id, atenciones.competenciaId))

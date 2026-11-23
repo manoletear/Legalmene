@@ -183,4 +183,10 @@ const PERIODO = { desde: "2025-07-01", hasta: "2025-12-31" };
     const propias = await ejecutarComo(como(abogadoB), () => exportsSrv.busqueda("consultas", { codPlan: PLAN }));
     expect(propias.filas).toBe(0);
   });
+
+  it("exportación de juicios: incluye la columna Bienes", async () => {
+    const { archivo } = await ejecutarComo(como(gerencia), () => exportsSrv.busqueda("juicios", { codPlan: PLAN }));
+    const wb = await leerLibro(archivo);
+    expect(encabezados(wb.worksheets[0])).toContain("Bienes");
+  });
 });
