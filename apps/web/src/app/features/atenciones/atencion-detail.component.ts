@@ -241,7 +241,7 @@ interface PipelineStep {
 
           <!-- Tabs -->
           <p-card>
-            <p-tabs value="gestiones">
+            <p-tabs [value]="pestana()" (valueChange)="pestana.set($any($event))">
               <p-tablist>
                 <p-tab value="resumen">Resumen</p-tab>
                 <p-tab value="gestiones">Gestiones</p-tab>
@@ -371,12 +371,19 @@ interface PipelineStep {
               </div>
             </ng-template>
             <div class="lm-col" style="gap:8px;">
-              <button pButton icon="pi pi-upload" label="Subir documento" [text]="true" severity="secondary"></button>
+              <ng-container *lmPermiso="'documentos.subir'">
+                <input #archivoPdf type="file" accept="application/pdf,.pdf" hidden (change)="subirDocumento(a.id, archivoPdf)" />
+                <button
+                  pButton
+                  icon="pi pi-upload"
+                  label="Subir documento (PDF)"
+                  [text]="true"
+                  severity="secondary"
+                  [loading]="uploading()"
+                  (click)="archivoPdf.click()"
+                ></button>
+              </ng-container>
               <button pButton icon="pi pi-pencil" label="Registrar gestión" [text]="true" severity="secondary" (click)="abrirNuevaGestion(a.id)"></button>
-              <button pButton icon="pi pi-dollar" label="Agregar gasto" [text]="true" severity="secondary"></button>
-              <button pButton icon="pi pi-calendar" label="Solicitar audiencia" [text]="true" severity="secondary"></button>
-              <button pButton icon="pi pi-comment" label="Enviar comunicación" [text]="true" severity="secondary"></button>
-              <a style="color:#2563eb; font-size:13px; font-weight:500; text-align:center; cursor:pointer; padding-top:8px;">Ver más acciones →</a>
             </div>
           </p-card>
 
@@ -392,7 +399,7 @@ interface PipelineStep {
                 <span style="flex:1; font-size:13px; color:#0f172a;">{{ d.nombre }}</span>
                 <small class="lm-muted">{{ d.fechaSubida | date: 'dd/MM/yyyy' }}</small>
               </div>
-              <a style="color:#2563eb; font-size:13px; font-weight:500; text-align:center; cursor:pointer; padding-top:8px;">Ver todos los documentos →</a>
+              <a style="color:#2563eb; font-size:13px; font-weight:500; text-align:center; cursor:pointer; padding-top:8px;" (click)="pestana.set('documentos')">Ver todos los documentos →</a>
             </div>
           </p-card>
         </div>
@@ -433,6 +440,7 @@ export class AtencionDetailComponent implements OnInit {
   protected comites = signal<Comite[]>([]);
   protected documentos = signal<DocumentoMeta[]>([]);
   protected uploading = signal(false);
+  protected pestana = signal<string>("gestiones");
   protected tiposGestion = [
     "LlamadaTelefonica", "Email", "Reunion", "EscritoJudicial", "Audiencia",
     "Notificacion", "AnalisisDocumental", "Resolucion", "Otra",
@@ -627,6 +635,37 @@ export class AtencionDetailComponent implements OnInit {
     if (b < 1024) return `${b} B`;
     if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
     return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  // Anexo: los documentos de la atención se archivan en PDF (la API también lo exige).
+  subirDocumento(atencionId: string, input: HTMLInputElement) {
+    const archivo = input.files?.[0];
+    input.value = "";
+    if (!archivo) return;
+    const esPdf = archivo.type === "application/pdf" || archivo.name.toLowerCase().endsWith(".pdf");
+    if (!esPdf) {
+      this.msg.add({ severity: "warn", summary: "Solo PDF", detail: "Los documentos de la atención se suben en PDF.", life: 4000 });
+      return;
+    }
+    if (archivo.size > 100 * 1024 * 1024) {
+      this.msg.add({ severity: "warn", summary: "Archivo muy grande", detail: "El máximo es 100 MB.", life: 4000 });
+      return;
+    }
+    const pdf = archivo.type === "application/pdf" ? archivo : new File([archivo], archivo.name, { type: "application/pdf" });
+    this.uploading.set(true);
+    this.documentosApi.upload(atencionId, pdf).subscribe({
+      next: (doc) => {
+        this.uploading.set(false);
+        this.documentos.update((l) => [doc, ...l]);
+        this.pestana.set("documentos");
+        this.msg.add({ severity: "success", summary: "Documento subido", detail: doc.nombre, life: 3000 });
+      },
+      error: (err) => {
+        this.uploading.set(false);
+        const detalle = err?.error?.message ?? err?.message ?? "No se pudo subir el documento";
+        this.msg.add({ severity: "error", summary: "Error al subir", detail: String(detalle), life: 5000 });
+      },
+    });
   }
 
   descargar(doc: DocumentoMeta) {

@@ -44,7 +44,7 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 
 ## Fase 1 — Operable desde la web (~1,5 semanas)
 
-- [ ] Subir documentos desde la ficha (botón hoy sin acción), solo PDF. (§VI 3.4/5, §VII 04, §VIII)
+- [x] Subir documentos desde la ficha (botón hoy sin acción), solo PDF. (§VI 3.4/5, §VII 04, §VIII)
 - [ ] Afiliados: crear, editar y eliminar/restaurar en la web; alta rápida desde una consulta. (§II l.131)
 - [ ] Usuarios: crear desde Administración, con campo "cargo". (§II l.106, §IV l.338)
 - [ ] Pantalla de planes: alta, término de vigencia (fecha), asignar/copiar coberturas. (§II l.118, §I l.79)
@@ -117,3 +117,4 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 |---|---|---|---|
 | 2026-11-23 | — | Plan creado a partir de la revisión del Anexo | — |
 | 2026-11-23 | 0 | Estados de atención condicionales (409); derivar consulta cerrada es 409; CLAUDE.md corregido | ver commit siguiente |
+| 2026-11-23 | 1 | Subida de documentos PDF desde la ficha (API valida PDF y 100 MB) | ver commit |

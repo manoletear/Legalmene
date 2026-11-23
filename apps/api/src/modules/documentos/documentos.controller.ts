@@ -1,3 +1,5 @@
+import { createZodDto } from "nestjs-zod";
+import { RegistrarDocumentoSchema, SolicitarSubidaSchema } from "@legalmene/shared";
 import {
   Body,
   Controller,
@@ -18,6 +20,9 @@ import { Permiso } from "../../common/decorators/permiso.decorator";
 import { PermisosGuard } from "../../common/guards/permisos.guard";
 import { LocalStorage } from "./local.storage";
 
+class SolicitarSubidaDto extends createZodDto(SolicitarSubidaSchema) {}
+class RegistrarDocumentoDto extends createZodDto(RegistrarDocumentoSchema) {}
+
 @ApiTags("documentos")
 @ApiBearerAuth("EntraID")
 @Controller()
@@ -30,9 +35,7 @@ export class DocumentosController {
   @Post("documentos/upload-url")
   @UseGuards(JwtAuthGuard, PermisosGuard)
   @Permiso("documentos.subir")
-  obtenerUploadUrl(
-    @Body() body: { atencionId?: string; nombre: string; mimeType: string; tamanoBytes: number },
-  ) {
+  obtenerUploadUrl(@Body() body: SolicitarSubidaDto) {
     return this.service.generateUploadUrl(body);
   }
 
@@ -41,14 +44,7 @@ export class DocumentosController {
   @Permiso("documentos.subir")
   registrar(
     @CurrentUser() user: AuthenticatedUser,
-    @Body() body: {
-      atencionId?: string;
-      nombre: string;
-      mimeType: string;
-      tamanoBytes: number;
-      s3Key: string;
-      sha256: string;
-    },
+    @Body() body: RegistrarDocumentoDto,
   ) {
     return this.service.register({ ...body, subidoPor: user.id ?? user.entraOid });
   }
