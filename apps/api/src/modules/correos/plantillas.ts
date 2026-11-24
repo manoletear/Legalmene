@@ -71,6 +71,18 @@ export function plantillaSolicitudAntecedentes(p: { cliente: string; abogado: st
   };
 }
 
+// Al cliente: respuesta escrita de su consulta (Anexo §VI l.580).
+export function plantillaRespuestaConsulta(p: { cliente: string; correlativo: string; respuesta: string; abogado: string }): Contenido {
+  const intro = [`Estimado(a) ${p.cliente}:`, `Le enviamos la respuesta a su consulta ${p.correlativo}:`];
+  const cierre = [`Si tiene dudas, puede responder este correo o escribir a ${p.abogado}.`];
+  const cuerpo = p.respuesta.split("\n").map((l) => l.trim()).filter(Boolean);
+  return {
+    asunto: textoLinea(`LegalChile · Respuesta a su consulta ${p.correlativo}`),
+    html: marco("Respuesta a su consulta", parrafos(intro) + `<blockquote style="margin:8px 0; padding-left:12px; border-left:3px solid #cbd5e1;">${parrafos(cuerpo)}</blockquote>` + parrafos(cierre)),
+    texto: [...intro, ...cuerpo, ...cierre].join("\n\n"),
+  };
+}
+
 // A la dirección anterior del cliente cuando se cambia su correo de contacto.
 export function plantillaCambioCorreo(p: { cliente: string }): Contenido {
   const lineas = [

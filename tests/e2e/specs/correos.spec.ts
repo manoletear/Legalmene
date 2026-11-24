@@ -31,4 +31,28 @@ test.describe("Correos al cliente", () => {
     expect(r.status()).toBe(400);
     expect((await r.json()).message).toMatch(/solo para juicios/);
   });
+
+  test("la respuesta de una consulta se envía al cliente por correo", async ({ page, request }) => {
+    type Af = { id: string; vigencia: string; planes: { codPlan: string; vigente: boolean }[] };
+    const afi = ((await request.get(`${API}/afiliados?pageSize=50`).then((r) => r.json())).data as Af[]).find((a) => a.vigencia === "Activo" && a.planes.some((p) => p.vigente))!;
+    const codPlan = afi.planes.find((p) => p.vigente)!.codPlan;
+    const comps = (await request.get(`${API}/maestros/competencias?vigente=true`).then((r) => r.json())) as { id: string }[];
+    let consulta: { id: string } | null = null;
+    for (const c of comps) {
+      const mats = (await request.get(`${API}/maestros/materias?competenciaId=${c.id}&aplicaA=Consulta&vigente=true`).then((r) => r.json())) as { id: string }[];
+      if (!mats.length) continue;
+      consulta = await request
+        .post(`${API}/atenciones/consultas`, { data: { afiliadoId: afi.id, codPlan, competenciaId: c.id, materiaId: mats[0].id, asunto: `Respuesta E2E ${Date.now()}`, canalContacto: "Telefonico" } })
+        .then((r) => r.json());
+      break;
+    }
+    const sinRespuesta = await request.post(`${API}/atenciones/${consulta!.id}/enviar-respuesta`);
+    expect(sinRespuesta.status()).toBe(400);
+    expect((await request.patch(`${API}/afiliados/${afi.id}`, { data: { email: `respuesta.e2e.${Date.now()}@ejemplo.cl` } })).ok()).toBeTruthy();
+    expect((await request.patch(`${API}/atenciones/${consulta!.id}`, { data: { respuesta: "Puede reclamar ante la Inspección del Trabajo." } })).ok()).toBeTruthy();
+
+    await page.goto(`/atenciones/${consulta!.id}`);
+    await page.getByTestId("enviar-respuesta").click();
+    await expect(page.getByText("Respuesta enviada", { exact: true })).toBeVisible();
+  });
 });

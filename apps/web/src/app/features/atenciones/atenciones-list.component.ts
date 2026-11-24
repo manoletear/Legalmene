@@ -45,7 +45,7 @@ const EXPORTACION: Record<string, BusquedaExportable> = {
         <div style="display:flex; align-items:center; gap:8px; padding:16px 16px 0;">
           <h2 style="margin:0; flex:1;">{{ titulo }}</h2>
           <button *lmPermiso="['atenciones.crear_consulta', 'atenciones.crear_caso', 'posesiones.crear']" pButton icon="pi pi-plus"
-            [label]="filtroTipo === 'PosesionEfectiva' ? 'Nueva posesión efectiva' : 'Nueva atención'" routerLink="/atenciones/nueva"
+            [label]="filtroTipo === 'PosesionEfectiva' ? 'Nueva posesión efectiva' : filtroTipo === 'Consulta' ? 'Nueva consulta' : 'Nueva atención'" data-testid="nueva-atencion" routerLink="/atenciones/nueva"
             [queryParams]="filtroTipo ? { tipo: filtroTipo } : {}"></button>
         </div>
       </ng-template>

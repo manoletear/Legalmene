@@ -1,4 +1,4 @@
-import { plantillaPresentacionAbogado, plantillaSolicitudAntecedentes, plantillaTerminoAtencion } from "../correos/plantillas";
+import { plantillaPresentacionAbogado, plantillaRespuestaConsulta, plantillaSolicitudAntecedentes, plantillaTerminoAtencion } from "../correos/plantillas";
 import { CorreosService } from "../correos/correos.service";
 import { avisar, jefeDe } from "../notif-inbox/destinatarios";
 import {
@@ -670,6 +670,45 @@ export class AtencionesService {
     if (estado !== "Error") {
       await this.db.update(atenciones).set({ antecedentesSolicitadosEn: new Date() }).where(eq(atenciones.id, id));
     }
+    return { estado, para: d.email };
+  }
+
+  // Anexo §VI l.580: la respuesta de la consulta se envía por correo al cliente (máx. 3 cada 24 h).
+  async enviarRespuestaConsulta(id: string, actor: Actor) {
+    await asegurarAtencionVisible(this.db, id);
+    const [d] = await this.db
+      .select({
+        tipo: atenciones.tipo,
+        correlativo: atenciones.correlativo,
+        respuesta: atenciones.respuesta,
+        cliente: afiliados.nombres,
+        email: afiliados.email,
+        abogadoId: atenciones.abogadoAsignadoId,
+      })
+      .from(atenciones)
+      .innerJoin(afiliados, eq(afiliados.id, atenciones.afiliadoId))
+      .where(eq(atenciones.id, id));
+    if (d.tipo !== "Consulta") throw new BadRequestException("Solo las consultas tienen respuesta para el cliente");
+    if (!d.respuesta?.trim()) throw new BadRequestException("Guarde primero la respuesta de la consulta");
+    if (!d.email) throw new BadRequestException("El afiliado no tiene correo registrado; agréguelo en su ficha");
+    if (!this.correos) throw new BadRequestException("El envío de correos no está disponible");
+    const [envios] = await this.db
+      .select({ n: count() })
+      .from(correosEnviados)
+      .where(
+        and(
+          eq(correosEnviados.atencionId, id),
+          eq(correosEnviados.plantilla, "cliente.respuesta_consulta"),
+          gte(correosEnviados.createdAt, new Date(Date.now() - 24 * 3600 * 1000)),
+        ),
+      );
+    if (Number(envios?.n ?? 0) >= 3) throw new ConflictException("Ya se envió la respuesta 3 veces en las últimas 24 horas");
+    const [ab] = d.abogadoId ? await this.db.select({ nombre: usuarios.nombre }).from(usuarios).where(eq(usuarios.id, d.abogadoId)) : [];
+    const estado = await this.correos.enviar(
+      [d.email],
+      plantillaRespuestaConsulta({ cliente: d.cliente, correlativo: d.correlativo, respuesta: d.respuesta, abogado: ab?.nombre ?? "LegalChile" }),
+      { plantilla: "cliente.respuesta_consulta", atencionId: id, enviadoPorId: actor.id },
+    );
     return { estado, para: d.email };
   }
 

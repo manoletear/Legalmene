@@ -156,6 +156,8 @@ const MONEDAS: MonedaCuantia[] = ["CLP", "UF", "UTM", "USD"];
         <textarea pTextarea rows="3" [(ngModel)]="consulta.respuesta" style="width:100%;"></textarea>
         <div class="lm-row" style="gap:8px; margin-top:8px; flex-wrap:wrap;">
           <button pButton label="Guardar" icon="pi pi-save" [outlined]="true" (click)="guardarConsulta(a)"></button>
+          <button *lmPermiso="'atenciones.editar'" pButton label="Enviar respuesta al cliente" icon="pi pi-envelope" [outlined]="true"
+            [disabled]="!a.respuesta" data-testid="enviar-respuesta" (click)="enviarRespuesta(a)"></button>
           <button pButton label="Nuevo correlativo" icon="pi pi-plus" [outlined]="true" (click)="nuevoCorrelativo(a)"></button>
           <ng-container *ngIf="a.estado === 'Iniciada' || a.estado === 'Respondida'">
             <button pButton label="Derivar a asesoría" icon="pi pi-share-alt" severity="secondary" [outlined]="true" (click)="solicitarDerivacion(a, 'Asesoria')"></button>
@@ -606,6 +608,14 @@ export class AtencionFlujoComponent implements OnInit {
         error: () => undefined,
       });
     }
+  }
+
+  // Anexo §VI l.580: la respuesta guardada se envía por correo al cliente.
+  protected enviarRespuesta(a: AtencionConMaestros) {
+    this.api.enviarRespuesta(a.id).subscribe({
+      next: (r) => this.msg.add({ severity: "success", summary: "Respuesta enviada", detail: r.para, life: 3000 }),
+      error: (e) => this.msg.add({ severity: "error", summary: "No se pudo enviar", detail: e.error?.message ?? e.message, life: 5000 }),
+    });
   }
 
   private cargarDerivaciones(id: string) {

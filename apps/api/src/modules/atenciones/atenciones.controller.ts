@@ -131,6 +131,13 @@ export class AtencionesController {
     return this.service.aprobarTermino(id, user);
   }
 
+  // Correo al cliente con la respuesta de la consulta.
+  @Post("atenciones/:id/enviar-respuesta")
+  @Permiso("atenciones.editar")
+  enviarRespuesta(@Param("id", ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.enviarRespuestaConsulta(id, user);
+  }
+
   // Correo al cliente pidiendo antecedentes (uno por línea).
   @Post("atenciones/:id/solicitar-antecedentes")
   @Permiso("atenciones.editar")
