@@ -1,3 +1,4 @@
+import { procedimientos } from "../../src/db/schema/maestros";
 import { Test, TestingModule } from "@nestjs/testing";
 import { ConflictException } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
@@ -78,6 +79,7 @@ const avisos: { titulo: string; metadata?: Record<string, unknown> }[] = [];
           provide: NotifInboxService,
           useValue: {
             crear: async () => null,
+            crearBulk: async () => [],
             crearSiNoExisteUnseen: async (input: { titulo: string; metadata?: Record<string, unknown> }) => {
               avisos.push(input);
               return null;
@@ -200,14 +202,29 @@ const avisos: { titulo: string; metadata?: Record<string, unknown> }[] = [];
     }
   });
 
-  it("juicio: Pendiente exige tribunal, ROL y cuantía", async () => {
+  it("juicio: Pendiente exige tribunal, procedimiento, ROL y cuantía", async () => {
     const j = await atenciones.crear({ ...base(), tipo: "Juicio", ...cm, asunto: "Etapas" });
     await expect(atenciones.cambiarEstado(j.id, { estado: "Pendiente" })).rejects.toThrow(
-      /Falta: tribunal; ROL\/RIT de la causa; cuantía y moneda/,
+      /Falta: tribunal; procedimiento; ROL\/RIT de la causa; cuantía y moneda/,
     );
-    await atenciones.actualizar(j.id, { tribunalId, rolCausa: "C-123-2026", cuantiaMonto: 500_000, cuantiaMoneda: "CLP" }, abogado);
+    const [proc] = await drizzle(pool).insert(procedimientos).values({ competenciaId: cm.competenciaId, nombre: `Ordinario ${Date.now()}` }).returning();
+    await atenciones.actualizar(
+      j.id,
+      { tribunalId, procedimientoId: proc.id, rolCausa: "C-123-2026", cuantiaMonto: 500_000, cuantiaMoneda: "CLP" },
+      abogado,
+    );
     const p = await atenciones.cambiarEstado(j.id, { estado: "Pendiente" });
     expect(p.estado).toBe("Pendiente");
+
+    // V°B° de la jefatura a la primera presentación: requiere un escrito presentado y no lo da quien lo presentó.
+    await expect(atenciones.vbPrimeraPresentacion(j.id, jefe)).rejects.toThrow(/escrito judicial/);
+    await drizzle(pool)
+      .insert(gestiones)
+      .values({ atencionId: j.id, tipo: "EscritoJudicial", titulo: "Demanda", responsableId: abogado.id, estado: "Completada", fechaEjecucion: new Date() });
+    await expect(atenciones.vbPrimeraPresentacion(j.id, abogado)).rejects.toThrow(/no puede darle el V°B°/);
+    const vb = await atenciones.vbPrimeraPresentacion(j.id, jefe);
+    expect(vb.vbPrimeraPresentacion?.usuarioId).toBe(jefe.id);
+    await expect(atenciones.vbPrimeraPresentacion(j.id, jefe)).rejects.toBeInstanceOf(ConflictException);
   });
 
   it("no se termina con gestiones pendientes; sí con causa y gestiones completadas", async () => {

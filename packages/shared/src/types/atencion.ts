@@ -41,6 +41,11 @@ export const AtencionSchema = z.object({
     })
     .optional()
     .nullable(),
+  // V°B° de la jefatura judicial a la primera presentación del juicio (Anexo §VIII l.1092).
+  vbPrimeraPresentacion: z
+    .object({ usuarioId: z.string().uuid(), fecha: z.string().datetime() })
+    .optional()
+    .nullable(),
   // Solicitud de término pendiente de V°B° de jefatura (asesorías y juicios).
   solicitudTermino: z
     .object({
@@ -83,6 +88,13 @@ export const AtencionSchema = z.object({
 });
 export type Atencion = z.infer<typeof AtencionSchema>;
 
+// Solicitud de antecedentes al cliente por correo (Anexo §VI l.537, §VII): una línea por documento.
+export const SolicitarAntecedentesSchema = z.object({
+  antecedentes: z.string().trim().min(1, "Indique los antecedentes").max(4000),
+  plazo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+});
+export type SolicitarAntecedentes = z.infer<typeof SolicitarAntecedentesSchema>;
+
 
 // Respuesta de lectura: incluye los nombres de los maestros y el riesgo total.
 export type AtencionConMaestros = Atencion & {
@@ -93,7 +105,18 @@ export type AtencionConMaestros = Atencion & {
 
 // Ficha de la atención: además trae afiliado, plan y responsable para mostrarlos.
 // Fila del listado/búsqueda de atenciones: agrega datos de despliegue del afiliado.
-export type AtencionListada = AtencionConMaestros & { afiliadoNombre: string; afiliadoRut: string };
+export type AtencionListada = AtencionConMaestros & {
+  afiliadoNombre: string;
+  afiliadoRut: string;
+  // Columnas de la búsqueda (Anexo §XI), iguales a las del Excel.
+  canalNombre: string | null;
+  abogadoNombre: string | null;
+  tipoConsultaNombre: string | null;
+  organismoNombre: string | null;
+  tribunalNombre: string | null;
+  estadoDerivacion: string | null;
+  bienes: string | null;
+};
 
 export type FichaAtencion = AtencionConMaestros & {
   afiliado: { rut: string; nombre: string; email: string | null; telefono: string | null };
@@ -122,6 +145,7 @@ export const CreateAtencionSchema = AtencionSchema.omit({
   fechaUltimaGestion: true,
   fechaPrimerContacto: true,
   solicitudTermino: true,
+  vbPrimeraPresentacion: true,
   autorizacionCobertura: true,
   horaInicio: true,
   horaTermino: true,

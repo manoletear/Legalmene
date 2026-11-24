@@ -10,10 +10,10 @@ import { MaestrosApiService } from "../core/services/maestros.service";
 import { UsuariosAdminService } from "../core/services/usuarios-admin.service";
 import { PermisoDirective } from "../core/permisos";
 
-export type CampoCriterio = "correlativo" | "rut" | "abogado" | "plan" | "canal" | "competencia" | "materia" | "fechas" | "texto" | "bien";
+export type CampoCriterio = "correlativo" | "rut" | "abogado" | "plan" | "canal" | "competencia" | "materia" | "fechas" | "texto" | "bien" | "tipoAtencion" | "tipoPago";
 export type Criterios = Record<string, string | undefined>;
 
-type ClaveCriterio = "correlativo" | "rut" | "q" | "bien" | "abogadoId" | "codPlan" | "canalId" | "competenciaId" | "materiaId" | "estado" | "fechaDesde" | "fechaHasta";
+type ClaveCriterio = "correlativo" | "rut" | "q" | "bien" | "abogadoId" | "codPlan" | "canalId" | "competenciaId" | "materiaId" | "estado" | "fechaDesde" | "fechaHasta" | "tipoAtencion" | "tipoPago";
 type Valores = Partial<Record<ClaveCriterio, string>>;
 
 interface Opcion {
@@ -66,6 +66,16 @@ interface Opcion {
         <p-select name="materiaId" [(ngModel)]="valores.materiaId" [options]="materiaOpts()" optionLabel="label" optionValue="value"
           placeholder="Todas" [showClear]="true" [filter]="true" appendTo="body"></p-select>
       </div>
+      <div *ngIf="tiene('tipoAtencion')" class="lm-col" style="gap:4px;">
+        <label class="lm-small">Tipo de atención</label>
+        <p-select name="tipoAtencion" [(ngModel)]="valores.tipoAtencion" [options]="tipoAtencionOpts" optionLabel="label" optionValue="value"
+          placeholder="Todos" [showClear]="true" appendTo="body"></p-select>
+      </div>
+      <div *ngIf="tiene('tipoPago')" class="lm-col" style="gap:4px;">
+        <label class="lm-small">Tipo de pago</label>
+        <p-select name="tipoPago" [(ngModel)]="valores.tipoPago" [options]="tipoPagoOpts" optionLabel="label" optionValue="value"
+          placeholder="Todos" [showClear]="true" appendTo="body"></p-select>
+      </div>
       <div *ngIf="tiene('bien')" class="lm-col" style="gap:4px;">
         <label class="lm-small">Bien cubierto</label>
         <input pInputText name="bien" [(ngModel)]="valores.bien" placeholder="Rol, patente o descripción" />
@@ -108,6 +118,17 @@ export class CriteriosBusquedaComponent implements OnInit {
   private maestrosApi = inject(MaestrosApiService);
   private usuariosApi = inject(UsuariosAdminService);
   private msg = inject(MessageService);
+  // Tipos de atención del sistema (no es un maestro: cada tipo tiene su flujo y correlativo).
+  protected tipoAtencionOpts: Opcion[] = [
+    { label: "Consulta", value: "Consulta" },
+    { label: "Asesoría", value: "Asesoria" },
+    { label: "Juicio", value: "Juicio" },
+    { label: "Posesión efectiva", value: "PosesionEfectiva" },
+  ];
+  protected tipoPagoOpts: Opcion[] = [
+    { label: "Arancel de una atención", value: "Arancel" },
+    { label: "Plan", value: "Plan" },
+  ];
 
   readonly campos = input<CampoCriterio[]>(["correlativo", "rut", "abogado", "plan", "canal", "fechas"]);
   readonly estados = input<Opcion[] | null>(null);

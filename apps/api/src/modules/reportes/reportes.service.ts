@@ -1,9 +1,13 @@
 import { BadRequestException, Inject, Injectable } from "@nestjs/common";
-import { and, count, eq, inArray, isNotNull, ne, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNotNull, ne, sql, type SQL } from "drizzle-orm";
 import {
+  CAMPOS_INFORME_AFILIADOS,
   CAMPOS_INFORME_ATENCIONES,
   ESTADOS_TERMINALES,
+  MAX_FILAS_EXPORTACION,
+  type CampoInformeAfiliado,
   type CampoInformeAtencion,
+  type InformeAfiliados,
   type FilaController,
   type FilaReporteCanal,
   type FilaReportePlan,
@@ -15,7 +19,9 @@ import { DRIZZLE, Database } from "../../db/database.module";
 import { filtroAtenciones } from "../../common/acceso/alcance";
 import { fechaChile, rangoFechas } from "../../common/busqueda/criterios";
 import { atenciones } from "../../db/schema/atenciones";
-import { planesAfiliado } from "../../db/schema/afiliados";
+import { afiliados, planesAfiliado } from "../../db/schema/afiliados";
+import { formatearRut } from "../../common/utils/rut";
+import { planVigenteSql } from "../afiliados/vigencia";
 import { canales, planes } from "../../db/schema/planes";
 import { gestiones } from "../../db/schema/gestiones";
 import { comites, participantesComite } from "../../db/schema/comites";
@@ -25,6 +31,37 @@ import { libroXlsx, type ColumnaXlsx, type HojaGenerica } from "../exports/xlsx"
 import { conteoVacio, mesesDelPeriodo, sumar, tasaUso } from "./calculo";
 
 const MAX_MESES = 36;
+
+export interface FiltroRelaciones {
+  codPlan?: string;
+  canalId?: string;
+  rut?: string;
+}
+
+const fechaCl = (d: Date | null) => (d ? new Date(d).toLocaleDateString("es-CL", { timeZone: "America/Santiago" }) : "");
+const fechaIso = (d: string | null) => (d ? d.split("-").reverse().join("-") : "");
+
+// Atención contada en un reporte por plan o canal, con el plan o canal bajo el que se contó.
+type FilaListado = FilaAtencionDetalle & { reportadoEn: string };
+
+function hojaListadoAtenciones(filas: FilaListado[], etiqueta: string): HojaGenerica {
+  return {
+    nombre: "Atenciones",
+    columnas: [
+      { titulo: etiqueta, valor: (r: FilaListado) => r.reportadoEn, ancho: 22 },
+      { titulo: "Correlativo", valor: (r: FilaListado) => r.correlativo, ancho: 20 },
+      { titulo: "Tipo", valor: (r: FilaListado) => r.tipo },
+      { titulo: "Fecha inicio", valor: (r: FilaListado) => fechaCl(r.fechaApertura) },
+      { titulo: "RUT afiliado", valor: (r: FilaListado) => r.rut },
+      { titulo: "Nombre afiliado", valor: (r: FilaListado) => r.afiliado, ancho: 28 },
+      { titulo: "Plan de registro", valor: (r: FilaListado) => r.plan ?? r.codPlan, ancho: 22 },
+      { titulo: "Materia", valor: (r: FilaListado) => r.materia, ancho: 24 },
+      { titulo: "Estado", valor: (r: FilaListado) => r.estado },
+      { titulo: "Abogado", valor: (r: FilaListado) => r.abogado ?? "", ancho: 24 },
+    ],
+    filas,
+  };
+}
 
 export interface FiltroController {
   desde?: string;
@@ -47,8 +84,11 @@ export class ReportesService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
   // RUT–Plan vigente en algún día del período: inicio ≤ hasta y (sin término o término ≥ desde).
+  // Las relaciones y afiliados eliminados (soft-delete) no cuentan.
   private vigenteEnPeriodo(p: Periodo): SQL {
-    return sql`${planesAfiliado.fechaInicio} <= ${p.hasta}::date and (${planesAfiliado.fechaTermino} is null or ${planesAfiliado.fechaTermino} >= ${p.desde}::date)`;
+    return sql`${planesAfiliado.fechaInicio} <= ${p.hasta}::date and (${planesAfiliado.fechaTermino} is null or ${planesAfiliado.fechaTermino} >= ${p.desde}::date)
+      and ${planesAfiliado.vigencia} <> 'Eliminado'
+      and not exists (select 1 from afiliados ae where ae.id = ${planesAfiliado.afiliadoId} and ae.vigencia = 'Eliminado')`;
   }
 
   // La atención cae dentro de la vigencia de esa relación RUT–Plan (Anexo §XII "Etapa Consultas").
@@ -357,22 +397,179 @@ export class ReportesService {
     ]);
   }
 
+  // Relaciones RUT–Plan vigentes algún día del período (Anexo §XII B, §XIII A–C), por canal y plan.
+  async relacionesEnPeriodo(p: Periodo, f: FiltroRelaciones = {}) {
+    const filas = await this.db
+      .select({
+        rut: afiliados.rut,
+        nombre: sql<string>`${afiliados.nombres} || ' ' || ${afiliados.apellidoPaterno} || coalesce(' ' || ${afiliados.apellidoMaterno}, '')`,
+        email: afiliados.email,
+        telefono: afiliados.telefono,
+        direccion: afiliados.direccion,
+        comuna: afiliados.comuna,
+        ciudad: afiliados.ciudad,
+        region: afiliados.region,
+        fechaNacimiento: afiliados.fechaNacimiento,
+        codPlan: planesAfiliado.codPlan,
+        plan: planes.nombre,
+        canal: canales.nombre,
+        fechaInicio: planesAfiliado.fechaInicio,
+        fechaTermino: planesAfiliado.fechaTermino,
+        vigencia: planesAfiliado.vigencia,
+        vigenteHoy: planVigenteSql,
+      })
+      .from(planesAfiliado)
+      .innerJoin(afiliados, eq(afiliados.id, planesAfiliado.afiliadoId))
+      .innerJoin(planes, eq(planes.codPlan, planesAfiliado.codPlan))
+      .leftJoin(canales, eq(canales.id, planes.canalId))
+      .where(
+        and(
+          this.vigenteEnPeriodo(p),
+          f.codPlan ? eq(planesAfiliado.codPlan, f.codPlan) : undefined,
+          f.canalId ? eq(planes.canalId, f.canalId) : undefined,
+          f.rut ? eq(afiliados.rut, formatearRut(f.rut)) : undefined,
+        ),
+      )
+      .orderBy(sql`${canales.nombre} nulls last`, asc(planesAfiliado.codPlan), asc(afiliados.rut))
+      .limit(MAX_FILAS_EXPORTACION + 1);
+    if (filas.length > MAX_FILAS_EXPORTACION) {
+      throw new BadRequestException(`El resultado supera ${MAX_FILAS_EXPORTACION} filas; acote el período o el plan`);
+    }
+    return filas.map((r) => ({ ...r, vigenteHoy: Boolean(r.vigenteHoy) }));
+  }
+
+  // Atenciones que cuentan los reportes por plan (o canal), con el plan (o canal) bajo el que se
+  // contaron: consultas de la nómina dentro de la vigencia RUT–Plan y el resto por plan de registro.
+  async listadoAtenciones(p: Periodo, f: { codPlan?: string; canalId?: string }, por: "plan" | "canal"): Promise<FilaListado[]> {
+    const enPeriodo = rangoFechas(atenciones.fechaApertura, p.desde, p.hasta);
+    const enCanal = (col: typeof planesAfiliado.codPlan | typeof atenciones.codPlan) =>
+      f.canalId ? sql`${col} in (select pl.cod_plan from planes pl where pl.canal_id = ${f.canalId})` : undefined;
+    const [consultas, otras] = await Promise.all([
+      this.db
+        .selectDistinct({ id: atenciones.id, codPlan: planesAfiliado.codPlan })
+        .from(atenciones)
+        .innerJoin(planesAfiliado, and(eq(planesAfiliado.afiliadoId, atenciones.afiliadoId), this.dentroDeVigencia()))
+        .where(
+          and(
+            filtroAtenciones(),
+            eq(atenciones.tipo, "Consulta"),
+            enPeriodo,
+            f.codPlan ? eq(planesAfiliado.codPlan, f.codPlan) : undefined,
+            enCanal(planesAfiliado.codPlan),
+          ),
+        ),
+      this.db
+        .select({ id: atenciones.id, codPlan: atenciones.codPlan })
+        .from(atenciones)
+        .where(
+          and(
+            filtroAtenciones(),
+            ne(atenciones.tipo, "Consulta"),
+            enPeriodo,
+            f.codPlan ? eq(atenciones.codPlan, f.codPlan) : undefined,
+            enCanal(atenciones.codPlan),
+          ),
+        ),
+    ]);
+    const catalogo = await this.catalogoPlanes();
+    const etiqueta = (cod: string) => {
+      const pl = catalogo.find((c) => c.codPlan === cod);
+      return por === "plan" ? `${cod} — ${pl?.nombre ?? cod}` : (pl?.canal ?? "Sin canal");
+    };
+    // Por canal, una atención se lista una sola vez por canal aunque el RUT tenga dos planes del canal.
+    const pares = new Map<string, { id: string; reportadoEn: string }>();
+    for (const r of [...consultas, ...otras]) {
+      const reportadoEn = etiqueta(r.codPlan);
+      pares.set(`${r.id}|${reportadoEn}`, { id: r.id, reportadoEn });
+    }
+    if (pares.size > MAX_FILAS_EXPORTACION) {
+      throw new BadRequestException(`El listado supera ${MAX_FILAS_EXPORTACION} atenciones; acote el período`);
+    }
+    const ids = [...new Set([...pares.values()].map((x) => x.id))];
+    const detalle = new Map<string, FilaAtencionDetalle>();
+    for (let i = 0; i < ids.length; i += 5000) {
+      for (const d of await filasAtencionDetalle(this.db, inArray(atenciones.id, ids.slice(i, i + 5000)))) detalle.set(d.id, d);
+    }
+    return [...pares.values()]
+      .filter((x) => detalle.has(x.id))
+      .map((x) => ({ ...detalle.get(x.id)!, reportadoEn: x.reportadoEn }))
+      .sort((a, b) => a.reportadoEn.localeCompare(b.reportadoEn, "es") || a.correlativo.localeCompare(b.correlativo));
+  }
+
   async xlsxPorPlan(p: Periodo, codPlan?: string): Promise<Buffer> {
-    const filas = await this.porPlan(p, codPlan);
-    return libroXlsx([hojaPlanes("Reporte por plan", filas)]);
+    const [filas, listado] = await Promise.all([this.porPlan(p, codPlan), this.listadoAtenciones(p, { codPlan }, "plan")]);
+    return libroXlsx([hojaPlanes("Reporte por plan", filas), hojaListadoAtenciones(listado, "Plan reportado")]);
   }
 
   async xlsxPorCanal(p: Periodo, canalId?: string): Promise<Buffer> {
-    const canalesFilas = await this.porCanal(p, canalId);
+    const [canalesFilas, listado] = await Promise.all([this.porCanal(p, canalId), this.listadoAtenciones(p, { canalId }, "canal")]);
     const resumen = canalesFilas.map((c) => ({ ...c, codPlan: "", nombre: c.canal, canal: c.canal }));
     return libroXlsx([
       hojaPlanes("Resumen por canal", resumen, true),
       hojaPlanes("Detalle por plan", canalesFilas.flatMap((c) => c.planes)),
+      hojaListadoAtenciones(listado, "Canal"),
+    ]);
+  }
+
+  // Informe de afiliados (Anexo §XIII A–C): hoja "Resumen" por plan y hoja "Afiliados" con los
+  // campos elegidos, una fila por relación RUT–Plan vigente algún día del período.
+  async informeAfiliadosXlsx(body: InformeAfiliados): Promise<Buffer> {
+    const filas = await this.relacionesEnPeriodo(body, body);
+    type Rel = (typeof filas)[number];
+    const valor = (r: Rel, c: CampoInformeAfiliado): string => {
+      switch (c) {
+        case "fechaInicio":
+        case "fechaTermino":
+        case "fechaNacimiento":
+          return fechaIso(r[c]);
+        case "vigenteHoy":
+          return r.vigenteHoy ? "Sí" : "No";
+        case "canal":
+          return r.canal ?? "Sin canal";
+        default:
+          return r[c] ?? "";
+      }
+    };
+    const enPeriodo = (d: string | null) => !!d && d >= body.desde && d <= body.hasta;
+    const resumen = new Map<string, { codPlan: string; plan: string; canal: string; ruts: Set<string>; altas: number; bajas: number; vigentesHoy: Set<string> }>();
+    for (const r of filas) {
+      const g = resumen.get(r.codPlan) ?? { codPlan: r.codPlan, plan: r.plan, canal: r.canal ?? "Sin canal", ruts: new Set(), altas: 0, bajas: 0, vigentesHoy: new Set() };
+      g.ruts.add(r.rut);
+      if (r.vigenteHoy) g.vigentesHoy.add(r.rut);
+      if (enPeriodo(r.fechaInicio)) g.altas++;
+      if (enPeriodo(r.fechaTermino)) g.bajas++;
+      resumen.set(r.codPlan, g);
+    }
+    type Res = typeof resumen extends Map<string, infer V> ? V : never;
+    return libroXlsx([
+      {
+        nombre: "Resumen",
+        columnas: [
+          { titulo: "Canal", valor: (r: Res) => r.canal, ancho: 22 },
+          { titulo: "Cód. plan", valor: (r: Res) => r.codPlan },
+          { titulo: "Plan", valor: (r: Res) => r.plan, ancho: 26 },
+          { titulo: "RUT vigentes en el período", valor: (r: Res) => r.ruts.size },
+          { titulo: "Altas en el período", valor: (r: Res) => r.altas },
+          { titulo: "Términos en el período", valor: (r: Res) => r.bajas },
+          { titulo: "Vigentes hoy", valor: (r: Res) => r.vigentesHoy.size },
+        ],
+        filas: [...resumen.values()],
+      },
+      {
+        nombre: "Afiliados",
+        columnas: body.campos.map((c) => ({
+          titulo: CAMPOS_INFORME_AFILIADOS[c],
+          valor: (r: Rel) => valor(r, c),
+          ancho: c === "nombre" || c === "direccion" || c === "email" ? 28 : 16,
+        })),
+        filas,
+      },
     ]);
   }
 
   async xlsxAfiliadosMes(p: Periodo, filtro: { codPlan?: string; canalId?: string }): Promise<Buffer> {
-    const serie = await this.afiliadosPorMes(p, filtro);
+    const [serie, relaciones] = await Promise.all([this.afiliadosPorMes(p, filtro), this.relacionesEnPeriodo(p, filtro)]);
+    type Rel = (typeof relaciones)[number];
     return libroXlsx([
       {
         nombre: "Afiliados activos",
@@ -384,6 +581,19 @@ export class ReportesService {
           { titulo: "Afiliados activos", valor: (r: SerieAfiliadosMes) => r.activos },
         ],
         filas: serie,
+      },
+      {
+        nombre: "RUT vigentes",
+        columnas: [
+          { titulo: "Canal", valor: (r: Rel) => r.canal ?? "Sin canal", ancho: 22 },
+          { titulo: "Cód. plan", valor: (r: Rel) => r.codPlan },
+          { titulo: "Plan", valor: (r: Rel) => r.plan, ancho: 26 },
+          { titulo: "RUT", valor: (r: Rel) => r.rut },
+          { titulo: "Nombre", valor: (r: Rel) => r.nombre, ancho: 28 },
+          { titulo: "Inicio vigencia", valor: (r: Rel) => fechaIso(r.fechaInicio) },
+          { titulo: "Término vigencia", valor: (r: Rel) => fechaIso(r.fechaTermino) },
+        ],
+        filas: relaciones,
       },
     ]);
   }

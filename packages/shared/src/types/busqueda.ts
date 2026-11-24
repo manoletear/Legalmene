@@ -17,7 +17,13 @@ export const CriteriosBusquedaSchema = z.object({
   fechaHasta: fecha.optional(),
   // Identificador o descripción de un bien cubierto del afiliado (rol, patente…).
   bien: z.string().trim().min(1).optional(),
+  // Tipo de atención (Anexo §IX l.1423, §XI: aranceles y provisiones por tipo).
+  tipoAtencion: TipoAtencionEnum.optional(),
 });
+
+// Pagos WebPay por tipo (Anexo §XI l.1993): de una atención (arancel) o del plan.
+export const TipoPagoEnum = z.enum(["Arancel", "Plan"]);
+export type TipoPago = z.infer<typeof TipoPagoEnum>;
 export type CriteriosBusqueda = z.infer<typeof CriteriosBusquedaSchema>;
 
 // Una búsqueda sin ningún criterio no se ejecuta (Anexo §XI: "no deberán presentar precarga").
@@ -126,3 +132,37 @@ export const InformeAtencionesSchema = z.object({
   abogadoId: z.string().uuid().optional(),
 });
 export type InformeAtenciones = z.infer<typeof InformeAtencionesSchema>;
+
+// Informe de afiliados (§XIII A–C): listado RUT–Plan vigente en el período con los campos elegidos
+// y hoja "Resumen" por plan.
+export const CAMPOS_INFORME_AFILIADOS = {
+  rut: "RUT",
+  nombre: "Nombre",
+  email: "Correo",
+  telefono: "Teléfono",
+  direccion: "Dirección",
+  comuna: "Comuna",
+  ciudad: "Ciudad",
+  region: "Región",
+  fechaNacimiento: "Fecha de nacimiento",
+  codPlan: "Cód. plan",
+  plan: "Plan",
+  canal: "Canal",
+  fechaInicio: "Inicio vigencia",
+  fechaTermino: "Término vigencia",
+  vigencia: "Estado vigencia",
+  vigenteHoy: "Vigente hoy",
+} as const;
+export type CampoInformeAfiliado = keyof typeof CAMPOS_INFORME_AFILIADOS;
+
+export const InformeAfiliadosSchema = z.object({
+  desde: fecha,
+  hasta: fecha,
+  campos: z
+    .array(z.enum(Object.keys(CAMPOS_INFORME_AFILIADOS) as [CampoInformeAfiliado, ...CampoInformeAfiliado[]]))
+    .min(1, "Seleccione al menos un campo"),
+  codPlan: z.string().optional(),
+  canalId: z.string().uuid().optional(),
+  rut: z.string().max(12).optional(),
+}).refine((p) => p.desde <= p.hasta, { message: "La fecha inicial no puede ser posterior a la final", path: ["hasta"] });
+export type InformeAfiliados = z.infer<typeof InformeAfiliadosSchema>;

@@ -47,8 +47,11 @@ const ESPERAS = ["EnEsperaAntecedentes", "EnEsperaArancel", "EnEsperaProvision"]
 // Transiciones permitidas por tipo. "Derivada" solo se alcanza al aprobar una derivación.
 type Mapa = Partial<Record<EstadoAtencion, readonly EstadoAtencion[]>>;
 
+// Consultas por correo, chat o web que requieren documentos quedan a la espera del cliente
+// (Anexo §VI 3.3–3.4).
 const CONSULTA: Mapa = {
-  Iniciada: ["Respondida", "Terminada"],
+  Iniciada: ["Respondida", "EnEsperaAntecedentes", "Terminada"],
+  EnEsperaAntecedentes: ["Iniciada", "Respondida", "Terminada"],
   Respondida: ["Terminada"],
   Derivada: [],
   Terminada: [],

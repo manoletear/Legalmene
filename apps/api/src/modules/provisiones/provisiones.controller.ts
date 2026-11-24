@@ -17,7 +17,8 @@ import { Permiso } from "../../common/decorators/permiso.decorator";
 import { PermisosGuard } from "../../common/guards/permisos.guard";
 import { ProvisionesService } from "./provisiones.service";
 import {
-  DevolucionDto,
+  ChequeDevolucionDto,
+  ReingresoDto,
   EntregaDto,
   FiltroProvisionesDto,
   ObservacionDto,
@@ -39,6 +40,13 @@ function usuarioId(user: AuthenticatedUser): string {
 @Controller()
 export class ProvisionesController {
   constructor(@Inject(ProvisionesService) private readonly service: ProvisionesService) {}
+
+  // Anexo §X 12: cuenta corriente por abogado (por entregar, por rendir y por reingresar).
+  @Get("provisiones/cuenta-corriente")
+  @Permiso("finanzas.ver")
+  cuentaCorriente(@Query("abogadoId", new ParseUUIDPipe({ optional: true })) abogadoId?: string) {
+    return this.service.cuentaCorriente(abogadoId);
+  }
 
   @Get("provisiones")
   listar(@Query() filtro: FiltroProvisionesDto) {
@@ -63,7 +71,7 @@ export class ProvisionesController {
   @Post("provisiones/:id/pago-cliente")
   @Permiso("provisiones.registrar_pago")
   pagoCliente(@CurrentUser() user: AuthenticatedUser, @Param("id", ParseUUIDPipe) id: string, @Body() body: PagoClienteDto) {
-    return this.service.registrarPagoCliente(id, usuarioId(user), body.medio, body.fecha);
+    return this.service.registrarPagoCliente(id, usuarioId(user), body.medio, body.fecha, { cuotas: body.cuotas, referencia: body.referencia });
   }
 
   @Post("provisiones/:id/solicitar-entrega")
@@ -102,10 +110,30 @@ export class ProvisionesController {
     return this.service.rendir(id, usuarioId(user));
   }
 
-  @Post("provisiones/:id/devolucion")
+  // Anexo §X 14: el contador registra el saldo no gastado que devuelve el abogado.
+  @Post("provisiones/:id/reingreso")
+  @Permiso("provisiones.registrar_pago")
+  reingreso(@CurrentUser() user: AuthenticatedUser, @Param("id", ParseUUIDPipe) id: string, @Body() body: ReingresoDto) {
+    return this.service.registrarReingreso(id, usuarioId(user), body.monto, body.glosa);
+  }
+
+  // Anexo §X 16–20: rendición de fondos al cliente.
+  @Post("atenciones/:atencionId/rendicion-cliente")
+  @Permiso("provisiones.rendir")
+  solicitarRendicion(@CurrentUser() user: AuthenticatedUser, @Param("atencionId", ParseUUIDPipe) atencionId: string) {
+    return this.service.solicitarRendicionCliente(atencionId, usuarioId(user));
+  }
+
+  @Post("atenciones/:atencionId/rendicion-cliente/cheque")
   @Permiso("provisiones.disponer_entregar")
-  devolucion(@CurrentUser() user: AuthenticatedUser, @Param("id", ParseUUIDPipe) id: string, @Body() body: DevolucionDto) {
-    return this.service.registrarDevolucion(id, usuarioId(user), body.numeroCheque, body.observacion);
+  chequeDevolucion(@CurrentUser() user: AuthenticatedUser, @Param("atencionId", ParseUUIDPipe) atencionId: string, @Body() body: ChequeDevolucionDto) {
+    return this.service.registrarChequeDevolucion(atencionId, usuarioId(user), body.numeroCheque, body.observacion);
+  }
+
+  @Post("atenciones/:atencionId/rendicion-cliente/entregada")
+  @Permiso("provisiones.rendir")
+  rendidoCliente(@CurrentUser() user: AuthenticatedUser, @Param("atencionId", ParseUUIDPipe) atencionId: string) {
+    return this.service.marcarRendidoCliente(atencionId, usuarioId(user));
   }
 
   @Get("provisiones/:id/eventos")

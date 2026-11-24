@@ -10,6 +10,7 @@ import { planes } from "../../src/db/schema/planes";
 import { afiliados, planesAfiliado } from "../../src/db/schema/afiliados";
 import { CargasMasivasService } from "../../src/modules/cargas-masivas/cargas-masivas.service";
 import { NotifInboxService } from "../../src/modules/notif-inbox/notif-inbox.service";
+import { AtencionesService } from "../../src/modules/atenciones/atenciones.service";
 import ExcelJS from "exceljs";
 import { planAleatorio, rutAleatorio } from "./helpers";
 
@@ -22,12 +23,13 @@ const RUN = !!process.env.DATABASE_URL;
   const TEST_PLAN = planAleatorio();
   const OTRO_PLAN = planAleatorio("TESTB");
   const [JUAN, MARIA, CARLOS] = [rutAleatorio(), rutAleatorio(), rutAleatorio()];
+  const PEDRO = rutAleatorio();
   const notificadas: unknown[] = [];
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true }), DatabaseModule],
-      providers: [CargasMasivasService, { provide: NotifInboxService, useValue: { crearBulk: async (items: unknown[]) => { notificadas.push(items); return []; } } }],
+      providers: [CargasMasivasService, { provide: AtencionesService, useValue: {} }, { provide: NotifInboxService, useValue: { crearBulk: async (items: unknown[]) => { notificadas.push(items); return []; } } }],
     }).compile();
     service = moduleRef.get(CargasMasivasService);
     pool = moduleRef.get(PG_POOL);
@@ -48,7 +50,7 @@ const RUN = !!process.env.DATABASE_URL;
     await db.execute(sql`DELETE FROM cargas_afiliado WHERE cod_plan IN (${TEST_PLAN}, ${OTRO_PLAN})`);
     await db.execute(sql`DELETE FROM bienes_afiliado WHERE cod_plan IN (${TEST_PLAN}, ${OTRO_PLAN})`);
     await db.execute(sql`DELETE FROM planes_afiliado WHERE cod_plan IN (${TEST_PLAN}, ${OTRO_PLAN})`);
-    await db.execute(sql`DELETE FROM afiliados WHERE rut IN (${JUAN}, ${MARIA}, ${CARLOS})`);
+    await db.execute(sql`DELETE FROM afiliados WHERE rut IN (${JUAN}, ${MARIA}, ${CARLOS}, ${PEDRO})`);
     await db.execute(sql`DELETE FROM planes WHERE cod_plan IN (${TEST_PLAN}, ${OTRO_PLAN})`);
     await moduleRef.close();
   });
@@ -84,6 +86,19 @@ const RUN = !!process.env.DATABASE_URL;
     expect(res.actualizados).toBe(0);
     expect(res.errores).toHaveLength(1);
     expect(res.errores[0].mensaje).toMatch(/RUT inv/);
+  });
+
+  it("FLUJO registra dirección, comuna, ciudad y región del RUT nuevo", async () => {
+    const buf = Buffer.from(
+      ["rut,nombres,apellido_paterno,direccion,comuna,ciudad,region", `${PEDRO},Pedro,Test,Calle 1,Providencia,Santiago,Metropolitana de Santiago`].join("\n"),
+      "utf-8",
+    );
+    const res = await service.cargarAfiliados(TEST_PLAN, "FLUJO", buf);
+    expect(res.insertados).toBe(1);
+    const [p] = await drizzle(pool).select().from(afiliados).where(eq(afiliados.rut, PEDRO));
+    expect(p).toMatchObject({ direccion: "Calle 1", comuna: "Providencia", ciudad: "Santiago", region: "Metropolitana de Santiago" });
+    // No interfiere con los conteos de las pruebas STOCK del mismo plan.
+    await drizzle(pool).delete(planesAfiliado).where(eq(planesAfiliado.afiliadoId, p.id));
   });
 
   it("FLUJO de nuevo actualiza la fecha de término y NO cambia datos de la persona", async () => {
@@ -134,6 +149,20 @@ const RUN = !!process.env.DATABASE_URL;
     expect((await relacion(CARLOS, TEST_PLAN)).vigencia).toBe("Activo");
     // La relación de Juan con el otro plan no se toca.
     expect((await relacion(JUAN, OTRO_PLAN)).vigencia).toBe("Activo");
+  });
+
+  it("STOCK no da de baja un RUT que viene en el archivo con error de validación (Anexo §III)", async () => {
+    const res = await service.cargarAfiliados(
+      TEST_PLAN,
+      "STOCK",
+      csv([
+        [JUAN, "", "", "", "", ""], // viene en el archivo, pero sin nombres: error
+        [CARLOS, "Carlos", "Nuevo", "carlos@test.cl", "", ""],
+      ]),
+    );
+    expect(res.errores.map((e) => e.fila)).toEqual([2]);
+    expect(res.eliminados).toBe(0);
+    expect((await relacion(JUAN, TEST_PLAN)).vigencia).toBe("Activo");
   });
 
   it("rechaza RUT duplicado dentro del mismo archivo", async () => {
@@ -217,6 +246,31 @@ const RUN = !!process.env.DATABASE_URL;
       await wb.xlsx.load((await service.resumenXlsx(r)) as unknown as ArrayBuffer);
       expect(wb.worksheets.map((w) => w.name)).toEqual(["Resumen", "Errores"]);
       expect(wb.getWorksheet("Errores")!.rowCount).toBe(3);
+    });
+
+    it("STOCK de cargas y bienes conserva lo identificable aunque su fila tenga error, y sin nada identificable no da de baja", async () => {
+      // Parentesco inválido: error, pero la carga es identificable y no se da de baja.
+      const r1 = await service.cargarCargas(OTRO_PLAN, "STOCK", buf(["rut_titular,rut,nombres,apellido_paterno,parentesco", `${JUAN},${CARGA1},Ana,Pérez,Primo`]));
+      expect(r1.errores).toHaveLength(1);
+      expect(r1.eliminados).toBe(0);
+      const db = drizzle(pool);
+      const carga1 = await db.execute(sql`SELECT vigencia FROM cargas_afiliado WHERE cod_plan = ${OTRO_PLAN} AND rut = ${CARGA1}`);
+      expect(carga1.rows[0]).toMatchObject({ vigencia: "Activo" });
+
+      // Ningún registro identificable (RUT inválidos): no se da de baja nada y se informa.
+      const r2 = await service.cargarCargas(OTRO_PLAN, "STOCK", buf(["rut_titular,rut,nombres,apellido_paterno", "1-1,2-2,X,Y"]));
+      expect(r2.eliminados).toBe(0);
+      expect(r2.errores.some((e) => /sin registros identificables/.test(e.mensaje))).toBe(true);
+      expect((await db.execute(sql`SELECT vigencia FROM cargas_afiliado WHERE cod_plan = ${OTRO_PLAN} AND rut = ${CARGA1}`)).rows[0]).toMatchObject({
+        vigencia: "Activo",
+      });
+
+      // Bienes: fecha inválida en la fila del vehículo existente; se conserva.
+      const r3 = await service.cargarBienes(OTRO_PLAN, "STOCK", buf(["rut_titular,tipo,identificador,fecha_inicio", `${JUAN},Vehiculo,ab-cd-12,31-12-2024`]));
+      expect(r3.errores).toHaveLength(1);
+      expect(r3.eliminados).toBe(0);
+      const bien = await db.execute(sql`SELECT vigencia FROM bienes_afiliado WHERE cod_plan = ${OTRO_PLAN} AND identificador = 'AB-CD-12'`);
+      expect(bien.rows[0]).toMatchObject({ vigencia: "Activo" });
     });
   });
 });

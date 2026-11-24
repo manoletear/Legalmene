@@ -73,6 +73,8 @@ export const gestiones = pgTable(
     fechaEjecucion: timestamp("fecha_ejecucion", { withTimezone: true }),
     resultado: text("resultado"),
     documentosIds: jsonb("documentos_ids").$type<string[]>().notNull().default([]),
+    // Se informa al cliente por correo el inicio y el término (Anexo §VII l.1015, §VIII l.1105).
+    informarCliente: boolean("informar_cliente").notNull().default(false),
     // Gestión instanciada desde una plantilla (evita duplicarla en la misma atención).
     plantillaId: uuid("plantilla_id").references(() => gestionesPlantilla.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

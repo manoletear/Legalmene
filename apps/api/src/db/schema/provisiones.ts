@@ -8,7 +8,9 @@ import {
   pgEnum,
   index,
   date,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { atenciones } from "./atenciones";
 import { usuarios } from "./usuarios";
 import { documentos } from "./documentos";
@@ -23,6 +25,8 @@ export const estadoProvisionEnum = pgEnum("estado_provision", [
   "Disponible",
   "Entregada",
   "Rendida",
+  "Reingresado",
+  "RendidaCliente",
   "Cerrada",
 ]);
 export const medioPagoEnum = pgEnum("medio_pago", ["WebPay", "CasaCentral", "Transferencia"]);
@@ -53,6 +57,9 @@ export const provisiones = pgTable(
     fechaResolucion: timestamp("fecha_resolucion", { withTimezone: true }),
     medioPagoCliente: medioPagoEnum("medio_pago_cliente"),
     fechaPagoCliente: date("fecha_pago_cliente", { mode: "string" }),
+    // Cuotas y referencia del depósito o transferencia (Anexo §X 05).
+    cuotasPagoCliente: integer("cuotas_pago_cliente"),
+    referenciaPagoCliente: varchar("referencia_pago_cliente", { length: 80 }),
     fechaDisponible: timestamp("fecha_disponible", { withTimezone: true }),
     montoEntregado: integer("monto_entregado"),
     fechaEntrega: timestamp("fecha_entrega", { withTimezone: true }),
@@ -108,3 +115,36 @@ export const provisionesEventos = pgTable(
   },
   (t) => ({ provisionIdx: index("provisiones_eventos_provision_idx").on(t.provisionId) }),
 );
+
+// Rendición de fondos al cliente por atención (Anexo §X 16–20): el abogado la solicita, Finanzas
+// registra el cheque por el saldo de la cuenta y el abogado marca "rendido a cliente".
+export const estadoRendicionClienteEnum = pgEnum("estado_rendicion_cliente", ["Solicitada", "ChequeEmitido", "Entregada"]);
+
+export const rendicionesCliente = pgTable(
+  "rendiciones_cliente",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    atencionId: uuid("atencion_id")
+      .notNull()
+      .references(() => atenciones.id, { onDelete: "restrict" }),
+    estado: estadoRendicionClienteEnum("estado").notNull().default("Solicitada"),
+    monto: integer("monto"),
+    numeroCheque: varchar("numero_cheque", { length: 40 }),
+    observacion: text("observacion"),
+    solicitadaPorId: uuid("solicitada_por_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "restrict" }),
+    solicitadaEn: timestamp("solicitada_en", { withTimezone: true }).notNull().defaultNow(),
+    chequePorId: uuid("cheque_por_id").references(() => usuarios.id, { onDelete: "restrict" }),
+    chequeEn: timestamp("cheque_en", { withTimezone: true }),
+    entregadaPorId: uuid("entregada_por_id").references(() => usuarios.id, { onDelete: "restrict" }),
+    entregadaEn: timestamp("entregada_en", { withTimezone: true }),
+  },
+  (t) => ({
+    atencionIdx: index("rendiciones_cliente_atencion_idx").on(t.atencionId),
+    // Una sola rendición en curso por atención.
+    enCursoUq: uniqueIndex("rendiciones_cliente_en_curso_uq").on(t.atencionId).where(sql`estado <> 'Entregada'`),
+  }),
+);
+
+export type RendicionClienteRow = typeof rendicionesCliente.$inferSelect;

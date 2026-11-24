@@ -1,4 +1,6 @@
-import { Inject, Injectable, Logger, BadRequestException, NotFoundException } from "@nestjs/common";
+import { CorreosService } from "../correos/correos.service";
+import { plantillaResumenCarga } from "../correos/plantillas";
+import { ForbiddenException, HttpException, Inject, Injectable, Logger, BadRequestException, NotFoundException, Optional } from "@nestjs/common";
 import { parse } from "csv-parse/sync";
 import { and, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
@@ -7,12 +9,20 @@ import { perfilPermisos, perfiles, usuarios } from "../../db/schema/usuarios";
 import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
 import { libroXlsx } from "../exports/xlsx";
 import { planes } from "../../db/schema/planes";
+import { coberturas } from "../../db/schema/aranceles";
+import { competencias, materias } from "../../db/schema/maestros";
+import { AtencionesService } from "../atenciones/atenciones.service";
+import type { AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 import { formatearRut, rutValido } from "../../common/utils/rut";
 import { hoyChile } from "../afiliados/vigencia";
 import {
+  CreateAtencionSchema,
+  CreateCoberturaSchema,
   PARENTESCO_LABEL,
   ParentescoEnum,
   PERFIL_ADMIN,
+  PLANES_SIN_COBERTURA,
+  type TipoAtencion,
   TipoBienEnum,
   type CargaMasivaResultado,
   type EntidadCargaMasiva,
@@ -28,6 +38,7 @@ interface FilaCSV {
   telefono?: string;
   direccion?: string;
   comuna?: string;
+  ciudad?: string;
   region?: string;
   fecha_nacimiento?: string;
   fecha_inicio?: string;
@@ -35,6 +46,24 @@ interface FilaCSV {
 }
 
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_ATENCIONES_POR_CARGA = 2000;
+const MODALIDADES = ["Porcentaje", "ValorUF", "SinCobertura"] as const;
+
+// Sin tildes, mayúsculas ni espacios repetidos, para comparar nombres de maestros.
+function normalizar(v: string): string {
+  return v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+const TIPOS: Record<string, TipoAtencion> = {
+  consulta: "Consulta",
+  asesoria: "Asesoria",
+  juicio: "Juicio",
+  posesionefectiva: "PosesionEfectiva",
+  "posesion efectiva": "PosesionEfectiva",
+};
+function tipoAtencion(v: string): TipoAtencion | null {
+  return TIPOS[normalizar(v)] ?? null;
+}
 
 interface RegistroValido {
   fila: number;
@@ -50,7 +79,187 @@ export class CargasMasivasService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     @Inject(NotifInboxService) private readonly notif: NotifInboxService,
+    @Inject(AtencionesService) private readonly atenciones: AtencionesService,
+    @Optional() @Inject(CorreosService) private readonly correos?: CorreosService,
   ) {}
+
+  // Materias vigentes por "competencia|materia" normalizado (sin tildes ni mayúsculas).
+  private async materiasPorNombre(): Promise<Map<string, { competenciaId: string; materiaId: string }>> {
+    const rows = await this.db
+      .select({ competenciaId: competencias.id, competencia: competencias.nombre, materiaId: materias.id, materia: materias.nombre })
+      .from(materias)
+      .innerJoin(competencias, eq(competencias.id, materias.competenciaId))
+      .where(and(eq(materias.vigente, true), eq(competencias.vigente, true)));
+    return new Map(rows.map((r) => [`${normalizar(r.competencia)}|${normalizar(r.materia)}`, { competenciaId: r.competenciaId, materiaId: r.materiaId }]));
+  }
+
+  /**
+   * Coberturas de un plan (Anexo §I l.54). Columnas: modalidad (Porcentaje, ValorUF, SinCobertura);
+   * opcionales competencia + materia (vacías = todas las materias), tipo (vacío = todos),
+   * porcentaje (0–100) y valor_uf (p. ej. 1,5). FLUJO agrega o reemplaza la regla de la misma
+   * materia y tipo; STOCK además desactiva las reglas vigentes del plan que no vienen en el archivo.
+   */
+  async cargarCoberturas(codPlan: string, tipo: TipoCargaMasiva, csvBuffer: Buffer, usuario: AuthenticatedUser): Promise<CargaMasivaResultado> {
+    if (!usuario.permisos.includes("coberturas.administrar")) throw new ForbiddenException("Requiere permiso coberturas.administrar");
+    if ((PLANES_SIN_COBERTURA as readonly string[]).includes(codPlan)) {
+      throw new BadRequestException(`El plan ${codPlan} es sin cobertura y no lleva reglas`);
+    }
+    const inicio = Date.now();
+    await this.validarPlan(codPlan);
+    const filas = this.leerCsv(csvBuffer);
+    const r = this.resultadoVacio("coberturas", tipo, codPlan, filas.length);
+    const porNombre = await this.materiasPorNombre();
+    const reglas: { codPlan: string; materiaId: string | null; tipo: TipoAtencion | null; modalidad: "Porcentaje" | "ValorUF" | "SinCobertura"; porcentaje: number | null; valorUfCentesimas: number | null }[] = [];
+    const vistas = new Set<string>();
+    filas.forEach((f, i) => {
+      const fila = i + 2;
+      const error = (mensaje: string) => r.errores.push({ fila, mensaje });
+      let materiaId: string | null = null;
+      if (f.competencia || f.materia) {
+        const m = porNombre.get(`${normalizar(f.competencia ?? "")}|${normalizar(f.materia ?? "")}`);
+        if (!m) return error(`Materia no encontrada o no vigente: ${f.competencia ?? ""} / ${f.materia ?? ""}`);
+        materiaId = m.materiaId;
+      }
+      const t = f.tipo ? tipoAtencion(f.tipo) : null;
+      if (f.tipo && !t) return error(`Tipo inválido: ${f.tipo} (Consulta, Asesoria, Juicio, PosesionEfectiva o vacío)`);
+      const modalidad = MODALIDADES.find((m) => normalizar(m) === normalizar(f.modalidad ?? ""));
+      if (!modalidad) return error(`Modalidad inválida: ${f.modalidad ?? ""} (Porcentaje, ValorUF o SinCobertura)`);
+      const porcentaje = f.porcentaje ? Number(f.porcentaje.replace(",", ".")) : null;
+      const uf = f.valor_uf ? Number(f.valor_uf.replace(",", ".")) : null;
+      if (porcentaje !== null && !Number.isInteger(porcentaje)) return error(`Porcentaje inválido: ${f.porcentaje}`);
+      if (uf !== null && !Number.isFinite(uf)) return error(`valor_uf inválido: ${f.valor_uf}`);
+      const regla = {
+        codPlan,
+        materiaId,
+        tipo: t,
+        modalidad,
+        porcentaje: modalidad === "Porcentaje" ? porcentaje : null,
+        valorUfCentesimas: modalidad === "ValorUF" && uf !== null ? Math.round(uf * 100) : null,
+      };
+      const v = CreateCoberturaSchema.safeParse(regla);
+      if (!v.success) return error(v.error.issues.map((x) => `${x.path.join(".")}: ${x.message}`).join("; "));
+      const clave = `${materiaId}|${t}`;
+      if (vistas.has(clave)) return error("Regla duplicada en el archivo (misma materia y tipo)");
+      vistas.add(clave);
+      reglas.push(regla);
+    });
+
+    if (tipo === "STOCK" && reglas.length === 0) {
+      r.errores.push({ fila: 0, mensaje: "STOCK sin reglas válidas: no se desactivó ninguna regla del plan" });
+    } else {
+      await this.db.transaction(async (tx) => {
+        const filasDb = reglas.length
+          ? await tx
+              .insert(coberturas)
+              .values(reglas.map((x) => ({ ...x, vigente: true })))
+              .onConflictDoUpdate({
+                target: [coberturas.codPlan, coberturas.materiaId, coberturas.tipo],
+                set: {
+                  modalidad: sql`excluded.modalidad`,
+                  porcentaje: sql`excluded.porcentaje`,
+                  valorUfCentesimas: sql`excluded.valor_uf_centesimas`,
+                  vigente: true,
+                  updatedAt: new Date(),
+                },
+              })
+              .returning({ id: coberturas.id, insertado: sql<boolean>`(xmax = 0)` })
+          : [];
+        r.insertados = filasDb.filter((x) => x.insertado).length;
+        r.actualizados = filasDb.length - r.insertados;
+        if (tipo === "STOCK") {
+          const desactivadas = await tx
+            .update(coberturas)
+            .set({ vigente: false, updatedAt: new Date() })
+            .where(
+              and(
+                eq(coberturas.codPlan, codPlan),
+                eq(coberturas.vigente, true),
+                filasDb.length ? notInArray(coberturas.id, filasDb.map((x) => x.id)) : undefined,
+              ),
+            )
+            .returning({ id: coberturas.id });
+          r.eliminados = desactivadas.length;
+        }
+      });
+    }
+    r.duracionMs = Date.now() - inicio;
+    await this.notificar(r);
+    return r;
+  }
+
+  /**
+   * Atenciones del plan (Anexo §II l.141), solo FLUJO: cada fila crea una atención por el mismo
+   * camino que la web (plan vigente del RUT, materia del tipo, correlativo, cobertura). Columnas:
+   * rut, tipo (Consulta, Asesoria o Juicio), competencia, materia, asunto; opcionales
+   * abogado (correo) y rut_carga.
+   */
+  async cargarAtenciones(codPlan: string, tipo: TipoCargaMasiva, csvBuffer: Buffer, usuario: AuthenticatedUser): Promise<CargaMasivaResultado> {
+    if (tipo !== "FLUJO") throw new BadRequestException("Las atenciones solo se cargan en modalidad FLUJO");
+    const inicio = Date.now();
+    await this.validarPlan(codPlan);
+    const filas = this.leerCsv(csvBuffer);
+    if (filas.length > MAX_ATENCIONES_POR_CARGA) {
+      throw new BadRequestException(`El archivo supera ${MAX_ATENCIONES_POR_CARGA} atenciones; divídalo`);
+    }
+    const r = this.resultadoVacio("atenciones", tipo, codPlan, filas.length);
+    const porNombre = await this.materiasPorNombre();
+    const ruts = [...new Set(filas.map((f) => f.rut).filter((x): x is string => !!x && rutValido(x)).map(formatearRut))];
+    const personas = ruts.length
+      ? await this.db.select({ id: afiliados.id, rut: afiliados.rut }).from(afiliados).where(inArray(afiliados.rut, ruts))
+      : [];
+    const idPorRut = new Map(personas.map((p) => [p.rut, p.id]));
+    const correos = [...new Set(filas.map((f) => f.abogado?.toLowerCase()).filter((x): x is string => !!x))];
+    const abogados = correos.length
+      ? await this.db.select({ id: usuarios.id, email: usuarios.email }).from(usuarios).where(inArray(sql`lower(${usuarios.email})`, correos))
+      : [];
+    const idPorCorreo = new Map(abogados.map((u) => [u.email.toLowerCase(), u.id]));
+
+    for (const [i, f] of filas.entries()) {
+      const fila = i + 2;
+      const error = (mensaje: string) => r.errores.push({ fila, mensaje });
+      if (!f.rut || !rutValido(f.rut)) { error(`RUT inválido: ${f.rut ?? ""}`); continue; }
+      const afiliadoId = idPorRut.get(formatearRut(f.rut));
+      if (!afiliadoId) { error(`El RUT ${formatearRut(f.rut)} no está registrado`); continue; }
+      const t = f.tipo ? tipoAtencion(f.tipo) : null;
+      if (!t || t === "PosesionEfectiva") { error(`Tipo inválido: ${f.tipo ?? ""} (Consulta, Asesoria o Juicio)`); continue; }
+      const permiso = t === "Consulta" ? "atenciones.crear_consulta" : "atenciones.crear_caso";
+      if (!usuario.permisos.includes(permiso)) { error(`Sin permiso ${permiso}`); continue; }
+      const m = porNombre.get(`${normalizar(f.competencia ?? "")}|${normalizar(f.materia ?? "")}`);
+      if (!m) { error(`Materia no encontrada o no vigente: ${f.competencia ?? ""} / ${f.materia ?? ""}`); continue; }
+      if (!f.asunto) { error("asunto es obligatorio"); continue; }
+      let abogadoAsignadoId: string | undefined;
+      if (f.abogado) {
+        abogadoAsignadoId = idPorCorreo.get(f.abogado.toLowerCase());
+        if (!abogadoAsignadoId) { error(`Abogado no encontrado: ${f.abogado}`); continue; }
+      }
+      let cargaId: string | undefined;
+      if (f.rut_carga) {
+        if (!rutValido(f.rut_carga)) { error(`RUT de la carga inválido: ${f.rut_carga}`); continue; }
+        const [c] = await this.db
+          .select({ id: cargasAfiliado.id })
+          .from(cargasAfiliado)
+          .where(and(eq(cargasAfiliado.afiliadoId, afiliadoId), eq(cargasAfiliado.codPlan, codPlan), eq(cargasAfiliado.rut, formatearRut(f.rut_carga))));
+        if (!c) { error(`La carga ${formatearRut(f.rut_carga)} no es del titular en el plan ${codPlan}`); continue; }
+        cargaId = c.id;
+      }
+      // Mismas validaciones y valores por defecto que el formulario.
+      const datos = CreateAtencionSchema.safeParse({
+        codPlan, afiliadoId, competenciaId: m.competenciaId, materiaId: m.materiaId, asunto: f.asunto, abogadoAsignadoId, cargaId,
+      });
+      if (!datos.success) { error(datos.error.issues.map((x) => `${x.path.join(".")}: ${x.message}`).join("; ")); continue; }
+      try {
+        await this.atenciones.crear({ ...datos.data, tipo: t }, usuario);
+        r.insertados++;
+      } catch (e) {
+        if (!(e instanceof HttpException)) throw e;
+        const resp = e.getResponse();
+        error(typeof resp === "string" ? resp : String((resp as { message?: unknown }).message ?? e.message));
+      }
+    }
+    r.duracionMs = Date.now() - inicio;
+    await this.notificar(r);
+    return r;
+  }
 
   /**
    * Anexo §III. Ambas modalidades:
@@ -103,10 +312,14 @@ export class CargasMasivasService {
 
     // Validar y normalizar todas las filas antes de tocar la DB.
     const rutsValidos = new Set<string>();
+    // RUT presentes en el archivo aunque su fila tenga otro error: STOCK no los da de baja
+    // (Anexo §III: solo se terminan las relaciones "no consideradas en el archivo").
+    const rutsEnArchivo = new Set<string>();
     const registros: RegistroValido[] = [];
 
     filas.forEach((fila, idx) => {
       const nroLinea = idx + 2; // +1 por header, +1 por base 1.
+      if (fila.rut && rutValido(fila.rut)) rutsEnArchivo.add(formatearRut(fila.rut));
       if (!fila.rut) {
         resultado.errores.push({
           fila: nroLinea,
@@ -149,6 +362,7 @@ export class CargasMasivasService {
           telefono: fila.telefono || null,
           direccion: fila.direccion || null,
           comuna: fila.comuna || null,
+          ciudad: fila.ciudad || null,
           region: fila.region || null,
           fechaNacimiento: fila.fecha_nacimiento || null,
           vigencia: "Activo",
@@ -195,24 +409,35 @@ export class CargasMasivasService {
             updatedAt: new Date(),
           },
         })
-        .returning({ id: planesAfiliado.id, isNew: sql<boolean>`xmax = 0` });
+        .returning({ id: planesAfiliado.id, afiliadoId: planesAfiliado.afiliadoId, isNew: sql<boolean>`xmax = 0` });
 
       resultado.insertados = relaciones.filter((r) => r.isNew).length;
+      const nuevosIds = relaciones.filter((r) => r.isNew).map((r) => r.afiliadoId);
+      resultado.rutsNuevos = nuevosIds.length
+        ? (await tx.select({ rut: afiliados.rut }).from(afiliados).where(inArray(afiliados.id, nuevosIds))).map((x) => x.rut).sort()
+        : [];
       resultado.actualizados = relaciones.length - resultado.insertados;
 
       if (tipo === "STOCK") {
+        const presentes = await tx
+          .select({ id: afiliados.id })
+          .from(afiliados)
+          .where(inArray(afiliados.rut, Array.from(rutsEnArchivo)));
         const terminadas = await tx
           .update(planesAfiliado)
           .set({ fechaTermino: sql`${hoyChile}`, vigencia: "Eliminado", updatedAt: new Date() })
           .where(
             and(
               eq(planesAfiliado.codPlan, codPlan),
-              notInArray(planesAfiliado.afiliadoId, Array.from(idPorRut.values())),
+              notInArray(planesAfiliado.afiliadoId, presentes.map((x) => x.id)),
               ne(planesAfiliado.vigencia, "Eliminado"),
             ),
           )
-          .returning({ id: planesAfiliado.id });
+          .returning({ id: planesAfiliado.id, afiliadoId: planesAfiliado.afiliadoId });
         resultado.eliminados = terminadas.length;
+        resultado.rutsEliminados = terminadas.length
+          ? (await tx.select({ rut: afiliados.rut }).from(afiliados).where(inArray(afiliados.id, terminadas.map((t) => t.afiliadoId)))).map((x) => x.rut).sort()
+          : [];
       }
     });
 
@@ -279,9 +504,14 @@ export class CargasMasivasService {
     }
     const validas: { fila: number; titular: string; rut: string; f: Fila; parentesco: string | null }[] = [];
     const vistos = new Set<string>();
+    // Registros identificables del archivo (aunque su fila tenga error): STOCK no los da de baja.
+    const enArchivo = new Set<string>();
     filas.forEach((f, i) => {
       const fila = i + 2;
       const error = (mensaje: string) => r.errores.push({ fila, mensaje });
+      if (f.rut_titular && rutValido(f.rut_titular) && f.rut && rutValido(f.rut)) {
+        enArchivo.add(`${formatearRut(f.rut_titular)}|${formatearRut(f.rut)}`);
+      }
       if (!f.rut_titular || !rutValido(f.rut_titular)) return error(`RUT titular inválido: ${f.rut_titular ?? ""}`);
       if (!f.rut || !rutValido(f.rut)) return error(`RUT de la carga inválido: ${f.rut ?? ""}`);
       if (!f.nombres || !f.apellido_paterno) return error("nombres y apellido_paterno son obligatorios");
@@ -339,18 +569,26 @@ export class CargasMasivasService {
       r.insertados = filasDb.filter((x) => x.isNew).length;
       r.actualizados = filasDb.length - r.insertados;
       if (tipo === "STOCK") {
-        const terminadas = await tx
-          .update(cargasAfiliado)
-          .set({ fechaTermino: sql`${hoyChile}`, vigencia: "Eliminado", updatedAt: new Date() })
-          .where(
-            and(
-              eq(cargasAfiliado.codPlan, codPlan),
-              ne(cargasAfiliado.vigencia, "Eliminado"),
-              filasDb.length ? notInArray(cargasAfiliado.id, filasDb.map((x) => x.id)) : undefined,
-            ),
-          )
-          .returning({ id: cargasAfiliado.id });
-        r.eliminados = terminadas.length;
+        // Solo se dan de baja las cargas que no vienen en el archivo (aunque su fila tenga error,
+        // una carga identificable se conserva). Sin registros identificables no se da de baja nada.
+        if (enArchivo.size === 0) {
+          r.errores.push({ fila: 0, mensaje: "Carga STOCK sin registros identificables: no se dio de baja ninguna carga" });
+        } else {
+          const actuales = await tx
+            .select({ id: cargasAfiliado.id, rut: cargasAfiliado.rut, titular: afiliados.rut })
+            .from(cargasAfiliado)
+            .innerJoin(afiliados, eq(afiliados.id, cargasAfiliado.afiliadoId))
+            .where(and(eq(cargasAfiliado.codPlan, codPlan), ne(cargasAfiliado.vigencia, "Eliminado")));
+          const bajas = actuales.filter((c) => !enArchivo.has(`${c.titular}|${c.rut}`)).map((c) => c.id);
+          if (bajas.length) {
+            const terminadas = await tx
+              .update(cargasAfiliado)
+              .set({ fechaTermino: sql`${hoyChile}`, vigencia: "Eliminado", updatedAt: new Date() })
+              .where(inArray(cargasAfiliado.id, bajas))
+              .returning({ id: cargasAfiliado.id });
+            r.eliminados = terminadas.length;
+          }
+        }
       }
     });
     r.duracionMs = Date.now() - inicio;
@@ -373,11 +611,16 @@ export class CargasMasivasService {
     tipos.set("vehículo", "Vehiculo");
     const validas: { fila: number; titular: string; tipo: TipoBien; identificador: string; f: Fila }[] = [];
     const vistos = new Set<string>();
+    // Registros identificables del archivo (aunque su fila tenga error): STOCK no los da de baja.
+    const enArchivo = new Set<string>();
     filas.forEach((f, i) => {
       const fila = i + 2;
       const error = (mensaje: string) => r.errores.push({ fila, mensaje });
-      if (!f.rut_titular || !rutValido(f.rut_titular)) return error(`RUT titular inválido: ${f.rut_titular ?? ""}`);
       const t = f.tipo ? tipos.get(f.tipo.toLowerCase()) : undefined;
+      if (f.rut_titular && rutValido(f.rut_titular) && t && f.identificador) {
+        enArchivo.add(`${formatearRut(f.rut_titular)}|${t}|${f.identificador.trim().toUpperCase()}`);
+      }
+      if (!f.rut_titular || !rutValido(f.rut_titular)) return error(`RUT titular inválido: ${f.rut_titular ?? ""}`);
       if (!t) return error(`Tipo de bien inválido: ${f.tipo ?? ""} (${TipoBienEnum.options.join(", ")})`);
       if (!f.identificador) return error("identificador es obligatorio");
       const fechas = this.fechasInvalidas(f, ["fecha_inicio", "fecha_termino"]);
@@ -428,18 +671,25 @@ export class CargasMasivasService {
       r.insertados = filasDb.filter((x) => x.isNew).length;
       r.actualizados = filasDb.length - r.insertados;
       if (tipo === "STOCK") {
-        const terminadas = await tx
-          .update(bienesAfiliado)
-          .set({ fechaTermino: sql`${hoyChile}`, vigencia: "Eliminado", updatedAt: new Date() })
-          .where(
-            and(
-              eq(bienesAfiliado.codPlan, codPlan),
-              ne(bienesAfiliado.vigencia, "Eliminado"),
-              filasDb.length ? notInArray(bienesAfiliado.id, filasDb.map((x) => x.id)) : undefined,
-            ),
-          )
-          .returning({ id: bienesAfiliado.id });
-        r.eliminados = terminadas.length;
+        // Igual que las cargas: se conservan los bienes identificables del archivo.
+        if (enArchivo.size === 0) {
+          r.errores.push({ fila: 0, mensaje: "Carga STOCK sin registros identificables: no se dio de baja ningún bien" });
+        } else {
+          const actuales = await tx
+            .select({ id: bienesAfiliado.id, tipo: bienesAfiliado.tipo, identificador: bienesAfiliado.identificador, titular: afiliados.rut })
+            .from(bienesAfiliado)
+            .innerJoin(afiliados, eq(afiliados.id, bienesAfiliado.afiliadoId))
+            .where(and(eq(bienesAfiliado.codPlan, codPlan), ne(bienesAfiliado.vigencia, "Eliminado")));
+          const bajas = actuales.filter((b) => !enArchivo.has(`${b.titular}|${b.tipo}|${b.identificador}`)).map((b) => b.id);
+          if (bajas.length) {
+            const terminadas = await tx
+              .update(bienesAfiliado)
+              .set({ fechaTermino: sql`${hoyChile}`, vigencia: "Eliminado", updatedAt: new Date() })
+              .where(inArray(bienesAfiliado.id, bajas))
+              .returning({ id: bienesAfiliado.id });
+            r.eliminados = terminadas.length;
+          }
+        }
       }
     });
     r.duracionMs = Date.now() - inicio;
@@ -447,7 +697,8 @@ export class CargasMasivasService {
     return r;
   }
 
-  // Aviso en la aplicación a quienes ejecutan cargas (el correo a operaciones@ queda para SES).
+  // Aviso en la aplicación a quienes ejecutan cargas y correo con el resumen (RUT nuevos y
+  // terminados) a ellos y a la casilla de operaciones (Anexo §III l.308).
   private async notificar(r: CargaMasivaResultado): Promise<void> {
     const destinatarios = await this.db
       .select({ id: usuarios.id })
@@ -471,6 +722,24 @@ export class CargasMasivasService {
         metadata: { carga: { entidad: r.entidad, tipo: r.tipo, insertados: r.insertados, actualizados: r.actualizados, eliminados: r.eliminados, errores: r.errores.length } },
       })),
     );
+    if (this.correos) {
+      await this.correos.aUsuarios(
+        destinatarios.map((u) => u.id),
+        plantillaResumenCarga({
+          entidad: r.entidad,
+          tipo: r.tipo,
+          codPlan: r.codPlan,
+          total: r.totalRegistros,
+          insertados: r.insertados,
+          actualizados: r.actualizados,
+          eliminados: r.eliminados,
+          errores: r.errores.length,
+          rutsNuevos: r.rutsNuevos ?? [],
+          rutsEliminados: r.rutsEliminados ?? [],
+        }),
+        { plantilla: "carga.resumen", casillas: ["operaciones"] },
+      );
+    }
   }
 
   // Reporte de la carga (Anexo §III: resumen y filas con error en XLSX).
@@ -504,6 +773,10 @@ export class CargasMasivasService {
         ],
         filas: r.errores,
       },
+      ...(r.rutsNuevos?.length ? [{ nombre: "RUT nuevos", columnas: [{ titulo: "RUT", valor: (x: string) => x, ancho: 16 }], filas: r.rutsNuevos }] : []),
+      ...(r.rutsEliminados?.length
+        ? [{ nombre: "RUT terminados", columnas: [{ titulo: "RUT", valor: (x: string) => x, ancho: 16 }], filas: r.rutsEliminados }]
+        : []),
     ]);
   }
 }

@@ -58,13 +58,15 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 
 ## Fase 2 — Comunicaciones por correo (~1,5 semanas)
 
-- [ ] Servicio de correo (SES en producción; proveedor alternativo para la demo), plantillas en español y bitácora de envíos por atención.
-- [ ] Aranceles: al enviar (a AJ), al aprobar (`aprueba.arancel@`), al rechazar con motivo (a AR), al registrar el pago (AR y jefatura). (§IX)
-- [ ] Provisiones: solicitud (`solicitud.fondos@`), autorización (`autoriza.provision@`, EF, GAF), disponible (AR, AJ), recordatorio antes de 48 h, reversión (EF), entrega. (§X)
-- [ ] Asignación de abogado y aviso a jefatura de entrevistas/correos/chats. (§VI l.667, §VIII l.980)
-- [ ] Cliente: presentación del abogado, formulario de antecedentes (y cuestionario de divorcio), inicio y término de gestiones, informe final. (§VI l.537, §VII, §VIII l.1125)
-- [ ] Resumen de cargas masivas a `operaciones@`, con RUT nuevos y eliminados. (§III l.308)
-- [ ] Aviso al administrador de errores de funcionamiento. (§I l.66)
+> Ya existe `NotificacionesService` (SES; con `SES_ENABLED=false` solo registra en el log) y lo usan el enlace de acceso y los vencimientos. Falta conectarlo a los flujos: los avisos en la aplicación de cada etapa ya están (revisión 24-11).
+
+- [x] Servicio de correo (SES en producción; proveedor alternativo para la demo), plantillas en español y bitácora de envíos por atención. *(SES; sin `SES_ENABLED` el correo queda "no enviado" en la bitácora. Falta configurar SES y las casillas `CORREO_*` en producción.)*
+- [x] Aranceles: al enviar (a AJ), al aprobar (`aprueba.arancel@`), al rechazar con motivo (a AR), al registrar el pago (AR y jefatura). (§IX)
+- [x] Provisiones: solicitud (`solicitud.fondos@`), autorización (`autoriza.provision@`, EF, GAF), disponible (AR, AJ), recordatorio antes de 48 h, reversión (EF), entrega. (§X)
+- [x] Asignación de abogado y aviso a jefatura de entrevistas/correos/chats. (§VI l.667, §VIII l.980)
+- [ ] Cliente: presentación del abogado, formulario de antecedentes (y cuestionario de divorcio), inicio y término de gestiones, informe final. (§VI l.537, §VII, §VIII l.1125) — *hecho: presentación, solicitud de antecedentes, inicio/término de gestiones marcadas y correo de término. Falta: el formulario oficial y el cuestionario de divorcio (documentos del cliente) y el informe final en PDF.*
+- [x] Resumen de cargas masivas a `operaciones@`, con RUT nuevos y eliminados. (§III l.308)
+- [x] Aviso al administrador de errores de funcionamiento. (§I l.66)
 
 ## Fase 3 — Controles y plazos del negocio (~1 semana)
 
@@ -78,27 +80,27 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 
 ## Fase 4 — Finanzas completas (~1,5 semanas + WebPay)
 
-- [ ] Comprobantes PDF: recibo de arancel (2 copias), entrega de fondos, rendición al cliente (3 copias). (§IX l.1445, §X l.1585, l.1811)
-- [ ] Cierre con el cliente: "Rendir cliente", cheque de devolución validando saldo 0, estados Reingresado y Rendido a cliente. (§X l.1740–1830)
-- [ ] Cuenta corriente por abogado; cuotas y referencia de transferencia en pagos. (§X l.1566, l.1703)
-- [ ] Separar roles EF y GAF; registro de saldo devuelto solo por EC. (§X l.1488, l.1740)
+- [x] Comprobantes PDF: recibo de arancel (2 copias), entrega de fondos, rendición al cliente (3 copias). (§IX l.1445, §X l.1585, l.1811)
+- [x] Cierre con el cliente: "Rendir cliente", cheque de devolución validando saldo 0, estados Reingresado y Rendido a cliente. (§X l.1740–1830)
+- [x] Cuenta corriente por abogado; cuotas y referencia de transferencia en pagos. (§X l.1566, l.1703)
+- [x] Separar roles EF y GAF; registro de saldo devuelto solo por EC. (§X l.1488, l.1740)
 - [ ] WebPay real: link de pago al cliente, registro automático del pago, camino alternativo a casa central. (§IX l.1352–1380) — *depende de Transbank*
 
 ## Fase 5 — Búsquedas, reportes y cargas (~1 semana)
 
-- [ ] Columnas en pantalla equivalentes al Excel; columna "Bienes" en asesorías y juicios. (§XI)
-- [ ] Filtros "tipo de atención" (aranceles, provisiones) y "tipo de pago" (WebPay). (§IX l.1423, §XI)
-- [ ] Búsquedas de afiliados con coberturas y materias del plan; solo planes vigentes. (§XI l.1926–1955)
-- [ ] Estado de derivación con todas las etapas y fechas. (§XI ~l.1905)
-- [ ] Informe de afiliados con selección de campos y hoja resumen; listados de atenciones y RUT en reportes. (§XII, §XIII)
-- [ ] Carga masiva de coberturas y de atenciones; campo Ciudad; maestros región/ciudad/comuna; canales editables. (§I l.54, §II l.141, l.150)
-- [ ] Stock: no dar de baja un RUT que viene en el archivo con error de validación. (§III l.293)
+- [x] Columnas en pantalla equivalentes al Excel; columna "Bienes" en asesorías y juicios. (§XI)
+- [x] Filtros "tipo de atención" (aranceles, provisiones) y "tipo de pago" (WebPay). (§IX l.1423, §XI)
+- [x] Búsquedas de afiliados con coberturas y materias del plan; solo planes vigentes. (§XI l.1926–1955)
+- [x] Estado de derivación con todas las etapas y fechas. (§XI ~l.1905)
+- [x] Informe de afiliados con selección de campos y hoja resumen; listados de atenciones y RUT en reportes. (§XII, §XIII)
+- [x] Carga masiva de coberturas y de atenciones; campo Ciudad; maestros región/ciudad/comuna; canales editables. (§I l.54, §II l.141, l.150)
+- [x] Stock: no dar de baja un RUT que viene en el archivo con error de validación. (§III l.293)
 
 ## Fase 6 — Agenda, comité y telefonía (~2 semanas; requiere levantamiento)
 
-- [ ] Agenda de citas por abogado y jefatura; calendario mensual de audiencias. (§IV l.358, §VI l.662, §VIII l.1130)
-- [ ] Comité como bitácora: compromisos con plazo y responsable, validación en la sesión siguiente. (§VII l.951, §VIII l.1142)
-- [ ] Central telefónica: "Obtener grabación" por anexo y "Mantención de audio". (§VI l.583, l.619) — *depende del proveedor*
+- [x] Agenda de citas por abogado y jefatura; calendario mensual de audiencias. (§IV l.358, §VI l.662, §VIII l.1130)
+- [x] Comité como bitácora: compromisos con plazo y responsable, validación en la sesión siguiente. (§VII l.951, §VIII l.1142)
+- [ ] Central telefónica: "Obtener grabación" por anexo y "Mantención de audio". (§VI l.583, l.619) — *depende del proveedor: falta saber qué central usa LegalChile (API de grabaciones, identificación por anexo y formato del audio)*
 
 ## Fase 7 — Producción (~2–3 semanas, en paralelo desde fase 2)
 
@@ -133,3 +135,18 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 | 2026-11-23 | 3 | Arancel impago: solo gestiones de contacto con el cliente; provisión solicitada e impaga impide iniciar la tramitación del juicio | 4595685 |
 | 2026-11-23 | 3 | Sin cobertura del plan: autorización de Gerencia de Servicios (migración 0023, permiso `atenciones.autorizar_sin_cobertura`); rechazada, solo se abandona | 8586669 |
 | 2026-11-23 | 3 | Bloqueo tras 3 intentos fallidos (enlace ya usado o vencido) con aviso a los administradores; avisos de sistema sin plan (migración 0024) | 6f8910a |
+| 2026-11-23 | 4 | Comprobantes PDF de pago del arancel y de recepción de provisión (2 copias); rendición al cliente pendiente con el cierre | 37ee781 |
+| 2026-11-23 | 4 | Cierre con el cliente: reingreso del saldo por el contador (Reingresado), Rendir cliente, cheque por el saldo total, comprobante de rendición (3 copias) y Rendido a cliente (migración 0025) | b32eab9 |
+| 2026-11-23 | 4 | Pagos de arancel y provisión: diálogo con medio, fecha, cuotas y referencia (obligatoria en transferencias; migración 0026) | bb13679 |
+| 2026-11-23 | 4 | Cuenta corriente por abogado, comprobante de entrega de fondos (2 copias) y perfil Ejecutivo de Finanzas separado de Gerencia de Finanzas (migración 0027). Fase 4 completa salvo WebPay | 94632f0 (PR #15) |
+| 2026-11-23 | 5 | STOCK conserva lo que viene en el archivo aunque su fila tenga error; cargas y bienes ya no dan de baja todo el plan si ninguna fila es válida | 28a3682 |
+| 2026-11-23 | 5 | Filtro por tipo de atención en aranceles y provisiones (pantalla y Excel) y por tipo de pago en WebPay | 1679bc1 |
+| 2026-11-23 | 5 | Estado de derivación con todas las etapas y fechas (solicitud, resolución, contacto, arancel, primera gestión, término) en pantalla y Excel | 36b785e |
+| 2026-11-23 | 5 | Búsquedas de consultas, asesorías y juicios con las columnas del Excel (afiliado, plan/canal, abogado, organismo/tribunal, derivación) y columna Bienes en pantalla y Excel | 4d7220a |
+| 2026-11-23 | 5 | Búsqueda de afiliados por plan o canal y ficha del afiliado muestran los planes vigentes con RUT vigentes, coberturas y materias (`GET /coberturas/resumen-planes`) | 616ccdb |
+| 2026-11-23 | 5 | Informe de afiliados (campos elegibles, hoja Resumen por plan con altas y términos); los Excel por plan y canal traen el listado de atenciones contadas y el de afiliados por mes, la lista de RUT vigentes por canal y plan. Los reportes ya no cuentan relaciones ni afiliados eliminados | 4c85129 |
+| 2026-11-23 | 5 | Canales editables y maestros de regiones (16 precargadas), ciudades y comunas por región; campo Ciudad en afiliados (formulario, carga masiva, Excel e informe) (migración 0028) | 8c166e2 |
+| 2026-11-23 | 5 | Carga masiva de coberturas (FLUJO reemplaza, STOCK desactiva ausentes; exige `coberturas.administrar`) y de atenciones (solo FLUJO, por `AtencionesService.crear`). Fase 5 completa salvo comité obligatorio (decisión del cliente) | 169f29a |
+| 2026-11-24 | 6 | Agenda de citas (entrevistas, videollamadas, reuniones, audiencias y comparendos) con calendario mensual, topes, alcance por equipo, aviso de audiencias y Excel; comité como bitácora de compromisos con responsable y plazo, validados en el comité siguiente y con aviso de vencidos (migración 0029) | 15cdd91 |
+| 2026-11-24 | 2–3 | Avisos en la aplicación de los flujos de arancel y provisiones, consultas a la jefatura y errores 500 a administradores; reglas: provisión impaga detiene asesorías, procedimiento en juicios, cierre de comité marca "Revisado", espera de antecedentes en consultas, V°B° de la primera presentación y comprobante obligatorio en gastos (migración 0030). Cruce del detalle: 66 filas marcadas como cumplidas | 6da29a5, 094acd1, 90d8019 |
+| 2026-11-24 | 2 | Correos de los flujos sobre SES con plantillas en español y bitácora por atención (`correos_enviados`): arancel (con aprueba.arancel@), provisiones (solicitud.fondos@, autoriza.provision@), rendición al cliente, asignación de abogado, consultas a la jefatura, primera presentación, errores a administradores y resumen de cargas a operaciones@ con RUT nuevos y terminados. Al cliente: presentación del abogado, solicitud de antecedentes, inicio y término de gestiones marcadas y término de la atención (migraciones 0031–0032) | 27ec343 |

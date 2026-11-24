@@ -31,6 +31,7 @@ export const afiliados = pgTable(
     telefono: varchar("telefono", { length: 20 }),
     direccion: varchar("direccion", { length: 250 }),
     comuna: varchar("comuna", { length: 80 }),
+    ciudad: varchar("ciudad", { length: 80 }),
     region: varchar("region", { length: 80 }),
     fechaNacimiento: date("fecha_nacimiento"),
     vigencia: vigenciaAfiliadoEnum("vigencia").notNull().default("Activo"),

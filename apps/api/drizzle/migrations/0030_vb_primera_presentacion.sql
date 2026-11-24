@@ -1,0 +1,1 @@
+ALTER TABLE "atenciones" ADD COLUMN "vb_primera_presentacion" jsonb;

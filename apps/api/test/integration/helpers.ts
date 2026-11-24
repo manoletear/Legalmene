@@ -4,6 +4,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { calcularDv } from "../../src/common/utils/rut";
 import { competencias, materias } from "../../src/db/schema/maestros";
 import { perfiles, perfilPermisos, usuarios } from "../../src/db/schema/usuarios";
+import { documentos } from "../../src/db/schema/documentos";
 
 // RUT válido y distinto en cada llamada: el RUT es único global y los specs corren
 // en paralelo sobre la misma base. Rango 40–49 millones para no chocar con el seed.
@@ -17,8 +18,10 @@ export function planAleatorio(prefijo = "TEST"): string {
 }
 
 // Fecha AAAA-MM-DD desplazada en días desde hoy (UTC; los tests usan márgenes de varios días).
+// Fecha (AAAA-MM-DD) a `dias` de hoy en Chile: las vigencias se evalúan con la fecha de Chile,
+// que entre las 21:00 y la medianoche no coincide con la de UTC.
 export function fechaRelativa(dias: number): string {
-  return new Date(Date.now() + dias * 86_400_000).toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(new Date(Date.now() + dias * 86_400_000));
 }
 
 export interface MateriaPrueba {
@@ -41,6 +44,8 @@ export async function borrarMateriaDePrueba(db: NodePgDatabase<any>, ids: Materi
   await db.execute(sql`DELETE FROM aranceles WHERE materia_id IN (SELECT id FROM materias WHERE competencia_id = ${ids.competenciaId})`);
   await db.execute(sql`DELETE FROM gestiones_plantilla WHERE materia_id IN (SELECT id FROM materias WHERE competencia_id = ${ids.competenciaId})`);
   await db.execute(sql`DELETE FROM coberturas WHERE materia_id IN (SELECT id FROM materias WHERE competencia_id = ${ids.competenciaId})`);
+  await db.execute(sql`DELETE FROM gestiones_plantilla WHERE procedimiento_id IN (SELECT id FROM procedimientos WHERE competencia_id = ${ids.competenciaId})`);
+  await db.execute(sql`DELETE FROM procedimientos WHERE competencia_id = ${ids.competenciaId}`);
   await db.execute(sql`DELETE FROM materias WHERE competencia_id = ${ids.competenciaId}`);
   await db.execute(sql`DELETE FROM competencias WHERE id = ${ids.competenciaId}`);
 }
@@ -71,5 +76,26 @@ export async function borrarAtencionesDePlan(db: NodePgDatabase<any>, codPlan: s
   await db.execute(sql`DELETE FROM aranceles_atencion_eventos WHERE arancel_atencion_id IN (SELECT id FROM aranceles_atencion WHERE atencion_id IN ${ids})`);
   await db.execute(sql`DELETE FROM aranceles_atencion WHERE atencion_id IN ${ids}`);
   await db.execute(sql`DELETE FROM provisiones WHERE atencion_id IN ${ids}`);
+  await db.execute(sql`DELETE FROM rendiciones_cliente WHERE atencion_id IN ${ids}`);
+  await db.execute(sql`DELETE FROM documentos WHERE atencion_id IN ${ids}`);
   await db.execute(sql`DELETE FROM atenciones WHERE cod_plan = ${codPlan}`);
+}
+
+// Comprobante (documento) de una atención, para registrar gastos de provisión.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function comprobanteDePrueba(db: NodePgDatabase<any>, atencionId: string, subidoPor: string): Promise<string> {
+  const [d] = await db
+    .insert(documentos)
+    .values({
+      atencionId,
+      nombre: "comprobante.pdf",
+      mimeType: "application/pdf",
+      tamanoBytes: 1,
+      s3Bucket: "test",
+      s3Key: `test/${atencionId}/${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`,
+      sha256: "0".repeat(64),
+      subidoPor,
+    })
+    .returning({ id: documentos.id });
+  return d.id;
 }

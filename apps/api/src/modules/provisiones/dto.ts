@@ -1,6 +1,7 @@
 import { CriteriosBusquedaSchema } from "@legalmene/shared";
 import {
-  DevolucionSchema,
+  ChequeDevolucionSchema,
+  ReingresoSchema,
   EntregaSchema,
   EstadoProvisionEnum,
   ObservacionSchema,
@@ -18,7 +19,8 @@ export class PagoClienteDto extends createZodDto(PagoClienteSchema) {}
 export class ObservacionDto extends createZodDto(ObservacionSchema) {}
 export class RechazoDto extends createZodDto(RechazoSchema) {}
 export class EntregaDto extends createZodDto(EntregaSchema) {}
-export class DevolucionDto extends createZodDto(DevolucionSchema) {}
+export class ChequeDevolucionDto extends createZodDto(ChequeDevolucionSchema) {}
+export class ReingresoDto extends createZodDto(ReingresoSchema) {}
 
 export const FiltroProvisionesSchema = CriteriosBusquedaSchema.extend({
   page: z.coerce.number().int().min(1).default(1),

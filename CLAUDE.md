@@ -119,9 +119,11 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   vigente = vigencia Activo, fecha_inicio ≤ hoy (Chile), sin término o término ≥ hoy, y plan
   vigente. Sin planes vigentes, la atención solo puede ir como `REZAGADO` o `METLIFE`.
   Correlativos son globales por tipo/año.
-- **Maestros**: competencias, materias, etc. son tablas con `vigente` (nunca enums ni listas
+- **Maestros**: competencias, materias, canales, regiones, ciudades y comunas, etc. son tablas con `vigente` (nunca enums ni listas
   fijas en el frontend). Leerlos con `GET /maestros/:tipo`; modificarlos exige `maestros.administrar`.
   Desactivar oculta el valor en formularios nuevos sin tocar registros históricos.
+  Ciudades y comunas cuelgan de una región; el afiliado guarda región, ciudad y comuna como texto (listas editables en el
+  formulario) para no depender del maestro en cargas masivas ni en datos históricos.
 - **Aranceles y copago**: el arancel es por materia (+ tipo opcional; el específico gana) y es
   igual para todos los planes. El copago sale de `calcularCopago()`
   (`modules/coberturas/copago.ts`): regla del plan más específica (materia+tipo → materia →
@@ -140,7 +142,12 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   `ProvisionesService` (mapas `TRANSICIONES_ARANCEL` / `TRANSICIONES_PROVISION` en shared); cada
   cambio escribe su fila de eventos. Aprobar exige `aranceles_atencion.aprobar` / `provisiones.autorizar`
   (jefaturas); registrar pagos `*.registrar_pago` (Contador); disponer y entregar fondos
-  `provisiones.disponer_entregar` (Finanzas). El CLP de un arancel usa la UF de la fecha de pago.
+  `provisiones.disponer_entregar` (Finanzas). El CLP de un arancel usa la UF de la fecha de pago. Cuenta de la atención = pagado por el cliente − gastos −
+  devuelto al cliente. El abogado solo registra gastos y rinde; el saldo no gastado lo registra el contador como
+  reingreso (`provisiones.registrar_pago`, estado Reingresado). Rendición al cliente (`rendiciones_cliente`): el
+  abogado la solicita, Finanzas registra el cheque por el saldo total (sin fondos por rendir/reingresar ni entregas
+  en curso) y el abogado marca "rendido a cliente" (provisiones → RendidaCliente). Comprobantes PDF con
+  `dibujarComprobante()` (`modules/exports/comprobantes-pdf.service.ts`).
 - **Login con enlace de acceso**: `POST /auth/enlace` siempre responde 202 (no revela si el correo
   existe); solo usuarios activos, no bloqueados y del dominio permitido reciben enlace (máx. 3 cada
   15 min). El token es de un solo uso, vence en 15 min y se guarda solo su hash (`enlaces_acceso`).
@@ -177,6 +184,25 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
 - **Cargas y bienes**: cuelgan de la relación titular–plan (`cargas_afiliado`, `bienes_afiliado`); se
   cargan por `POST /cargas-masivas/:entidad` (FLUJO/STOCK). Una atención para una carga lleva
   `carga_id`, validada en `AtencionesService.crear()` (mismo titular y plan, vigente hoy).
+  También se cargan coberturas (FLUJO reemplaza la regla de igual materia y tipo; STOCK desactiva las ausentes;
+  exige `coberturas.administrar`) y atenciones (solo FLUJO; cada fila pasa por `AtencionesService.crear()` y por el
+  permiso de crear su tipo). Las materias se buscan por nombre de competencia + materia, sin tildes ni mayúsculas.
+- **Agenda (`modules/agenda`)**: citas (Entrevista, Videollamada, Reunión, Audiencia, Comparendo, Otro) con responsable,
+  opcionalmente ligadas a una atención (visible para quien agenda) o a un afiliado. Lectura con `filtroCitas()` (propias,
+  equipo o todas, según el alcance de atenciones); se agenda para uno mismo, su equipo, cualquiera con `ver_todas` o el
+  abogado de la atención. Un responsable no tiene dos citas programadas que se crucen (409). Cancelar no borra. Audiencias y
+  comparendos avisan a quienes tienen `agenda.calendario_audiencias` (calendario mensual; Excel en `/agenda/calendario.xlsx`).
+- **Comité como bitácora**: `compromisos_comite` (descripción, responsable, plazo). Los registra un participante o quien
+  convoca, solo con el comité abierto; se validan (Cumplido/NoCumplido) en un comité posterior de la misma atención
+  (`comites.convocar`), nunca en el mismo, y un comité no se cierra con compromisos anteriores sin validar. Los vencidos se
+  avisan cada día hábil.
+- **Correos (`modules/correos`)**: todo correo de negocio sale por `CorreosService` (plantillas en `plantillas.ts`, datos con
+  `escaparHtml()`), que registra cada envío en `correos_enviados` (sin el cuerpo; "Omitido" si SES está desactivado). Los avisos
+  de flujo usan `avisar(notif, destinatarios, aviso, actor, { servicio: this.correos, casillas, atencionId })`
+  (`notif-inbox/destinatarios.ts`): mismo aviso en la aplicación y por correo, nunca a quien hizo la acción. Las casillas
+  institucionales (`aprueba.arancel@`, `solicitud.fondos@`, `autoriza.provision@`, `operaciones@`) vienen de `CORREO_*`.
+  Al cliente solo van la presentación del abogado, la solicitud de antecedentes, el inicio/término de gestiones con
+  `informarCliente` y el término de la atención.
 - **Posesión efectiva**: es un tipo de atención (`PosesionEfectiva`, prefijo POSE); causante y
   herederos se manejan solo vía `PosesionesService`. La ficha PDF es un resumen interno, nunca el
   formulario oficial del Registro Civil.
@@ -231,7 +257,7 @@ y el detalle requisito por requisito en `docs/cumplimiento-anexo-detalle.md`. El
 `docs/requerimientos-anexo-psl.md` §5. Pendientes técnicos:
 
 1. Integración real Transbank WebPay (reemplazar stub en `pagos.service.ts`).
-2. Notificaciones por correo de vencimientos y flujos (SES), incluido el resumen de cargas masivas.
+2. Correos en producción: activar SES (`SES_ENABLED`, `SES_FROM`) y las casillas `CORREO_*`; formularios oficiales al cliente (antecedentes, cuestionario de divorcio) e informe final en PDF.
 3. AWS CDK en `infra/` para Aurora + ECS + ALB + S3 (corregir `apps/api/Dockerfile`, que no copia `pnpm-lock.yaml`).
 4. Migración SQL Server 2008 → Aurora (AWS DMS + SCT) — ver plan en `docs/`.
 5. Formularios oficiales de posesión efectiva (discovery).

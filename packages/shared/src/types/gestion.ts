@@ -46,6 +46,8 @@ export const GestionSchema = z.object({
   fechaEjecucion: z.string().datetime().optional().nullable(),
   resultado: z.string().max(2000).optional().nullable(),
   documentosIds: z.array(z.string().uuid()).default([]),
+  // Informar al cliente por correo el inicio y el término (Anexo §VII l.1015, §VIII l.1105).
+  informarCliente: z.boolean().default(false),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

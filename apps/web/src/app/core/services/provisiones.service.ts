@@ -68,8 +68,8 @@ export class ProvisionesApiService {
     return this.http.post<Provision>(`${this.base}/provisiones/${id}/${accion}`, body);
   }
 
-  pagoCliente(id: string, medio: MedioPago) {
-    return this.accion(id, "pago-cliente", { medio });
+  pagoCliente(id: string, medio: MedioPago, datos: { fecha?: string; cuotas?: number; referencia?: string } = {}) {
+    return this.accion(id, "pago-cliente", { medio, ...datos });
   }
   solicitarEntrega(id: string) {
     return this.accion(id, "solicitar-entrega");
@@ -89,8 +89,20 @@ export class ProvisionesApiService {
   rendir(id: string) {
     return this.accion(id, "rendir");
   }
-  devolucion(id: string, numeroCheque: string) {
-    return this.accion(id, "devolucion", { numeroCheque });
+  // Anexo §X 14: el contador registra el saldo no gastado que devuelve el abogado.
+  reingreso(id: string, monto: number) {
+    return this.accion(id, "reingreso", { monto });
+  }
+
+  // Anexo §X 16–20: rendición de fondos al cliente (por atención).
+  solicitarRendicion(atencionId: string) {
+    return this.http.post(`${this.base}/atenciones/${atencionId}/rendicion-cliente`, {});
+  }
+  chequeDevolucion(atencionId: string, numeroCheque: string) {
+    return this.http.post(`${this.base}/atenciones/${atencionId}/rendicion-cliente/cheque`, { numeroCheque });
+  }
+  rendidoCliente(atencionId: string) {
+    return this.http.post(`${this.base}/atenciones/${atencionId}/rendicion-cliente/entregada`, {});
   }
 
   eventos(id: string): Observable<EventoFinanciero[]> {

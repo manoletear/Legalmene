@@ -6,9 +6,11 @@ import type {
   Competencia,
   CreateGestionPlantilla,
   GestionPlantilla,
+  Lugar,
   MaestroSimple,
   Materia,
   Procedimiento,
+  Region,
   TipoAtencion,
   Tribunal,
   UpdateGestionPlantilla,
@@ -22,11 +24,16 @@ export type TipoMaestro =
   | "organismos"
   | "tipos-consulta"
   | "causas-termino"
-  | "calidades-procesales";
+  | "calidades-procesales"
+  | "canales"
+  | "regiones"
+  | "ciudades"
+  | "comunas";
 
 export interface FiltroMaestro {
   vigente?: boolean;
   competenciaId?: string;
+  regionId?: string;
   aplicaA?: TipoAtencion;
 }
 
@@ -39,6 +46,10 @@ interface PorTipo {
   "tipos-consulta": MaestroSimple;
   "causas-termino": MaestroSimple;
   "calidades-procesales": MaestroSimple;
+  canales: MaestroSimple;
+  regiones: Region;
+  ciudades: Lugar;
+  comunas: Lugar;
 }
 
 @Injectable({ providedIn: "root" })

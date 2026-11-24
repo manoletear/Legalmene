@@ -17,9 +17,13 @@ import { DividerModule } from "primeng/divider";
 import { TabsModule } from "primeng/tabs";
 import { MessageService } from "primeng/api";
 import { PromptService } from "../../shared/prompt.service";
-import { AtencionesApiService } from "../../core/services/atenciones.service";
+import { descargarArchivo } from "../../shared/descarga";
+import { PagoDialogService } from "../../shared/pago-dialog.component";
+import type { Observable } from "rxjs";
+import { AtencionesApiService, type CorreoEnviado } from "../../core/services/atenciones.service";
 import { GestionesApiService } from "../../core/services/gestiones.service";
-import { ComitesApiService } from "../../core/services/comites.service";
+import { ComitePanelComponent } from "./comite-panel.component";
+import { CitasAtencionComponent } from "./citas-atencion.component";
 import { DocumentosApiService, DocumentoMeta } from "../../core/services/documentos.service";
 import { ProvisionesApiService } from "../../core/services/provisiones.service";
 import { MeService } from "../../core/services/me.service";
@@ -31,7 +35,6 @@ import {
   ETAPAS_PIPELINE,
   ESTADOS_TERMINALES,
   type FichaAtencion,
-  type Comite,
   type CopagoResultado,
   type EstadoAtencion,
   type Gestion,
@@ -42,6 +45,8 @@ import {
   ESTADO_ARANCEL_LABEL,
   TIPO_GESTION_LABEL,
   TIPO_PLAZO_LABEL,
+  ESTADO_RENDICION_CLIENTE_LABEL,
+  type EstadoRendicionCliente,
   type PlazoAtencion,
   TipoGestionEnum,
   type TipoGestion,
@@ -84,6 +89,8 @@ interface PipelineStep {
     DialogModule,
     RouterLink,
     PermisoDirective,
+    ComitePanelComponent,
+    CitasAtencionComponent,
     CardModule,
     TagModule,
     ButtonModule,
@@ -219,6 +226,10 @@ interface PipelineStep {
                 <div *ngIf="ar.estado === 'Pagado'" class="lm-small lm-muted">
                   Pagado {{ ar.fechaPago | date: 'dd/MM/yyyy' }} · {{ ar.medioPago }} · $ {{ ar.montoClp | number }}
                 </div>
+                <ng-container *ngIf="ar.estado === 'Pagado' && ar.medioPago !== 'WebPay'">
+                  <button *lmPermiso="'finanzas.ver'" pButton size="small" [text]="true" icon="pi pi-print" label="Imprimir comprobante"
+                    (click)="imprimirComprobanteArancel(a.id, a.correlativo)"></button>
+                </ng-container>
                 <div class="lm-row" style="gap:4px; flex-wrap:wrap; margin-top:6px;">
                   <button *ngIf="ar.estado === 'Requerido' && me.tiene('aranceles_atencion.enviar')" pButton size="small" [outlined]="true" label="Enviar a aprobación" (click)="accionArancel(a.id, 'enviar')"></button>
                   <ng-container *ngIf="ar.estado === 'EnAprobacion' && me.tiene('aranceles_atencion.aprobar')">
@@ -239,6 +250,31 @@ interface PipelineStep {
                 <div *ngIf="r.reintegrado > 0" class="lm-info-row"><span>Devuelto</span><strong>$ {{ r.reintegrado | number }}</strong></div>
                 <div class="lm-info-row"><span>Saldo por rendir</span><strong [style.color]="r.saldoPorRendir > 0 ? '#b45309' : '#16a34a'">$ {{ r.saldoPorRendir | number }}</strong></div>
                 <div *ngIf="r.pendientePago > 0" class="lm-info-row"><span>Pendiente de pago</span><strong style="color:#b45309;">$ {{ r.pendientePago | number }}</strong></div>
+                <div *ngIf="r.pendienteReingreso > 0" class="lm-info-row"><span>Saldo por reingresar</span><strong style="color:#b45309;">$ {{ r.pendienteReingreso | number }}</strong></div>
+                <div class="lm-info-row" data-testid="saldo-cuenta"><span>Saldo de la cuenta</span><strong>$ {{ r.saldoCuenta | number }}</strong></div>
+                <div *ngIf="r.rendidoCliente > 0" class="lm-info-row"><span>Devuelto al cliente</span><strong>$ {{ r.rendidoCliente | number }}</strong></div>
+                <!-- Rendición al cliente (Anexo §X 16–20) -->
+                <div class="lm-small" data-testid="rendicion-cliente" style="margin-top:6px;">
+                  <ng-container *ngIf="r.rendicion as rc; else sinRendicion">
+                    <strong>{{ estadoRendicion(rc.estado) }}</strong>
+                    <span *ngIf="rc.numeroCheque" class="lm-muted"> · cheque {{ rc.numeroCheque }} por $ {{ rc.monto | number }}</span>
+                    <div class="lm-row" style="gap:4px; flex-wrap:wrap; margin-top:4px;">
+                      <ng-container *ngIf="rc.estado === 'Solicitada'">
+                        <button *lmPermiso="'provisiones.disponer_entregar'" pButton size="small" [outlined]="true" label="Cheque devolución" (click)="chequeDevolucion(a.id)"></button>
+                      </ng-container>
+                      <ng-container *ngIf="rc.estado !== 'Solicitada'">
+                        <button *lmPermiso="'finanzas.ver'" pButton size="small" [text]="true" icon="pi pi-print" label="Comprobante de rendición" (click)="comprobanteRendicion(a.id, a.correlativo)"></button>
+                      </ng-container>
+                      <ng-container *ngIf="rc.estado === 'ChequeEmitido'">
+                        <button *lmPermiso="'provisiones.rendir'" pButton size="small" [outlined]="true" label="Rendido a cliente" (click)="rendidoCliente(a.id)"></button>
+                      </ng-container>
+                    </div>
+                  </ng-container>
+                  <ng-template #sinRendicion></ng-template>
+                  <ng-container *ngIf="r.saldoCuenta > 0 && (!r.rendicion || r.rendicion.estado === 'Entregada')">
+                    <button *lmPermiso="'provisiones.rendir'" pButton size="small" [outlined]="true" label="Rendir cliente" (click)="solicitarRendicion(a.id)"></button>
+                  </ng-container>
+                </div>
               </ng-container>
               <div class="lm-info-card-footer">
                 <a style="cursor:pointer;" (click)="solicitarProvision(a.id)">Solicitar provisión</a> ·
@@ -275,6 +311,7 @@ interface PipelineStep {
                 <p-tab value="gestiones">Gestiones</p-tab>
                 <p-tab value="documentos">Documentos</p-tab>
                 <p-tab value="comite">Comité</p-tab>
+                <p-tab value="agenda" *lmPermiso="'agenda.ver'">Agenda</p-tab>
                 <p-tab value="historial">Historial</p-tab>
               </p-tablist>
               <p-tabpanels>
@@ -340,20 +377,28 @@ interface PipelineStep {
                 </p-tabpanel>
 
                 <p-tabpanel value="comite">
-                  <div class="lm-row" style="margin-bottom:12px;">
-                    <button pButton [outlined]="true" label="Convocar comité" (click)="convocarComite(a.id)"></button>
-                  </div>
-                  <div *ngFor="let c of comites()" style="margin-bottom:12px; padding:12px; border:1px solid #e2e8f0; border-radius:8px;">
-                    <div class="lm-row">
-                      <strong>Comité del {{ c.fechaConvocatoria | date: 'short' }}</strong>
-                      <p-tag [value]="c.estado"></p-tag>
-                      <p-tag [value]="c.decision" [severity]="decisionSeverity(c.decision)"></p-tag>
-                    </div>
-                    <p class="lm-small" style="margin:8px 0 0;">{{ c.motivo }}</p>
-                  </div>
+                  <lm-comite-panel [atencionId]="a.id"></lm-comite-panel>
+                </p-tabpanel>
+
+                <p-tabpanel value="agenda">
+                  <lm-citas-atencion [atencionId]="a.id" [abogadoId]="a.abogadoAsignadoId ?? null"></lm-citas-atencion>
                 </p-tabpanel>
 
                 <p-tabpanel value="historial">
+                  <div class="lm-row" style="margin-bottom:12px; gap:8px; flex-wrap:wrap;">
+                    <h4 style="margin:0;" class="lm-grow">Correos enviados</h4>
+                    <button *lmPermiso="'atenciones.editar'" pButton size="small" [outlined]="true" icon="pi pi-envelope"
+                      label="Solicitar antecedentes al cliente" (click)="solicitarAntecedentes(a.id)"></button>
+                  </div>
+                  <p *ngIf="!correos().length" class="lm-muted lm-small">Sin correos enviados.</p>
+                  <table *ngIf="correos().length" class="lm-small" style="width:100%; border-collapse:collapse; margin-bottom:16px;" data-testid="correos">
+                    <tr *ngFor="let c of correos()" style="border-bottom:1px solid #f1f5f9;">
+                      <td style="padding:6px 4px; white-space:nowrap;">{{ c.createdAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+                      <td style="padding:6px 4px;">{{ c.asunto }}</td>
+                      <td style="padding:6px 4px;" class="lm-muted">{{ c.destinatarios.join(', ') }}</td>
+                      <td style="padding:6px 4px;"><p-tag [value]="c.estado === 'Omitido' ? 'No enviado (sin SES)' : c.estado" [severity]="c.estado === 'Enviado' ? 'success' : c.estado === 'Error' ? 'danger' : 'secondary'"></p-tag></td>
+                    </tr>
+                  </table>
                   <p class="lm-muted">Historial completo de la atención disponible en Auditoría.</p>
                   <a routerLink="/auditoria" style="color:#2563eb;">Ir a Auditoría →</a>
                 </p-tabpanel>
@@ -456,6 +501,10 @@ interface PipelineStep {
           <label class="lm-col" style="gap:4px; flex:1; min-width:160px;">Fecha de inicio *<input pInputText type="date" name="ngInicio" [(ngModel)]="ng.inicio" /></label>
           <label class="lm-col" style="gap:4px; flex:1; min-width:160px;">Fecha de compromiso<input pInputText type="date" name="ngCompromiso" [(ngModel)]="ng.compromiso" [min]="ng.inicio" /></label>
         </div>
+        <label class="lm-row lm-small" style="gap:6px; align-items:center;">
+          <input type="checkbox" name="ngInformar" [(ngModel)]="ng.informarCliente" />
+          Informar al cliente por correo el inicio y el término
+        </label>
         <div style="display:flex; justify-content:flex-end; gap:8px;">
           <button pButton label="Cancelar" [text]="true" (click)="ngVisible.set(false)"></button>
           <button pButton label="Crear gestión" icon="pi pi-check" [disabled]="!ng.titulo.trim() || !ng.responsableId || !ng.inicio" [loading]="ngGuardando()" (click)="crearGestion()"></button>
@@ -481,10 +530,10 @@ export class AtencionDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private api = inject(AtencionesApiService);
   private gestionesApi = inject(GestionesApiService);
-  private comitesApi = inject(ComitesApiService);
   private documentosApi = inject(DocumentosApiService);
   private msg = inject(MessageService);
   private prompt = inject(PromptService);
+  private pagoDialog = inject(PagoDialogService);
   private provisionesApi = inject(ProvisionesApiService);
   protected me = inject(MeService);
   private usuariosApi = inject(UsuariosAdminService);
@@ -508,7 +557,6 @@ export class AtencionDetailComponent implements OnInit {
   protected gestiones = signal<Gestion[]>([]);
   protected plazos = signal<PlazoAtencion[]>([]);
   protected contactoPendiente = computed(() => this.plazos().some((p) => p.tipo === "ContactoCliente" && !p.cumplidoEn));
-  protected comites = signal<Comite[]>([]);
   protected documentos = signal<DocumentoMeta[]>([]);
   protected uploading = signal(false);
   protected pestana = signal<string>("gestiones");
@@ -516,7 +564,8 @@ export class AtencionDetailComponent implements OnInit {
   protected hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(new Date());
   protected ngVisible = signal(false);
   protected ngGuardando = signal(false);
-  protected ng = { tipo: "Reunion" as TipoGestion, titulo: "", detalle: "", responsableId: "", inicio: "", compromiso: "" };
+  protected ng = { tipo: "Reunion" as TipoGestion, titulo: "", detalle: "", responsableId: "", inicio: "", compromiso: "", informarCliente: false };
+  protected correos = signal<CorreoEnviado[]>([]);
   protected responsableOpts = signal<{ label: string; value: string }[]>([]);
   protected completando = signal<Gestion | null>(null);
   protected cg = { resultado: "", fecha: "" };
@@ -620,10 +669,10 @@ export class AtencionDetailComponent implements OnInit {
   }
 
   cargar(id: string) {
+    this.api.correos(id).subscribe({ next: (c) => this.correos.set(c), error: () => this.correos.set([]) });
     this.api.obtener(id).subscribe((a) => this.atencion.set(a));
     this.gestionesApi.listar(id).subscribe((g) => this.gestiones.set(g));
     this.api.plazos(id).subscribe({ next: (p) => this.plazos.set(p), error: () => this.plazos.set([]) });
-    this.comitesApi.listar(id).subscribe((c) => this.comites.set(c));
     this.documentosApi.listar(id).subscribe((d) => this.documentos.set(d));
     this.api.copago(id).subscribe({ next: (c) => this.copago.set(c), error: () => this.copago.set(null) });
     this.api.arancel(id).subscribe({ next: (r) => this.arancel.set(r), error: () => this.arancel.set(null) });
@@ -670,16 +719,9 @@ export class AtencionDetailComponent implements OnInit {
       if (!motivo) return;
       req = this.api.rechazarArancel(atencionId, motivo);
     } else {
-      const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(new Date());
-      const fecha = await this.prompt.open({ header: "Registrar pago del arancel", label: "Fecha de pago (AAAA-MM-DD)", initialValue: hoy, required: true });
-      if (!fecha) return;
-      const medio = await this.prompt.open({ header: "Medio de pago", label: "WebPay, CasaCentral o Transferencia", initialValue: "CasaCentral", required: true });
-      if (!medio) return;
-      if (!["WebPay", "CasaCentral", "Transferencia"].includes(medio.trim())) {
-        this.msg.add({ severity: "warn", summary: "Medio inválido", detail: "Use WebPay, CasaCentral o Transferencia", life: 4000 });
-        return;
-      }
-      req = this.api.pagarArancel(atencionId, { fechaPago: fecha.trim(), medio: medio.trim() as "CasaCentral" });
+      const pago = await this.pagoDialog.open("Registrar pago del arancel", { detalle: "El monto en pesos se calcula con la UF del día del pago." });
+      if (!pago) return;
+      req = this.api.pagarArancel(atencionId, { fechaPago: pago.fecha, medio: pago.medio, cuotas: pago.cuotas, referencia: pago.referencia });
     }
     req.subscribe({
       next: (r) => {
@@ -705,13 +747,6 @@ export class AtencionDetailComponent implements OnInit {
     if (e === "Abandonada" || e === "Derivada") return "secondary";
     if (e.startsWith("EnEspera") || e === "EnComite") return "warn";
     return "info";
-  }
-
-  decisionSeverity(d: string): Severity {
-    if (d === "Aprobado") return "success";
-    if (d === "Rechazado") return "danger";
-    if (d === "Diferido") return "warn";
-    return "secondary";
   }
 
   formatBytes(b: number): string {
@@ -760,6 +795,51 @@ export class AtencionDetailComponent implements OnInit {
     });
   }
 
+  protected estadoRendicion(e: EstadoRendicionCliente): string {
+    return ESTADO_RENDICION_CLIENTE_LABEL[e];
+  }
+
+  private accionRendicion(req: Observable<unknown>, ok: string, atencionId: string) {
+    req.subscribe({
+      next: () => {
+        this.msg.add({ severity: "success", summary: ok, life: 3000 });
+        this.cargarProvisiones(atencionId);
+      },
+      error: (err) => this.msg.add({ severity: "error", summary: "No se pudo completar", detail: err.error?.message ?? err.message, life: 6000 }),
+    });
+  }
+
+  solicitarRendicion(atencionId: string) {
+    this.accionRendicion(this.provisionesApi.solicitarRendicion(atencionId), "Rendición solicitada; se avisó a Finanzas", atencionId);
+  }
+
+  async chequeDevolucion(atencionId: string) {
+    const cheque = await this.prompt.open({ header: "Cheque de devolución", label: "Número de cheque (por el total del saldo)", required: true });
+    if (!cheque) return;
+    this.accionRendicion(this.provisionesApi.chequeDevolucion(atencionId, cheque.trim()), "Cheque registrado; se avisó al abogado", atencionId);
+  }
+
+  rendidoCliente(atencionId: string) {
+    this.accionRendicion(this.provisionesApi.rendidoCliente(atencionId), "Fondos rendidos al cliente", atencionId);
+  }
+
+  async comprobanteRendicion(atencionId: string, correlativo: string) {
+    try {
+      await descargarArchivo(`/exports/comprobantes/rendicion/${atencionId}.pdf`, `rendicion-${correlativo}.pdf`);
+    } catch (e) {
+      this.msg.add({ severity: "error", summary: "No se pudo generar el comprobante", detail: (e as Error).message, life: 5000 });
+    }
+  }
+
+  // Anexo §IX 5.4: comprobante del pago del arancel (dos copias en el PDF).
+  async imprimirComprobanteArancel(atencionId: string, correlativo: string) {
+    try {
+      await descargarArchivo(`/exports/comprobantes/arancel/${atencionId}.pdf`, `comprobante-arancel-${correlativo}.pdf`);
+    } catch (e) {
+      this.msg.add({ severity: "error", summary: "No se pudo generar el comprobante", detail: (e as Error).message, life: 5000 });
+    }
+  }
+
   protected tipoPlazo(t: PlazoAtencion["tipo"]): string {
     return TIPO_PLAZO_LABEL[t];
   }
@@ -781,7 +861,7 @@ export class AtencionDetailComponent implements OnInit {
   // Anexo §VII l.860, §VIII l.1122: responsable, fecha de inicio y compromiso.
   abrirNuevaGestion(atencionId: string) {
     this.atencionGestion = atencionId;
-    this.ng = { tipo: "Reunion", titulo: "", detalle: "", responsableId: this.responsableId() ?? "", inicio: this.hoy, compromiso: "" };
+    this.ng = { tipo: "Reunion", titulo: "", detalle: "", responsableId: this.responsableId() ?? "", inicio: this.hoy, compromiso: "", informarCliente: false };
     this.ngVisible.set(true);
   }
 
@@ -807,6 +887,7 @@ export class AtencionDetailComponent implements OnInit {
         // El compromiso vence al final del día elegido.
         fechaCompromiso: this.ng.compromiso ? new Date(`${this.ng.compromiso}T23:59:00`).toISOString() : null,
         documentosIds: [],
+        informarCliente: this.ng.informarCliente,
       })
       .subscribe({
         next: () => {
@@ -843,20 +924,26 @@ export class AtencionDetailComponent implements OnInit {
     });
   }
 
-  async convocarComite(atencionId: string) {
-    const motivo = await this.prompt.open({
-      header: "Convocar comité",
-      label: "Motivo",
+  async solicitarAntecedentes(atencionId: string) {
+    const antecedentes = await this.prompt.open({
+      header: "Solicitar antecedentes al cliente",
+      label: "Antecedentes requeridos (uno por línea)",
       multiline: true,
       required: true,
     });
-    if (!motivo) return;
-    this.comitesApi
-      .convocar(atencionId, { motivo, participantesIds: [this.me.user()?.id ?? ""].filter(Boolean) })
-      .subscribe(() => {
-        this.msg.add({ severity: "success", summary: "Comité convocado", life: 2000 });
+    if (!antecedentes) return;
+    this.api.solicitarAntecedentes(atencionId, { antecedentes }).subscribe({
+      next: (r) => {
+        this.msg.add({
+          severity: r.estado === "Error" ? "warn" : "success",
+          summary: r.estado === "Omitido" ? "Correo registrado (envío desactivado en este ambiente)" : "Correo enviado",
+          detail: r.para,
+          life: 4000,
+        });
         this.cargar(atencionId);
-      });
+      },
+      error: (err) => this.msg.add({ severity: "error", summary: "No se pudo enviar", detail: err.error?.message ?? err.message, life: 5000 }),
+    });
   }
 
   descargarPdf(atencionId: string) {

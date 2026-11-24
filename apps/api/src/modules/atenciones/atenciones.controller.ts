@@ -21,6 +21,7 @@ import {
   RegistrarContactoSchema,
   ResolverCoberturaSchema,
   SolicitarTerminoSchema,
+  SolicitarAntecedentesSchema,
 } from "@legalmene/shared";
 import { AtencionesService } from "./atenciones.service";
 import { PlazosService } from "./plazos.service";
@@ -37,6 +38,7 @@ import { Permiso } from "../../common/decorators/permiso.decorator";
 import { PermisosGuard } from "../../common/guards/permisos.guard";
 import { CurrentUser, AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 
+class SolicitarAntecedentesDto extends createZodDto(SolicitarAntecedentesSchema) {}
 class RegistrarContactoDto extends createZodDto(RegistrarContactoSchema) {}
 class SolicitarTerminoDto extends createZodDto(SolicitarTerminoSchema) {}
 class RechazarTerminoDto extends createZodDto(RechazarTerminoSchema) {}
@@ -127,6 +129,20 @@ export class AtencionesController {
   @Permiso("atenciones.aprobar_termino")
   aprobarTermino(@Param("id", ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.service.aprobarTermino(id, user);
+  }
+
+  // Correo al cliente pidiendo antecedentes (uno por línea).
+  @Post("atenciones/:id/solicitar-antecedentes")
+  @Permiso("atenciones.editar")
+  solicitarAntecedentes(@Param("id", ParseUUIDPipe) id: string, @Body() body: SolicitarAntecedentesDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.solicitarAntecedentes(id, body, user);
+  }
+
+  // V°B° de la jefatura judicial a la primera presentación del juicio.
+  @Post("atenciones/:id/vb-primera-presentacion")
+  @Permiso("atenciones.aprobar_termino")
+  vbPrimeraPresentacion(@Param("id", ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.vbPrimeraPresentacion(id, user);
   }
 
   @Post("atenciones/:id/termino/rechazar")

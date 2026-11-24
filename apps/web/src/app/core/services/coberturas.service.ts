@@ -6,6 +6,7 @@ import type {
   CoberturaConMaestros,
   CopagoResultado,
   CreateCobertura,
+  ResumenPlanCobertura,
   TipoAtencion,
   UpdateCobertura,
 } from "@legalmene/shared";
@@ -19,6 +20,12 @@ export class CoberturasApiService {
     return this.http.get<CoberturaConMaestros[]>(`${this.base}/coberturas`, {
       params: new HttpParams().set("codPlan", codPlan),
     });
+  }
+
+  resumenPlanes(filtro: { codPlan?: string; canalId?: string; afiliadoId?: string }): Observable<ResumenPlanCobertura[]> {
+    let params = new HttpParams();
+    for (const [k, v] of Object.entries(filtro)) if (v) params = params.set(k, v);
+    return this.http.get<ResumenPlanCobertura[]>(`${this.base}/coberturas/resumen-planes`, { params });
   }
 
   crear(payload: CreateCobertura): Observable<CoberturaConMaestros> {

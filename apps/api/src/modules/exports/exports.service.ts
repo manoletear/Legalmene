@@ -11,6 +11,8 @@ import {
 } from "@legalmene/shared";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { filtroAtenciones } from "../../common/acceso/alcance";
+import { atencionDerivada, columnasEtapasDerivacion } from "../atenciones/etapas-derivacion";
+import { bienesDeAtencionSql, estadoDerivacionSql } from "../atenciones/columnas-busqueda";
 import { accesoActual } from "../../common/acceso/contexto";
 import { condicionAtencion, condicionBien, rutComparable } from "../../common/busqueda/criterios";
 import { afiliados, planesAfiliado } from "../../db/schema/afiliados";
@@ -53,7 +55,6 @@ const ufTexto = (centesimas: number | null | undefined) => (centesimas == null ?
 
 const abogado = alias(usuarios, "abogado");
 const solicitante = alias(usuarios, "solicitante");
-const derivada = alias(atenciones, "derivada");
 
 // Atenciones con los nombres que muestran búsquedas e informes (afiliado, plan, canal, abogado…).
 export function filasAtencionDetalle(db: Database, where: SQL | undefined) {
@@ -81,7 +82,8 @@ export function filasAtencionDetalle(db: Database, where: SQL | undefined) {
       organismo: organismos.nombre,
       tribunal: tribunales.nombre,
       rolCausa: atenciones.rolCausa,
-      estadoDerivacion: sql<string | null>`(select d.estado from derivaciones d where d.consulta_id = ${atenciones.id} order by d.created_at desc limit 1)`,
+      estadoDerivacion: estadoDerivacionSql,
+      bienes: bienesDeAtencionSql,
     })
     .from(atenciones)
     .innerJoin(afiliados, eq(afiliados.id, atenciones.afiliadoId))
@@ -193,11 +195,12 @@ export class ExportsService {
         { titulo: "Tipo consulta", valor: (r) => r.tipoConsulta },
         { titulo: "Código grabación", valor: (r) => r.codigoGrabacion },
       ],
-      Asesoria: [...comunes, { titulo: "Organismo", valor: (r) => r.organismo, ancho: 22 }],
+      Asesoria: [...comunes, { titulo: "Organismo", valor: (r) => r.organismo, ancho: 22 }, { titulo: "Bienes", valor: (r) => r.bienes ?? "", ancho: 24 }],
       Juicio: [
         ...comunes,
         { titulo: "Tribunal", valor: (r) => r.tribunal, ancho: 24 },
         { titulo: "ROL/RIT", valor: (r) => r.rolCausa },
+        { titulo: "Bienes", valor: (r) => r.bienes ?? "", ancho: 24 },
       ],
       PosesionEfectiva: [
         ...comunes,
@@ -239,6 +242,7 @@ export class ExportsService {
         email: afiliados.email,
         telefono: afiliados.telefono,
         region: afiliados.region,
+        ciudad: afiliados.ciudad,
         comuna: afiliados.comuna,
         codPlan: planesAfiliado.codPlan,
         plan: planes.nombre,
@@ -261,6 +265,7 @@ export class ExportsService {
         { titulo: "Correo", valor: (r) => r.email, ancho: 26 },
         { titulo: "Teléfono", valor: (r) => r.telefono },
         { titulo: "Región", valor: (r) => r.region },
+        { titulo: "Ciudad", valor: (r) => r.ciudad },
         { titulo: "Comuna", valor: (r) => r.comuna },
         { titulo: "Cód. plan", valor: (r) => r.codPlan },
         { titulo: "Plan", valor: (r) => r.plan, ancho: 22 },
@@ -296,13 +301,13 @@ export class ExportsService {
         solicitadaPor: solicitante.nombre,
         creada: derivaciones.createdAt,
         resuelta: derivaciones.resueltaAt,
-        derivada: derivada.correlativo,
+        ...columnasEtapasDerivacion,
       })
       .from(derivaciones)
       .innerJoin(atenciones, eq(atenciones.id, derivaciones.consultaId))
       .innerJoin(afiliados, eq(afiliados.id, atenciones.afiliadoId))
       .leftJoin(solicitante, eq(solicitante.id, derivaciones.solicitadaPorId))
-      .leftJoin(derivada, eq(derivada.id, derivaciones.atencionDerivadaId))
+      .leftJoin(atencionDerivada, eq(atencionDerivada.id, derivaciones.atencionDerivadaId))
       .where(where)
       .orderBy(desc(derivaciones.createdAt));
     return this.libro(
@@ -316,7 +321,12 @@ export class ExportsService {
         { titulo: "Solicitada por", valor: (r) => r.solicitadaPor, ancho: 22 },
         { titulo: "Fecha solicitud", valor: (r) => fechaCl(r.creada) },
         { titulo: "Fecha resolución", valor: (r) => fechaCl(r.resuelta) },
-        { titulo: "Atención derivada", valor: (r) => r.derivada, ancho: 18 },
+        { titulo: "Atención derivada", valor: (r) => r.derivadaCorrelativo, ancho: 18 },
+        { titulo: "Estado atención derivada", valor: (r) => r.derivadaEstado },
+        { titulo: "Primer contacto", valor: (r) => fechaCl(r.primerContactoAt) },
+        { titulo: "Pago arancel", valor: (r) => fechaCl(r.arancelPagadoEn) },
+        { titulo: "Primera gestión", valor: (r) => fechaCl(r.primeraGestionAt) },
+        { titulo: "Término", valor: (r) => fechaCl(r.terminoAt) },
       ],
       filas,
     );
@@ -443,6 +453,7 @@ export class ExportsService {
         codigo: pagos.authCode,
         correo: afiliados.email,
         region: afiliados.region,
+        ciudad: afiliados.ciudad,
         comuna: afiliados.comuna,
         estado: pagos.estado,
       })
@@ -462,6 +473,7 @@ export class ExportsService {
         { titulo: "Código", valor: (r) => r.codigo },
         { titulo: "Correo", valor: (r) => r.correo, ancho: 26 },
         { titulo: "Región", valor: (r) => r.region },
+        { titulo: "Ciudad", valor: (r) => r.ciudad },
         { titulo: "Comuna", valor: (r) => r.comuna },
         { titulo: "Estado", valor: (r) => r.estado },
       ],

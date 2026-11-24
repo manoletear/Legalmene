@@ -6,6 +6,10 @@ const API = process.env.API_BASE ?? "http://localhost:3001/api/v1";
 test.describe("Código de grabación y fecha de término", () => {
   test("una asesoría guarda su código de grabación desde la ficha", async ({ page, request }) => {
     const a = await crearAsesoria(request, `E2E ${Date.now()}`);
+    // Sin pago del arancel no hay comprobante: 409 en JSON, no un PDF.
+    const sinPago = await request.get(`${API}/exports/comprobantes/arancel/${a.id}.pdf`);
+    expect(sinPago.status()).toBe(409);
+    expect(sinPago.headers()["content-type"]).toContain("application/json");
     await page.goto(`/atenciones/${a.id}`);
     const codigo = `GRAB-E2E-${Date.now()}`;
     await page.locator("#grabacionCaso").fill(codigo);

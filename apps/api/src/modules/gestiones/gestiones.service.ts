@@ -1,4 +1,7 @@
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { plantillaGestionCliente } from "../correos/plantillas";
+import { CorreosService } from "../correos/correos.service";
+import { avisar, equipoDeAtencion } from "../notif-inbox/destinatarios";
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { and, count, desc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { filtroAtenciones } from "../../common/acceso/alcance";
@@ -34,6 +37,7 @@ export class GestionesService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     @Inject(NotifInboxService) private readonly notif: NotifInboxService,
+    @Optional() @Inject(CorreosService) private readonly correos?: CorreosService,
   ) {}
 
   async listarPorAtencion(atencionId: string): Promise<Gestion[]> {
@@ -125,6 +129,7 @@ export class GestionesService {
       fechaProgramada: input.fechaProgramada ? new Date(input.fechaProgramada) : null,
       fechaCompromiso: input.fechaCompromiso ? new Date(input.fechaCompromiso) : null,
       documentosIds: input.documentosIds ?? [],
+      informarCliente: input.informarCliente ?? false,
     };
     const [row] = await this.db.insert(gestiones).values(payload).returning();
     await this.db
@@ -148,7 +153,28 @@ export class GestionesService {
       accionUrl: `/atenciones/${input.atencionId}`,
       metadata: { gestionId: row.id, atencionId: input.atencionId },
     });
+    if (row.informarCliente) await this.informarCliente(row, "inicio");
     return row;
+  }
+
+  // Correo al cliente con el inicio o el término de una gestión marcada para informarle.
+  private async informarCliente(g: { atencionId: string; titulo: string; fechaProgramada: Date | null; fechaEjecucion: Date | null; resultado: string | null }, etapa: "inicio" | "termino") {
+    if (!this.correos) return;
+    const equipo = await equipoDeAtencion(this.db, g.atencionId);
+    if (!equipo?.afiliadoEmail) return;
+    const cuando = etapa === "inicio" ? (g.fechaProgramada ?? new Date()) : (g.fechaEjecucion ?? new Date());
+    await this.correos.enviar(
+      [equipo.afiliadoEmail],
+      plantillaGestionCliente({
+        cliente: equipo.afiliadoNombre ?? "cliente",
+        correlativo: equipo.correlativo,
+        gestion: g.titulo,
+        etapa,
+        fecha: cuando.toLocaleDateString("es-CL", { timeZone: "America/Santiago" }),
+        resultado: etapa === "termino" ? g.resultado : null,
+      }),
+      { plantilla: `cliente.gestion.${etapa}`, atencionId: g.atencionId },
+    );
   }
 
   async completar(gestionId: string, input: CompletarGestion): Promise<Gestion> {
@@ -194,7 +220,40 @@ export class GestionesService {
       .update(atenciones)
       .set({ fechaUltimaGestion: new Date(), updatedAt: new Date() })
       .where(eq(atenciones.id, row.atencionId));
+    if (row.tipo === "EscritoJudicial") await this.avisarPrimeraPresentacion(row.atencionId, row.responsableId);
+    if (updated.informarCliente) await this.informarCliente(updated, "termino");
     return updated;
+  }
+
+  // Anexo §VIII l.1092: la jefatura judicial revisa la primera presentación del juicio. Al completarse
+  // el primer escrito se le avisa para que dé su V°B° en la ficha.
+  private async avisarPrimeraPresentacion(atencionId: string, responsableId: string | null) {
+    const [a] = await this.db
+      .select({ tipo: atenciones.tipo, vb: atenciones.vbPrimeraPresentacion })
+      .from(atenciones)
+      .where(eq(atenciones.id, atencionId));
+    if (!a || a.tipo !== "Juicio" || a.vb) return;
+    const [n] = await this.db
+      .select({ n: count() })
+      .from(gestiones)
+      .where(and(eq(gestiones.atencionId, atencionId), eq(gestiones.tipo, "EscritoJudicial"), eq(gestiones.estado, "Completada")));
+    if (Number(n?.n ?? 0) !== 1) return;
+    const equipo = await equipoDeAtencion(this.db, atencionId);
+    if (!equipo) return;
+    await avisar(
+      this.notif,
+      [equipo.jefeId],
+      {
+        codPlan: equipo.codPlan,
+        severidad: "warn",
+        titulo: `Revise la primera presentación: ${equipo.correlativo}`,
+        detalle: "Primer escrito presentado; falta su V°B°",
+        accionUrl: `/atenciones/${atencionId}`,
+        metadata: { atencionId, primeraPresentacion: true },
+      },
+      responsableId,
+      { servicio: this.correos, atencionId, plantilla: "juicio.primeraPresentacion" },
+    );
   }
 
   // Anexo §VII l.797: con el arancel impago la atención queda detenida. Solo se permiten las

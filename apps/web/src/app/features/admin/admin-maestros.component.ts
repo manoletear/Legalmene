@@ -11,7 +11,7 @@ import { TagModule } from "primeng/tag";
 import { TabsModule } from "primeng/tabs";
 import { MessageService } from "primeng/api";
 import { MaestrosApiService, TipoMaestro } from "../../core/services/maestros.service";
-import type { Competencia } from "@legalmene/shared";
+import type { Competencia, Region } from "@legalmene/shared";
 import { AdminPlantillasComponent } from "./admin-plantillas.component";
 import { AdminFeriadosComponent } from "./admin-feriados.component";
 
@@ -19,6 +19,7 @@ interface DefTab {
   tipo: TipoMaestro;
   titulo: string;
   porCompetencia?: boolean;
+  porRegion?: boolean;
   ubicacion?: boolean;
   flags?: boolean;
 }
@@ -32,6 +33,10 @@ const TABS: DefTab[] = [
   { tipo: "tipos-consulta", titulo: "Tipos de consulta" },
   { tipo: "causas-termino", titulo: "Causas de término" },
   { tipo: "calidades-procesales", titulo: "Calidades procesales" },
+  { tipo: "canales", titulo: "Canales" },
+  { tipo: "regiones", titulo: "Regiones" },
+  { tipo: "ciudades", titulo: "Ciudades", porRegion: true },
+  { tipo: "comunas", titulo: "Comunas", porRegion: true },
 ];
 
 // Fila genérica: cada maestro usa un subconjunto de estos campos.
@@ -40,6 +45,7 @@ interface Fila {
   nombre: string;
   vigente: boolean;
   competenciaId?: string;
+  regionId?: string;
   region?: string | null;
   comuna?: string | null;
   aplicaConsulta?: boolean;
@@ -84,6 +90,8 @@ const vacio = (): Partial<Fila> => ({
       <form (ngSubmit)="guardar()" class="lm-row" style="flex-wrap:wrap; align-items:center; margin-bottom:16px;">
         <p-select *ngIf="tab().porCompetencia" [(ngModel)]="form.competenciaId" name="competenciaId" [options]="competencias()"
           optionLabel="nombre" optionValue="id" placeholder="Competencia" appendTo="body" [style]="{ width: '200px' }"></p-select>
+        <p-select *ngIf="tab().porRegion" [(ngModel)]="form.regionId" name="regionId" [options]="regiones()"
+          optionLabel="nombre" optionValue="id" placeholder="Región" appendTo="body" [filter]="true" [style]="{ width: '220px' }"></p-select>
         <input pInputText [(ngModel)]="form.nombre" name="nombre" placeholder="Nombre" class="lm-grow" style="min-width:220px;" maxlength="200" />
         <ng-container *ngIf="tab().ubicacion">
           <input pInputText [(ngModel)]="form.region" name="region" placeholder="Región" style="width:160px;" />
@@ -99,6 +107,11 @@ const vacio = (): Partial<Fila> => ({
         <button *ngIf="editandoId()" pButton type="button" label="Cancelar" [text]="true" severity="secondary" (click)="limpiar()"></button>
       </form>
 
+      <div class="lm-row" *ngIf="tab().porRegion" style="margin-bottom:12px;">
+        <p-select [(ngModel)]="filtroRegion" name="filtroRegion" [options]="regiones()" optionLabel="nombre" optionValue="id"
+          placeholder="Todas las regiones" [showClear]="true" [filter]="true" [style]="{ width: '260px' }" (onChange)="recargar()"></p-select>
+      </div>
+
       <div class="lm-row" *ngIf="tab().porCompetencia" style="margin-bottom:12px;">
         <p-select [(ngModel)]="filtroCompetencia" [options]="competencias()" optionLabel="nombre" optionValue="id"
           placeholder="Todas las competencias" [showClear]="true" [style]="{ width: '240px' }" (onChange)="recargar()"></p-select>
@@ -109,6 +122,7 @@ const vacio = (): Partial<Fila> => ({
           <tr>
             <th>Nombre</th>
             <th *ngIf="tab().porCompetencia">Competencia</th>
+            <th *ngIf="tab().porRegion">Región</th>
             <th *ngIf="tab().ubicacion">Región</th>
             <th *ngIf="tab().ubicacion">Comuna</th>
             <th *ngIf="tab().flags">Aplica a</th>
@@ -121,6 +135,7 @@ const vacio = (): Partial<Fila> => ({
           <tr>
             <td>{{ f.nombre }}</td>
             <td *ngIf="tab().porCompetencia">{{ nombreCompetencia(f.competenciaId) }}</td>
+            <td *ngIf="tab().porRegion">{{ nombreRegion(f.regionId) }}</td>
             <td *ngIf="tab().ubicacion">{{ f.region || '—' }}</td>
             <td *ngIf="tab().ubicacion">{{ f.comuna || '—' }}</td>
             <td *ngIf="tab().flags" class="lm-small">{{ aplicaA(f) }}</td>
@@ -153,10 +168,14 @@ export class AdminMaestrosComponent implements OnInit {
   protected editandoId = signal<string | null>(null);
   protected form: Partial<Fila> = vacio();
   protected filtroCompetencia: string | undefined;
+  protected filtroRegion: string | undefined;
+  protected regiones = signal<Region[]>([]);
+  private regionPorId = computed(() => new Map(this.regiones().map((r) => [r.id, r.nombre])));
   private competenciaPorId = computed(() => new Map(this.competencias().map((c) => [c.id, c.nombre])));
 
   ngOnInit() {
     this.cargarCompetencias();
+    this.cargarRegiones();
     this.recargar();
   }
 
@@ -166,13 +185,15 @@ export class AdminMaestrosComponent implements OnInit {
     if (!t) return;
     this.tab.set(t);
     this.filtroCompetencia = undefined;
+    this.filtroRegion = undefined;
     this.limpiar();
     this.recargar();
   }
 
   recargar() {
     this.loading.set(true);
-    const filtro = this.tab().porCompetencia ? { competenciaId: this.filtroCompetencia } : {};
+    const t = this.tab();
+    const filtro = t.porCompetencia ? { competenciaId: this.filtroCompetencia } : t.porRegion ? { regionId: this.filtroRegion } : {};
     this.api.listar(this.tab().tipo, filtro).subscribe({
       next: (rows) => {
         this.filas.set(rows as Fila[]);
@@ -183,7 +204,8 @@ export class AdminMaestrosComponent implements OnInit {
   }
 
   valido(): boolean {
-    return !!this.form.nombre?.trim() && (!this.tab().porCompetencia || !!this.form.competenciaId);
+    const t = this.tab();
+    return !!this.form.nombre?.trim() && (!t.porCompetencia || !!this.form.competenciaId) && (!t.porRegion || !!this.form.regionId);
   }
 
   guardar() {
@@ -191,6 +213,7 @@ export class AdminMaestrosComponent implements OnInit {
     const t = this.tab();
     const body: Partial<Fila> = { nombre: this.form.nombre!.trim() };
     if (t.porCompetencia) body.competenciaId = this.form.competenciaId;
+    if (t.porRegion) body.regionId = this.form.regionId;
     if (t.ubicacion) {
       body.region = this.form.region?.trim() || null;
       body.comuna = this.form.comuna?.trim() || null;
@@ -207,6 +230,7 @@ export class AdminMaestrosComponent implements OnInit {
       next: () => {
         this.msg.add({ severity: "success", summary: id ? "Cambios guardados" : "Registro creado", life: 2500 });
         if (t.tipo === "competencias") this.cargarCompetencias();
+        if (t.tipo === "regiones") this.cargarRegiones();
         this.limpiar();
         this.recargar();
       },
@@ -223,6 +247,7 @@ export class AdminMaestrosComponent implements OnInit {
     this.api.actualizar(this.tab().tipo, f.id, { vigente: !f.vigente }).subscribe({
       next: () => {
         if (this.tab().tipo === "competencias") this.cargarCompetencias();
+        if (this.tab().tipo === "regiones") this.cargarRegiones();
         this.recargar();
       },
       error: (err) => this.error(err),
@@ -241,6 +266,14 @@ export class AdminMaestrosComponent implements OnInit {
   aplicaA(f: Fila): string {
     const t = [f.aplicaConsulta && "Consulta", f.aplicaAsesoria && "Asesoría", f.aplicaJuicio && "Juicio"].filter(Boolean);
     return t.length ? t.join(", ") : "Ninguno";
+  }
+
+  nombreRegion(id?: string): string {
+    return (id && this.regionPorId().get(id)) || "—";
+  }
+
+  private cargarRegiones() {
+    this.api.listar("regiones").subscribe((r) => this.regiones.set(r));
   }
 
   private cargarCompetencias() {

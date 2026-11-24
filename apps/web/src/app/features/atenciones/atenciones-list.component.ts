@@ -9,7 +9,7 @@ import { ButtonModule } from "primeng/button";
 import { SelectModule } from "primeng/select";
 import { MessageService } from "primeng/api";
 import type { TableLazyLoadEvent } from "primeng/table";
-import { estadosDeTipo, type AtencionConMaestros, type BusquedaExportable, type TipoAtencion } from "@legalmene/shared";
+import { estadosDeTipo, type AtencionListada, type BusquedaExportable, type TipoAtencion } from "@legalmene/shared";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { PermisoDirective } from "../../core/permisos";
 import { ESTADO_OPCIONES, estadoSeverity as severidadEstado } from "../../shared/estado-atencion";
@@ -87,28 +87,57 @@ const EXPORTACION: Record<string, BusquedaExportable> = {
           styleClass="p-datatable-sm"
           [style]="{ 'margin-top': '16px' }"
         >
+          <!-- Columnas del Anexo §XI (las mismas del Excel) según el tipo buscado. -->
           <ng-template pTemplate="header">
             <tr>
               <th>Correlativo</th>
-              <th>Tipo</th>
+              <th *ngIf="!tipoBuscado()">Tipo</th>
+              <th>Afiliado</th>
+              <th>Plan / canal</th>
               <th>Materia</th>
-              <th>Plan</th>
+              <th>Abogado</th>
               <th>Estado</th>
-              <th>Apertura</th>
+              <th>Inicio</th>
+              <th>Término</th>
+              <ng-container [ngSwitch]="tipoBuscado()">
+                <ng-container *ngSwitchCase="'Consulta'"><th>Hora</th><th>Tipo consulta</th><th>Derivación</th><th>Grabación</th></ng-container>
+                <ng-container *ngSwitchCase="'Asesoria'"><th>Organismo</th><th>Bienes</th></ng-container>
+                <ng-container *ngSwitchCase="'Juicio'"><th>Tribunal</th><th>ROL/RIT</th><th>Bienes</th></ng-container>
+              </ng-container>
             </tr>
           </ng-template>
           <ng-template pTemplate="body" let-a>
             <tr>
               <td><a [routerLink]="['/atenciones', a.id]" style="text-decoration:none; color:#1976d2;">{{ a.correlativo }}</a></td>
-              <td><p-tag [value]="a.tipo" [severity]="tipoSeverity(a.tipo)"></p-tag></td>
+              <td *ngIf="!tipoBuscado()"><p-tag [value]="a.tipo" [severity]="tipoSeverity(a.tipo)"></p-tag></td>
+              <td><span class="lm-mono">{{ a.afiliadoRut }}</span><div class="lm-small">{{ a.afiliadoNombre }}</div></td>
+              <td>{{ a.codPlan }}<div class="lm-small lm-muted">{{ a.canalNombre ?? '—' }}</div></td>
               <td>{{ a.asunto }} <small class="lm-muted">({{ a.materiaNombre }} · {{ a.competenciaNombre }})</small></td>
-              <td>{{ a.codPlan }}</td>
+              <td class="lm-small">{{ a.abogadoNombre ?? '—' }}</td>
               <td><p-tag [value]="a.estado" [severity]="estadoSeverity(a.estado)"></p-tag></td>
               <td>{{ a.fechaApertura | date: 'dd/MM/yyyy' }}</td>
+              <td>{{ a.fechaCierre ? (a.fechaCierre | date: 'dd/MM/yyyy') : '—' }}</td>
+              <ng-container [ngSwitch]="tipoBuscado()">
+                <ng-container *ngSwitchCase="'Consulta'">
+                  <td>{{ (a.horaInicio ?? a.fechaApertura) | date: 'HH:mm' }}</td>
+                  <td class="lm-small">{{ a.tipoConsultaNombre ?? '—' }}</td>
+                  <td class="lm-small">{{ a.estadoDerivacion ?? '—' }}</td>
+                  <td class="lm-small lm-mono">{{ a.codigoGrabacion ?? '—' }}</td>
+                </ng-container>
+                <ng-container *ngSwitchCase="'Asesoria'">
+                  <td class="lm-small">{{ a.organismoNombre ?? '—' }}</td>
+                  <td class="lm-small" data-testid="bienes">{{ a.bienes ?? '—' }}</td>
+                </ng-container>
+                <ng-container *ngSwitchCase="'Juicio'">
+                  <td class="lm-small">{{ a.tribunalNombre ?? '—' }}</td>
+                  <td class="lm-small lm-mono">{{ a.rolCausa ?? '—' }}</td>
+                  <td class="lm-small" data-testid="bienes">{{ a.bienes ?? '—' }}</td>
+                </ng-container>
+              </ng-container>
             </tr>
           </ng-template>
           <ng-template pTemplate="emptymessage">
-            <tr><td colspan="6" style="text-align:center; padding:24px;" class="lm-muted">Sin resultados para estos criterios.</td></tr>
+            <tr><td colspan="14" style="text-align:center; padding:24px;" class="lm-muted">Sin resultados para estos criterios.</td></tr>
           </ng-template>
         </p-table>
       </ng-template>
@@ -119,7 +148,9 @@ export class AtencionesListComponent implements OnInit {
   private api = inject(AtencionesApiService);
   private route = inject(ActivatedRoute);
   private msg = inject(MessageService);
-  protected data = signal<AtencionConMaestros[]>([]);
+  protected data = signal<AtencionListada[]>([]);
+  // Tipo de la última búsqueda ejecutada: define las columnas propias que se muestran.
+  protected tipoBuscado = signal<TipoAtencion | undefined>(undefined);
   protected total = signal(0);
   protected page = signal(1);
   protected pageSize = signal(25);
@@ -186,8 +217,10 @@ export class AtencionesListComponent implements OnInit {
     const c = this.criterios();
     if (!c) return;
     this.loading.set(true);
-    this.api.buscar({ ...c, tipo: this.filtroTipo, page: this.page(), pageSize: this.pageSize() }).subscribe({
+    const tipo = this.filtroTipo;
+    this.api.buscar({ ...c, tipo, page: this.page(), pageSize: this.pageSize() }).subscribe({
       next: (res) => {
+        this.tipoBuscado.set(tipo);
         this.data.set(res.data);
         this.total.set(res.total);
         this.loading.set(false);

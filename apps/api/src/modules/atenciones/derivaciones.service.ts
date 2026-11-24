@@ -17,6 +17,7 @@ import { WebhooksService } from "../webhooks/webhooks.service";
 import { AtencionesService, Actor } from "./atenciones.service";
 import type { CreateAtencionDto } from "./dto";
 import { filtroAtenciones } from "../../common/acceso/alcance";
+import { atencionDerivada, columnasEtapasDerivacion } from "./etapas-derivacion";
 
 export interface FiltroDerivaciones extends CriteriosBusqueda {
   estado?: EstadoDerivacion;
@@ -61,10 +62,12 @@ export class DerivacionesService {
           atencionDerivadaId: derivaciones.atencionDerivadaId,
           createdAt: derivaciones.createdAt,
           resueltaAt: derivaciones.resueltaAt,
+          ...columnasEtapasDerivacion,
         })
         .from(derivaciones)
         .innerJoin(atenciones, eq(atenciones.id, derivaciones.consultaId))
         .innerJoin(usuarios, eq(usuarios.id, derivaciones.solicitadaPorId))
+        .leftJoin(atencionDerivada, eq(atencionDerivada.id, derivaciones.atencionDerivadaId))
         .where(where)
         .orderBy(desc(derivaciones.createdAt))
         .limit(pageSize)

@@ -1,4 +1,4 @@
-import { pgTable, uuid, integer, text, timestamp, pgEnum, index, uniqueIndex, date } from "drizzle-orm/pg-core";
+import { pgTable, uuid, integer, text, timestamp, pgEnum, index, uniqueIndex, date, varchar } from "drizzle-orm/pg-core";
 import { atenciones } from "./atenciones";
 import { aranceles, modalidadCoberturaEnum } from "./aranceles";
 import { usuarios } from "./usuarios";
@@ -30,6 +30,8 @@ export const arancelesAtencion = pgTable(
     motivoRechazo: text("motivo_rechazo"),
     fechaPago: date("fecha_pago", { mode: "string" }),
     medioPago: medioPagoEnum("medio_pago"),
+    cuotasPago: integer("cuotas_pago"),
+    referenciaPago: varchar("referencia_pago", { length: 80 }),
     // UF del día del pago (centavos) y monto pagado en pesos.
     ufValorCentavos: integer("uf_valor_centavos"),
     montoClp: integer("monto_clp"),

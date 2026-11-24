@@ -21,6 +21,15 @@ const FiltroCoberturasSchema = z.object({
 });
 class FiltroCoberturasDto extends createZodDto(FiltroCoberturasSchema) {}
 
+const ResumenPlanesSchema = z
+  .object({
+    codPlan: z.string().min(1).max(20).optional(),
+    canalId: z.string().uuid().optional(),
+    afiliadoId: z.string().uuid().optional(),
+  })
+  .refine((f) => f.codPlan || f.canalId || f.afiliadoId, { message: "Indique plan, canal o afiliado" });
+class ResumenPlanesDto extends createZodDto(ResumenPlanesSchema) {}
+
 const CopagoQuerySchema = z.object({
   codPlan: z.string().min(1),
   materiaId: z.string().uuid(),
@@ -38,6 +47,13 @@ export class CoberturasController {
   @Get("coberturas")
   listar(@Query() filtro: FiltroCoberturasDto) {
     return this.service.listar(filtro);
+  }
+
+  // Búsquedas de afiliados: planes vigentes con RUT vigentes, coberturas y materias.
+  @Get("coberturas/resumen-planes")
+  @Permiso("afiliados.ver")
+  resumenPlanes(@Query() filtro: ResumenPlanesDto) {
+    return this.service.resumenPlanes(filtro);
   }
 
   @Post("coberturas")

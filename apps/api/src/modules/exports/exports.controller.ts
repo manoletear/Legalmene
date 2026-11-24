@@ -1,13 +1,14 @@
-import { BadRequestException, Controller, Get, Header, Inject, Param, Query, Res, UseGuards } from "@nestjs/common";
+import { BadRequestException, Controller, Get, Header, Inject, Param, ParseUUIDPipe, Query, Res, UseGuards } from "@nestjs/common";
 import { createZodDto } from "nestjs-zod";
 import { z } from "zod";
-import { BUSQUEDAS_EXPORTABLES, CriteriosBusquedaSchema, type BusquedaExportable } from "@legalmene/shared";
+import { BUSQUEDAS_EXPORTABLES, CriteriosBusquedaSchema, TipoPagoEnum, type BusquedaExportable } from "@legalmene/shared";
 import { MIME_XLSX } from "./xlsx";
 import { Response } from "express";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ExportsService } from "./exports.service";
 import { AtencionPdfService } from "./atencion-pdf.service";
+import { ComprobantesPdfService, dibujarComprobante, type Comprobante } from "./comprobantes-pdf.service";
 import { Permiso } from "../../common/decorators/permiso.decorator";
 import { PermisosGuard } from "../../common/guards/permisos.guard";
 
@@ -17,6 +18,7 @@ class FiltroExportacionDto extends createZodDto(
     q: z.string().trim().min(1).optional(),
     vigencia: z.string().optional(),
     ordenCompra: z.string().trim().min(1).optional(),
+    tipoPago: TipoPagoEnum.optional(),
   }),
 ) {}
 
@@ -28,7 +30,46 @@ export class ExportsController {
   constructor(
     @Inject(ExportsService) private readonly service: ExportsService,
     @Inject(AtencionPdfService) private readonly pdf: AtencionPdfService,
+    @Inject(ComprobantesPdfService) private readonly comprobantes: ComprobantesPdfService,
   ) {}
+
+  private enviarComprobante(c: Comprobante, archivo: string, res: Response) {
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${archivo}"`);
+    dibujarComprobante(c, res);
+  }
+
+  // Anexo §IX 5.4: comprobante del pago del arancel en dos copias (administración y cliente).
+  @Get("comprobantes/arancel/:atencionId.pdf")
+  @Permiso("finanzas.ver")
+  async reciboArancel(@Param("atencionId", ParseUUIDPipe) atencionId: string, @Res() res: Response) {
+    const c = await this.comprobantes.reciboArancel(atencionId);
+    this.enviarComprobante(c, `comprobante-arancel-${c.numero}.pdf`, res);
+  }
+
+  // Anexo §X 19: rendición de fondos al cliente, en tres copias.
+  @Get("comprobantes/rendicion/:atencionId.pdf")
+  @Permiso("finanzas.ver")
+  async rendicionCliente(@Param("atencionId", ParseUUIDPipe) atencionId: string, @Res() res: Response) {
+    const c = await this.comprobantes.rendicionCliente(atencionId);
+    this.enviarComprobante(c, `rendicion-${c.numero}.pdf`, res);
+  }
+
+  // Anexo §X 12: comprobante de entrega de fondos al abogado, en dos copias.
+  @Get("comprobantes/entrega/:provisionId.pdf")
+  @Permiso("finanzas.ver")
+  async entregaFondos(@Param("provisionId", ParseUUIDPipe) provisionId: string, @Res() res: Response) {
+    const c = await this.comprobantes.entregaFondos(provisionId);
+    this.enviarComprobante(c, `entrega-${c.numero}.pdf`, res);
+  }
+
+  // Anexo §X 05.1: recibo del dinero de una provisión, en dos copias.
+  @Get("comprobantes/provision/:provisionId.pdf")
+  @Permiso("finanzas.ver")
+  async reciboProvision(@Param("provisionId", ParseUUIDPipe) provisionId: string, @Res() res: Response) {
+    const c = await this.comprobantes.reciboProvision(provisionId);
+    this.enviarComprobante(c, `comprobante-provision-${c.numero}.pdf`, res);
+  }
 
   // Búsquedas del Anexo §XI en XLSX. Mismos criterios y alcance que la pantalla de búsqueda.
   @Get("busquedas/:tipo.xlsx")

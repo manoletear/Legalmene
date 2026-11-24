@@ -13,6 +13,7 @@ import { ConfirmationService, MessageService } from "primeng/api";
 import { PARENTESCO_LABEL, type AfiliadoConPlanes, type BienAfiliado, type CargaAfiliado, type Parentesco, type Plan, type PlanAfiliadoDetalle } from "@legalmene/shared";
 import { AfiliadosApiService } from "../../core/services/afiliados.service";
 import { PlanesApiService } from "../../core/services/planes.service";
+import { ResumenPlanesComponent } from "../../shared/resumen-planes.component";
 import { PermisoDirective } from "../../core/permisos";
 import { AfiliadoFormComponent } from "./afiliado-form.component";
 
@@ -22,7 +23,7 @@ const TIPO_BIEN: Record<string, string> = { Inmueble: "Inmueble", Vehiculo: "Veh
 @Component({
   selector: "lm-afiliado-detail",
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, CardModule, TableModule, TagModule, ButtonModule, DialogModule, InputTextModule, SelectModule, PermisoDirective, AfiliadoFormComponent],
+  imports: [CommonModule, FormsModule, RouterLink, CardModule, TableModule, TagModule, ButtonModule, DialogModule, InputTextModule, SelectModule, PermisoDirective, AfiliadoFormComponent, ResumenPlanesComponent],
   template: `
     <div *ngIf="afiliado() as a; else cargando">
       <div class="lm-row" style="margin-bottom:16px; align-items:flex-start;">
@@ -30,6 +31,7 @@ const TIPO_BIEN: Record<string, string> = { Inmueble: "Inmueble", Vehiculo: "Veh
           <small class="lm-muted"><a routerLink="/afiliados">Afiliados</a> / {{ a.rut }}</small>
           <h1 style="margin:4px 0;">{{ a.nombres }} {{ a.apellidoPaterno }} {{ a.apellidoMaterno }}</h1>
           <span class="lm-muted">{{ a.rut }} · {{ a.email || 'sin correo' }} · {{ a.telefono || 'sin teléfono' }}</span>
+          <div class="lm-muted lm-small" *ngIf="direccion(a) as d">{{ d }}</div>
         </div>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           <p-tag [value]="a.vigencia" [severity]="a.vigencia === 'Activo' ? 'success' : a.vigencia === 'Eliminado' ? 'danger' : 'secondary'"></p-tag>
@@ -70,6 +72,7 @@ const TIPO_BIEN: Record<string, string> = { Inmueble: "Inmueble", Vehiculo: "Veh
           </ng-template>
           <ng-template pTemplate="emptymessage"><tr><td colspan="5" class="lm-muted" style="text-align:center;">Sin planes.</td></tr></ng-template>
         </p-table>
+        <lm-resumen-planes [afiliadoId]="a.id" [refresco]="a" titulo="Coberturas de sus planes vigentes"></lm-resumen-planes>
       </p-card>
 
       <p-card header="Cargas" [style]="{ 'margin-bottom': '16px', display: 'block' }">
@@ -174,6 +177,10 @@ export class AfiliadoDetailComponent implements OnInit {
   protected editado() {
     this.editando.set(false);
     this.recargar();
+  }
+
+  protected direccion(a: AfiliadoConPlanes): string {
+    return [a.direccion, a.comuna, a.ciudad, a.region].filter(Boolean).join(", ");
   }
 
   protected eliminar(a: AfiliadoConPlanes) {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MedioPagoEnum } from "./provision";
+import { DatosPagoSchema, MedioPagoEnum } from "./provision";
 import type { ModalidadCobertura } from "./cobertura";
 
 // Arancel (copago) de una atención (Anexo §IX): rojo → naranjo → amarillo → verde.
@@ -55,6 +55,8 @@ export interface ArancelAtencion {
   motivoRechazo: string | null;
   fechaPago: string | null;
   medioPago: z.infer<typeof MedioPagoEnum> | null;
+  cuotasPago: number | null;
+  referenciaPago: string | null;
   ufValorCentavos: number | null;
   montoClp: number | null;
   comprobanteDocumentoId: string | null;
@@ -67,9 +69,12 @@ export interface ArancelAtencionRow extends ArancelAtencion {
   codPlan: string;
 }
 
-export const PagoArancelSchema = z.object({
+export const PagoArancelSchema = DatosPagoSchema.extend({
   medio: MedioPagoEnum,
   fechaPago: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   comprobanteDocumentoId: z.string().uuid().optional(),
+}).refine((p) => p.medio !== "Transferencia" || !!p.referencia, {
+  message: "Una transferencia requiere su número de referencia",
+  path: ["referencia"],
 });
 export type PagoArancel = z.infer<typeof PagoArancelSchema>;

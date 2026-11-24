@@ -39,6 +39,13 @@ export interface DerivacionRow {
   atencionDerivadaId: string | null;
   createdAt: string;
   resueltaAt: string | null;
+  // Etapas de la atención derivada (Anexo §XI, Estado Derivación): null mientras no ocurren.
+  derivadaCorrelativo: string | null;
+  derivadaEstado: string | null;
+  primerContactoAt: string | null;
+  arancelPagadoEn: string | null;
+  primeraGestionAt: string | null;
+  terminoAt: string | null;
 }
 
 // Contraparte de un juicio/asesoría (Anexo §VIII, pestaña Contraparte).

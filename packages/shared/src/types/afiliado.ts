@@ -14,6 +14,7 @@ export const AfiliadoSchema = z.object({
   telefono: z.string().max(20).optional().nullable(),
   direccion: z.string().max(250).optional().nullable(),
   comuna: z.string().max(80).optional().nullable(),
+  ciudad: z.string().max(80).optional().nullable(),
   region: z.string().max(80).optional().nullable(),
   fechaNacimiento: z.string().date().optional().nullable(),
   vigencia: VigenciaAfiliadoEnum.default("Activo"),
@@ -75,7 +76,7 @@ export const TipoCargaMasivaEnum = z.enum(["FLUJO", "STOCK"]);
 export type TipoCargaMasiva = z.infer<typeof TipoCargaMasivaEnum>;
 
 // Qué se carga: la nómina del plan, las cargas (familiares) o los bienes cubiertos (Anexo §III).
-export const EntidadCargaMasivaEnum = z.enum(["afiliados", "cargas", "bienes"]);
+export const EntidadCargaMasivaEnum = z.enum(["afiliados", "cargas", "bienes", "coberturas", "atenciones"]);
 export type EntidadCargaMasiva = z.infer<typeof EntidadCargaMasivaEnum>;
 
 export const CargaMasivaResultadoSchema = z.object({
@@ -94,6 +95,9 @@ export const CargaMasivaResultadoSchema = z.object({
     }),
   ),
   duracionMs: z.number().int(),
+  // Nómina: RUT con relación nueva y RUT terminados por STOCK (Anexo §III l.308).
+  rutsNuevos: z.array(z.string()).optional(),
+  rutsEliminados: z.array(z.string()).optional(),
 });
 export type CargaMasivaResultado = z.infer<typeof CargaMasivaResultadoSchema>;
 

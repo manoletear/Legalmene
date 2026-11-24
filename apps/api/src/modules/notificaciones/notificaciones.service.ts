@@ -3,6 +3,8 @@ import { ConfigService } from "@nestjs/config";
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 import { SES_CLIENT } from "./ses.provider";
 
+export type ResultadoEnvio = "Enviado" | "Omitido" | "Error";
+
 export interface EmailMessage {
   to: string[];
   subject: string;
@@ -25,12 +27,13 @@ export class NotificacionesService {
     this.enabled = config.get<string>("SES_ENABLED") === "true";
   }
 
-  async enviarEmail(msg: EmailMessage): Promise<void> {
+  // "Omitido": SES desactivado (desarrollo y demo); el correo solo queda en el log.
+  async enviarEmail(msg: EmailMessage): Promise<ResultadoEnvio> {
     if (!this.enabled) {
       this.logger.log(
         `[DEV] Email skipped: to=${msg.to.join(",")} subject="${msg.subject}" (set SES_ENABLED=true para enviar)`,
       );
-      return;
+      return "Omitido";
     }
     try {
       await this.ses.send(
@@ -47,10 +50,12 @@ export class NotificacionesService {
         }),
       );
       this.logger.log(`Email enviado: to=${msg.to.join(",")} subject="${msg.subject}"`);
+      return "Enviado";
     } catch (err) {
       this.logger.error(
         `Email falló para to=${msg.to.join(",")}: ${err instanceof Error ? err.message : err}`,
       );
+      return "Error";
     }
   }
 }

@@ -1,4 +1,8 @@
+import { plantillaAviso } from "../correos/plantillas";
+import { CorreosService } from "../correos/correos.service";
+import { documentos } from "../../db/schema/documentos";
 import type { CriteriosBusqueda } from "@legalmene/shared";
+import { avisar, jefeDe, usuariosConPermiso as conPermiso } from "../notif-inbox/destinatarios";
 import { condicionAtencion } from "../../common/busqueda/criterios";
 import {
   BadRequestException,
@@ -7,8 +11,9 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
-import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import {
   ESTADO_PROVISION_LABEL,
   puedeTransicionarProvision,
@@ -16,6 +21,7 @@ import {
   type EventoFinanciero,
   type MedioPago,
   type RegistrarMovimiento,
+  type CuentaCorrienteAbogado,
   type ResumenProvisionAtencion,
   type SolicitarProvision,
 } from "@legalmene/shared";
@@ -27,8 +33,10 @@ import {
   provisiones,
   provisionesEventos,
   provisionMovimientos,
+  rendicionesCliente,
   Provision,
   ProvisionMovimiento,
+  type RendicionClienteRow,
 } from "../../db/schema/provisiones";
 import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
 import { diasHabilesEntre, hoyChileISO, instanteChile, sumarDiasHabiles } from "../../common/utils/dias-habiles";
@@ -42,7 +50,16 @@ export interface FiltroProvisiones extends CriteriosBusqueda {
 }
 
 const ESTADOS_ATENCION_CERRADA: string[] = ["Terminada", "Abandonada", "Derivada"];
-const ESTADOS_PROVISIONADOS: EstadoProvision[] = ["Pagada", "EnAprobacion", "Autorizada", "Disponible", "Entregada", "Rendida", "Cerrada"];
+const ESTADOS_PROVISIONADOS: EstadoProvision[] = ["Pagada", "EnAprobacion", "Autorizada", "Disponible", "Entregada", "Rendida", "Reingresado", "RendidaCliente", "Cerrada"];
+
+// Saldo de una provisión (entregado − gastos − reintegros), como SQL sobre la fila de provisiones.
+const saldoProvisionSql = sql<number>`(coalesce(${provisiones.montoEntregado}, 0) - coalesce((select sum(m.monto) from provision_movimientos m where m.provision_id = ${provisiones.id}), 0))`;
+
+// Provisión con fondos aún en manos del abogado: entregada sin rendir, o rendida con saldo que
+// el contador todavía no recibe (reingreso pendiente). Impide pedir más fondos y terminar.
+export function condicionFondosPendientes(): SQL {
+  return or(eq(provisiones.estado, "Entregada"), and(eq(provisiones.estado, "Rendida"), sql`${saldoProvisionSql} > 0`))!;
+}
 // Plazo para retirar fondos disponibles antes de que vuelvan a la compañía (Anexo §X 11.1).
 export const DIAS_HABILES_RETIRO = 2;
 
@@ -62,6 +79,7 @@ export class ProvisionesService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     @Inject(NotifInboxService) private readonly notif: NotifInboxService,
+    @Optional() @Inject(CorreosService) private readonly correos?: CorreosService,
   ) {}
 
   async listar(filtro: FiltroProvisiones = {}) {
@@ -126,7 +144,7 @@ export class ProvisionesService {
     const [t] = await this.db
       .select({
         provisionado: sql<number>`coalesce(sum(${provisiones.monto}) filter (where ${inArray(provisiones.estado, ESTADOS_PROVISIONADOS)}), 0)`,
-        entregado: sql<number>`coalesce(sum(${provisiones.montoEntregado}) filter (where ${inArray(provisiones.estado, ["Entregada", "Rendida", "Cerrada"])}), 0)`,
+        entregado: sql<number>`coalesce(sum(${provisiones.montoEntregado}) filter (where ${inArray(provisiones.estado, ["Entregada", "Rendida", "Reingresado", "RendidaCliente", "Cerrada"])}), 0)`,
         pendientePago: sql<number>`coalesce(sum(${provisiones.monto}) filter (where ${provisiones.estado} = 'Solicitada'), 0)`,
       })
       .from(provisiones)
@@ -149,6 +167,8 @@ export class ProvisionesService {
     let saldoPorRendir = 0;
     for (const p of abiertas) saldoPorRendir += await this.saldo(this.db, p.id, p.montoEntregado ?? 0);
 
+    const c = await this.cuenta(atencionId);
+    const r = await this.rendicionActual(atencionId);
     return {
       provisionado: Number(t?.provisionado ?? 0),
       entregado: Number(t?.entregado ?? 0),
@@ -156,17 +176,28 @@ export class ProvisionesService {
       reintegrado: Number(m?.reintegros ?? 0),
       saldoPorRendir,
       pendientePago: Number(t?.pendientePago ?? 0),
+      saldoCuenta: c.saldo,
+      pendienteReingreso: c.pendienteReingreso,
+      rendidoCliente: c.devuelto,
+      rendicion: r
+        ? {
+            ...r,
+            solicitadaEn: r.solicitadaEn.toISOString(),
+            chequeEn: r.chequeEn?.toISOString() ?? null,
+            entregadaEn: r.entregadaEn?.toISOString() ?? null,
+          }
+        : null,
     };
   }
 
-  // Mientras el abogado tenga fondos entregados sin rendir no puede pedir más (Anexo §X 13).
+  // Mientras el abogado tenga fondos sin rendir o sin reingresar no puede pedir más (Anexo §X 13–14).
   private async assertSinRendicionPendiente(atencionId: string) {
     const [p] = await this.db
       .select({ n: count() })
       .from(provisiones)
-      .where(and(eq(provisiones.atencionId, atencionId), eq(provisiones.estado, "Entregada")));
+      .where(and(eq(provisiones.atencionId, atencionId), condicionFondosPendientes()));
     if (Number(p?.n ?? 0) > 0) {
-      throw new ConflictException("Hay fondos entregados sin rendir en esta atención; rinda la provisión antes de pedir más");
+      throw new ConflictException("Hay fondos entregados sin rendir o con saldo sin reingresar en esta atención; regularícelos antes de pedir más");
     }
   }
 
@@ -182,6 +213,9 @@ export class ProvisionesService {
         .values({ atencionId, monto: input.monto, motivo: input.motivo, solicitadaPorId: usuarioId })
         .returning();
       await this.evento(tx, row.id, null, "Solicitada", usuarioId, null);
+      return row;
+    }).then(async (row) => {
+      await this.notificar(row, "Solicitada", null, usuarioId);
       return row;
     });
   }
@@ -209,12 +243,17 @@ export class ProvisionesService {
       await this.evento(tx, id, p.estado, hasta, usuarioId, observacion);
       return u;
     });
-    await this.notificar(row, hasta, observacion);
+    await this.notificar(row, hasta, observacion, usuarioId);
     return row;
   }
 
-  registrarPagoCliente(id: string, usuarioId: string, medio: MedioPago, fecha?: string) {
-    return this.transicionar(id, "Pagada", usuarioId, { medioPagoCliente: medio, fechaPagoCliente: fecha ?? hoyChileISO() });
+  registrarPagoCliente(id: string, usuarioId: string, medio: MedioPago, fecha?: string, datos: { cuotas?: number; referencia?: string } = {}) {
+    return this.transicionar(id, "Pagada", usuarioId, {
+      medioPagoCliente: medio,
+      fechaPagoCliente: fecha ?? hoyChileISO(),
+      cuotasPagoCliente: datos.cuotas ?? null,
+      referenciaPagoCliente: datos.referencia || null,
+    });
   }
 
   async solicitarEntrega(id: string, usuarioId: string) {
@@ -289,27 +328,260 @@ export class ProvisionesService {
     });
   }
 
-  // Rendir exige que todo lo entregado esté gastado (con comprobante) o reintegrado.
+  // El abogado rinde con sus gastos (con comprobante). Si queda saldo, la provisión queda a la
+  // espera de que lo devuelva y el contador registre el reingreso (Anexo §X 13–14).
   rendir(id: string, usuarioId: string) {
     return this.transicionar(id, "Rendida", usuarioId, { fechaRendicion: new Date() }, null, async (p, tx) => {
       const saldo = await this.saldo(tx, p.id, p.montoEntregado ?? 0);
-      if (saldo !== 0) {
-        throw new BadRequestException(`Queda saldo por rendir (${clp(saldo)}); registre gastos o reintegre el saldo`);
-      }
+      if (saldo < 0) throw new BadRequestException("Los gastos superan lo entregado");
     });
   }
 
-  // Finanzas registra la devolución al cliente (cheque) sobre una provisión rendida.
-  async registrarDevolucion(id: string, usuarioId: string, numeroCheque: string, observacion?: string) {
-    const p = await this.obtener(id);
-    if (!["Rendida", "Cerrada"].includes(p.estado)) {
-      throw new ConflictException("La devolución se registra sobre una provisión rendida");
-    }
-    return this.db.transaction(async (tx) => {
-      const [u] = await tx.update(provisiones).set({ numeroCheque }).where(eq(provisiones.id, id)).returning();
-      await this.evento(tx, id, p.estado, p.estado, usuarioId, `Devolución al cliente, cheque ${numeroCheque}${observacion ? ` — ${observacion}` : ""}`);
-      return u;
+  // El contador recibe el saldo no gastado y lo registra: la provisión queda "Reingresado" y se
+  // habilitan nuevas solicitudes de fondos (Anexo §X 14). El monto debe ser el saldo exacto.
+  registrarReingreso(id: string, usuarioId: string, monto: number, glosa?: string) {
+    return this.transicionar(id, "Reingresado", usuarioId, {}, `Reingreso de ${clp(monto)}`, async (p, tx) => {
+      const saldo = await this.saldo(tx, p.id, p.montoEntregado ?? 0);
+      if (saldo <= 0) throw new ConflictException("La provisión no tiene saldo por reingresar");
+      if (monto !== saldo) throw new BadRequestException(`El reingreso debe ser el saldo no gastado (${clp(saldo)})`);
+      await tx.insert(provisionMovimientos).values({
+        provisionId: p.id,
+        tipo: "Reintegro",
+        monto,
+        glosa: glosa ?? "Saldo no gastado devuelto por el abogado",
+        registradoPorId: usuarioId,
+      });
     });
+  }
+
+  // Cuenta corriente por abogado (Anexo §X 12): provisiones autorizadas, disponibles, entregadas o
+  // con saldo por reingresar, agrupadas por quien las solicitó. Acotada al alcance del usuario.
+  async cuentaCorriente(abogadoId?: string): Promise<CuentaCorrienteAbogado[]> {
+    const filas = await this.db
+      .select({
+        id: provisiones.id,
+        atencionId: provisiones.atencionId,
+        correlativo: atenciones.correlativo,
+        motivo: provisiones.motivo,
+        estado: provisiones.estado,
+        monto: provisiones.monto,
+        montoEntregado: provisiones.montoEntregado,
+        saldo: saldoProvisionSql,
+        fechaEntrega: provisiones.fechaEntrega,
+        abogadoId: provisiones.solicitadaPorId,
+        abogadoNombre: usuarios.nombre,
+      })
+      .from(provisiones)
+      .innerJoin(atenciones, eq(atenciones.id, provisiones.atencionId))
+      .innerJoin(usuarios, eq(usuarios.id, provisiones.solicitadaPorId))
+      .where(
+        and(
+          filtroAtenciones(),
+          abogadoId ? eq(provisiones.solicitadaPorId, abogadoId) : undefined,
+          or(inArray(provisiones.estado, ["Autorizada", "Disponible"]), condicionFondosPendientes()),
+        ),
+      )
+      .orderBy(asc(usuarios.nombre), asc(provisiones.fechaSolicitud));
+    const porAbogado = new Map<string, CuentaCorrienteAbogado>();
+    for (const f of filas) {
+      let c = porAbogado.get(f.abogadoId);
+      if (!c) {
+        c = { abogadoId: f.abogadoId, abogadoNombre: f.abogadoNombre, porEntregar: 0, porRendir: 0, porReingresar: 0, provisiones: [] };
+        porAbogado.set(f.abogadoId, c);
+      }
+      const saldo = Number(f.saldo);
+      if (f.estado === "Autorizada" || f.estado === "Disponible") c.porEntregar += f.monto;
+      else if (f.estado === "Entregada") c.porRendir += saldo;
+      else c.porReingresar += saldo;
+      c.provisiones.push({
+        id: f.id,
+        atencionId: f.atencionId,
+        correlativo: f.correlativo,
+        motivo: f.motivo,
+        estado: f.estado,
+        monto: f.monto,
+        montoEntregado: f.montoEntregado,
+        saldo: f.estado === "Autorizada" || f.estado === "Disponible" ? f.monto : saldo,
+        fechaEntrega: f.fechaEntrega?.toISOString() ?? null,
+      });
+    }
+    return [...porAbogado.values()];
+  }
+
+  // --- Rendición de fondos al cliente (Anexo §X 16–20) ---
+
+  // Saldo de la cuenta de la atención: lo pagado por el cliente menos los gastos y lo ya devuelto.
+  async cuenta(atencionId: string) {
+    const [t] = await this.db
+      .select({ pagado: sql<number>`coalesce(sum(${provisiones.monto}) filter (where ${inArray(provisiones.estado, ESTADOS_PROVISIONADOS)}), 0)` })
+      .from(provisiones)
+      .where(eq(provisiones.atencionId, atencionId));
+    const [m] = await this.db
+      .select({ gastos: sumaMov("Gasto") })
+      .from(provisionMovimientos)
+      .innerJoin(provisiones, eq(provisionMovimientos.provisionId, provisiones.id))
+      .where(eq(provisiones.atencionId, atencionId));
+    const [r] = await this.db
+      .select({ devuelto: sql<number>`coalesce(sum(${rendicionesCliente.monto}) filter (where ${rendicionesCliente.estado} <> 'Solicitada'), 0)` })
+      .from(rendicionesCliente)
+      .where(eq(rendicionesCliente.atencionId, atencionId));
+    const [pend] = await this.db
+      .select({ n: sql<number>`coalesce(sum(${saldoProvisionSql}) filter (where ${provisiones.estado} = 'Rendida'), 0)` })
+      .from(provisiones)
+      .where(eq(provisiones.atencionId, atencionId));
+    const pagado = Number(t?.pagado ?? 0);
+    const gastos = Number(m?.gastos ?? 0);
+    const devuelto = Number(r?.devuelto ?? 0);
+    return { pagado, gastos, devuelto, saldo: pagado - gastos - devuelto, pendienteReingreso: Math.max(0, Number(pend?.n ?? 0)) };
+  }
+
+  async rendicionActual(atencionId: string): Promise<RendicionClienteRow | null> {
+    const [r] = await this.db
+      .select()
+      .from(rendicionesCliente)
+      .where(eq(rendicionesCliente.atencionId, atencionId))
+      .orderBy(desc(rendicionesCliente.solicitadaEn))
+      .limit(1);
+    return r ?? null;
+  }
+
+  // Paso 16: el abogado pide rendir al cliente; se avisa a Finanzas y al contador.
+  async solicitarRendicionCliente(atencionId: string, usuarioId: string): Promise<RendicionClienteRow> {
+    const atencion = await this.assertAtencion(atencionId);
+    const c = await this.cuenta(atencionId);
+    if (c.saldo <= 0) throw new ConflictException("La cuenta de la atención no tiene saldo que rendir al cliente");
+    const [row] = await this.db
+      .insert(rendicionesCliente)
+      .values({ atencionId, solicitadaPorId: usuarioId })
+      .onConflictDoNothing()
+      .returning();
+    if (!row) throw new ConflictException("Ya hay una rendición al cliente en curso para esta atención");
+    // Anexo §X 17: aviso y correo a EF y EC.
+    const destinatarios = await this.usuariosConPermiso(["provisiones.disponer_entregar", "provisiones.registrar_pago"]);
+    await avisar(
+      this.notif,
+      destinatarios,
+      {
+        codPlan: atencion.codPlan,
+        severidad: "warn",
+        titulo: `Rendición al cliente: ${atencion.correlativo}`,
+        detalle: `Emitir cheque de devolución por ${clp(c.saldo)}`,
+        accionUrl: `/atenciones/${atencionId}`,
+      },
+      usuarioId,
+      { servicio: this.correos, atencionId, plantilla: "rendicion.solicitada" },
+    );
+    return row;
+  }
+
+  // Paso 18: Finanzas emite el cheque por el total del saldo (la cuenta queda en cero). No procede
+  // si hay fondos en manos del abogado o entregas en curso.
+  async registrarChequeDevolucion(atencionId: string, usuarioId: string, numeroCheque: string, observacion?: string): Promise<RendicionClienteRow> {
+    const atencion = await this.assertAtencion(atencionId);
+    const actual = await this.rendicionActual(atencionId);
+    if (!actual || actual.estado !== "Solicitada") throw new ConflictException("No hay una rendición al cliente solicitada");
+    const [enCurso] = await this.db
+      .select({ n: count() })
+      .from(provisiones)
+      .where(
+        and(
+          eq(provisiones.atencionId, atencionId),
+          or(inArray(provisiones.estado, ["EnAprobacion", "Autorizada", "Disponible"]), condicionFondosPendientes()),
+        ),
+      );
+    if (Number(enCurso?.n ?? 0) > 0) {
+      throw new ConflictException("Hay fondos por rendir o reingresar, o entregas en curso; regularícelos antes de emitir el cheque");
+    }
+    const c = await this.cuenta(atencionId);
+    if (c.saldo <= 0) throw new ConflictException("La cuenta de la atención no tiene saldo que devolver");
+    const [row] = await this.db
+      .update(rendicionesCliente)
+      .set({ estado: "ChequeEmitido", monto: c.saldo, numeroCheque, observacion: observacion ?? null, chequePorId: usuarioId, chequeEn: new Date() })
+      .where(and(eq(rendicionesCliente.id, actual.id), eq(rendicionesCliente.estado, "Solicitada")))
+      .returning();
+    if (!row) throw new ConflictException("La rendición ya fue procesada");
+    // Aviso al abogado que la pidió y a su jefatura: el cheque está disponible para retiro.
+    const [sol] = await this.db.select({ jefeId: usuarios.jefeId }).from(usuarios).where(eq(usuarios.id, actual.solicitadaPorId));
+    await avisar(
+      this.notif,
+      [actual.solicitadaPorId, sol?.jefeId],
+      {
+        codPlan: atencion.codPlan,
+        severidad: "info",
+        titulo: `Cheque de devolución disponible: ${atencion.correlativo}`,
+        detalle: `Cheque ${numeroCheque} por ${clp(c.saldo)}`,
+        accionUrl: `/atenciones/${atencionId}`,
+      },
+      usuarioId,
+      { servicio: this.correos, atencionId, plantilla: "rendicion.cheque" },
+    );
+    return row;
+  }
+
+  // Paso 20: entregado el cheque al cliente, el abogado marca "rendido a cliente" y todas las
+  // provisiones con fondos pasan a "Rendida al cliente".
+  async marcarRendidoCliente(atencionId: string, usuarioId: string): Promise<RendicionClienteRow> {
+    await this.assertAtencion(atencionId);
+    const actual = await this.rendicionActual(atencionId);
+    if (!actual || actual.estado !== "ChequeEmitido") throw new ConflictException("El cheque de devolución aún no está emitido");
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(rendicionesCliente)
+        .set({ estado: "Entregada", entregadaPorId: usuarioId, entregadaEn: new Date() })
+        .where(and(eq(rendicionesCliente.id, actual.id), eq(rendicionesCliente.estado, "ChequeEmitido")))
+        .returning();
+      if (!row) throw new ConflictException("La rendición ya fue marcada como entregada");
+      const provs = await tx
+        .select({ id: provisiones.id, estado: provisiones.estado })
+        .from(provisiones)
+        .where(and(eq(provisiones.atencionId, atencionId), inArray(provisiones.estado, ["Pagada", "Rendida", "Reingresado"])));
+      for (const p of provs) {
+        await tx.update(provisiones).set({ estado: "RendidaCliente", numeroCheque: actual.numeroCheque }).where(eq(provisiones.id, p.id));
+        await this.evento(tx, p.id, p.estado, "RendidaCliente", usuarioId, `Rendido a cliente con cheque ${actual.numeroCheque}`);
+      }
+      return row;
+    });
+  }
+
+  private usuariosConPermiso(permisosBuscados: string[]): Promise<string[]> {
+    return conPermiso(this.db, permisosBuscados);
+  }
+
+  private async recordarRetiro(p: Provision) {
+    const [a] = await this.db
+      .select({ codPlan: atenciones.codPlan, correlativo: atenciones.correlativo })
+      .from(atenciones)
+      .where(eq(atenciones.id, p.atencionId));
+    if (!a) return;
+    const jefe = await jefeDe(this.db, p.solicitadaPorId);
+    const avisados: string[] = [];
+    for (const usuarioId of new Set([p.solicitadaPorId, jefe].filter((x): x is string => !!x))) {
+      const creada = await this.notif.crearSiNoExisteUnseen(
+        {
+          codPlan: a.codPlan,
+          usuarioId,
+          severidad: "warn",
+          titulo: `Retire hoy los fondos de ${a.correlativo}`,
+          detalle: `${clp(p.monto)}: si no se retiran hoy, mañana vuelven a la compañía`,
+          accionUrl: `/atenciones/${p.atencionId}`,
+          metadata: { recordatorioRetiro: p.id },
+        },
+        "recordatorioRetiro",
+        p.id,
+      );
+      if (creada) avisados.push(usuarioId);
+    }
+    if (avisados.length && this.correos) {
+      await this.correos.aUsuarios(
+        avisados,
+        plantillaAviso({
+          titulo: `Retire hoy los fondos de ${a.correlativo}`,
+          detalle: `${clp(p.monto)}: si no se retiran hoy, mañana vuelven a la compañía`,
+          url: this.correos.url(`/atenciones/${p.atencionId}`),
+        }),
+        { plantilla: "provision.recordatorioRetiro", atencionId: p.atencionId },
+      );
+    }
   }
 
   // Disponibles no retirados en 2 días hábiles vuelven a Pagada (Anexo §X 11.1).
@@ -318,7 +590,10 @@ export class ProvisionesService {
     let n = 0;
     for (const p of disponibles) {
       if (!p.fechaDisponible) continue;
-      if (diasHabilesEntre(hoyChileISO(p.fechaDisponible), hoy) <= DIAS_HABILES_RETIRO) continue;
+      const transcurridos = diasHabilesEntre(hoyChileISO(p.fechaDisponible), hoy);
+      // Último día hábil del plazo: recordatorio al abogado y su jefatura (Anexo §X 11.1).
+      if (transcurridos === DIAS_HABILES_RETIRO) await this.recordarRetiro(p);
+      if (transcurridos <= DIAS_HABILES_RETIRO) continue;
       // Solo si sigue Disponible con la misma fecha: una entrega hecha mientras corre el job gana.
       const revertida = await this.db.transaction(async (tx) => {
         const [u] = await tx
@@ -331,7 +606,7 @@ export class ProvisionesService {
         return true;
       });
       if (!revertida) continue;
-      await this.notificar({ ...p, estado: "Pagada" }, "Pagada", "Fondos no retirados en el plazo de 2 días hábiles", true);
+      await this.notificar({ ...p, estado: "Pagada" }, "Pagada", "Fondos no retirados en el plazo de 2 días hábiles", null, true);
       n++;
     }
     return n;
@@ -352,14 +627,23 @@ export class ProvisionesService {
     return this.db.transaction(async (tx) => {
       const [prov] = await tx.select().from(provisiones).where(eq(provisiones.id, provisionId)).for("update");
       if (!prov) throw new NotFoundException(`Provisión ${provisionId} no existe`);
+      if (input.tipo !== "Gasto") {
+        throw new BadRequestException("El saldo no gastado lo registra el contador al recibirlo (reingreso)");
+      }
       if (prov.estado !== "Entregada") {
-        throw new BadRequestException("Solo se registran gastos y reintegros sobre fondos entregados al abogado");
+        throw new BadRequestException("Solo se registran gastos sobre fondos entregados al abogado");
       }
       const saldo = await this.saldo(tx, provisionId, prov.montoEntregado ?? 0);
       if (input.monto > saldo) {
-        const que = input.tipo === "Gasto" ? "El gasto" : "El reintegro";
-        throw new BadRequestException(`${que} supera el saldo disponible de la provisión (${clp(saldo)})`);
+        throw new BadRequestException(`El gasto supera el saldo disponible de la provisión (${clp(saldo)})`);
       }
+      // Anexo §X 13: cada gasto real se respalda con su comprobante, subido a la misma atención.
+      if (!input.documentoId) throw new BadRequestException("Adjunte el comprobante del gasto");
+      const [doc] = await tx
+        .select({ id: documentos.id })
+        .from(documentos)
+        .where(and(eq(documentos.id, input.documentoId), eq(documentos.atencionId, prov.atencionId)));
+      if (!doc) throw new BadRequestException("El comprobante no corresponde a un documento de esta atención");
       const [mov] = await tx
         .insert(provisionMovimientos)
         .values({
@@ -412,26 +696,58 @@ export class ProvisionesService {
     await tx.insert(provisionesEventos).values({ provisionId, estadoDesde: desde, estadoHasta: hasta, usuarioId, observacion });
   }
 
-  // Avisa al abogado que solicitó la provisión (y al jefe que la autorizó, si aplica).
-  private async notificar(p: Provision, estado: EstadoProvision, observacion: string | null, incluirJefe = false) {
+  // Avisos del flujo de provisiones (Anexo §X), según la etapa: al contador al solicitar y al
+  // rendir; al abogado y su jefatura al pagarse y quedar disponible; a la jefatura al pedir la
+  // entrega; a Finanzas (EF/GAF) al autorizarse y si los fondos vuelven por no retirarse. Nunca a
+  // quien hizo la acción.
+  private async notificar(p: Provision, estado: EstadoProvision, observacion: string | null, actorId: string | null, reversion = false) {
     const [a] = await this.db
       .select({ codPlan: atenciones.codPlan, correlativo: atenciones.correlativo })
       .from(atenciones)
       .where(eq(atenciones.id, p.atencionId));
     if (!a) return;
-    const destinatarios = new Set([p.solicitadaPorId]);
-    if (incluirJefe && p.resueltaPorId) destinatarios.add(p.resueltaPorId);
-    for (const usuarioId of destinatarios) {
-      await this.notif.crear({
+    const abogado = p.solicitadaPorId;
+    const jefe = await jefeDe(this.db, abogado);
+    const destinatarios: (string | null)[] = [];
+    if (reversion) {
+      destinatarios.push(abogado, jefe, p.resueltaPorId, ...(await this.usuariosConPermiso(["provisiones.disponer_entregar"])));
+    } else if (estado === "Solicitada" || estado === "Rendida") {
+      destinatarios.push(...(await this.usuariosConPermiso(["provisiones.registrar_pago"])));
+    } else if (estado === "EnAprobacion") {
+      destinatarios.push(...(jefe ? [jefe] : await this.usuariosConPermiso(["provisiones.autorizar"])));
+    } else if (estado === "Autorizada") {
+      destinatarios.push(abogado, ...(await this.usuariosConPermiso(["provisiones.disponer_entregar"])));
+    } else if (estado === "Pagada" || estado === "Disponible") {
+      destinatarios.push(abogado, jefe);
+    } else {
+      destinatarios.push(abogado);
+    }
+    const titulo =
+      estado === "Solicitada"
+        ? `Provisión solicitada en ${a.correlativo}: registrar el pago del cliente`
+        : estado === "EnAprobacion"
+          ? `Entrega de provisión por autorizar: ${a.correlativo}`
+          : `Provisión ${a.correlativo}: ${ESTADO_PROVISION_LABEL[estado]}`;
+    await avisar(
+      this.notif,
+      destinatarios,
+      {
         codPlan: a.codPlan,
-        usuarioId,
-        severidad: estado === "Disponible" ? "warn" : "info",
-        titulo: `Provisión ${a.correlativo}: ${ESTADO_PROVISION_LABEL[estado]}`,
+        severidad: estado === "Disponible" || estado === "EnAprobacion" || reversion ? "warn" : "info",
+        titulo,
         detalle: observacion ?? `${clp(p.monto)} — ${p.motivo}`,
         accionUrl: `/atenciones/${p.atencionId}`,
         metadata: { provisionId: p.id, estado },
-      });
-    }
+      },
+      actorId,
+      {
+        servicio: this.correos,
+        atencionId: p.atencionId,
+        plantilla: `provision.${reversion ? "Revertida" : estado}`,
+        // Anexo §X: solicitud.fondos@ al solicitar; autoriza.provision@ al autorizar.
+        casillas: estado === "Solicitada" ? ["solicitudFondos"] : estado === "Autorizada" && !reversion ? ["autorizaProvision"] : [],
+      },
+    );
   }
 
   // 404 si la provisión no existe o pertenece a una atención que el usuario no ve.
@@ -448,7 +764,7 @@ export class ProvisionesService {
 
   private async assertAtencion(atencionId: string) {
     const [row] = await this.db
-      .select({ id: atenciones.id, estado: atenciones.estado })
+      .select({ id: atenciones.id, estado: atenciones.estado, codPlan: atenciones.codPlan, correlativo: atenciones.correlativo })
       .from(atenciones)
       .where(and(eq(atenciones.id, atencionId), filtroAtenciones()));
     if (!row) throw new NotFoundException(`Atención ${atencionId} no existe`);
@@ -456,14 +772,15 @@ export class ProvisionesService {
   }
 }
 
-// Usado al terminar la atención: provisiones rendidas pasan a Cerrada.
+// Usado al terminar la atención: provisiones rendidas o reingresadas pasan a Cerrada (las
+// rendidas al cliente ya están en su estado final).
 export async function cerrarProvisionesDeAtencion(db: Database, atencionId: string, usuarioId: string | null): Promise<void> {
   const rendidas = await db
-    .select({ id: provisiones.id })
+    .select({ id: provisiones.id, estado: provisiones.estado })
     .from(provisiones)
-    .where(and(eq(provisiones.atencionId, atencionId), eq(provisiones.estado, "Rendida")));
+    .where(and(eq(provisiones.atencionId, atencionId), inArray(provisiones.estado, ["Rendida", "Reingresado"])));
   for (const p of rendidas) {
     await db.update(provisiones).set({ estado: "Cerrada" }).where(eq(provisiones.id, p.id));
-    await db.insert(provisionesEventos).values({ provisionId: p.id, estadoDesde: "Rendida", estadoHasta: "Cerrada", usuarioId, observacion: "Atención terminada" });
+    await db.insert(provisionesEventos).values({ provisionId: p.id, estadoDesde: p.estado, estadoHasta: "Cerrada", usuarioId, observacion: "Atención terminada" });
   }
 }

@@ -6,8 +6,9 @@ import { InputTextModule } from "primeng/inputtext";
 import { ButtonModule } from "primeng/button";
 import { SelectModule } from "primeng/select";
 import { MessageService } from "primeng/api";
-import { CreateAfiliadoSchema, type Afiliado } from "@legalmene/shared";
+import { CreateAfiliadoSchema, type Afiliado, type Region } from "@legalmene/shared";
 import { AfiliadosApiService } from "../../core/services/afiliados.service";
+import { MaestrosApiService } from "../../core/services/maestros.service";
 
 type Campos = {
   rut: string;
@@ -18,6 +19,7 @@ type Campos = {
   telefono: string;
   direccion: string;
   comuna: string;
+  ciudad: string;
   region: string;
   fechaNacimiento: string;
   vigencia: "Activo" | "Inactivo";
@@ -32,6 +34,7 @@ const VACIO: Campos = {
   telefono: "",
   direccion: "",
   comuna: "",
+  ciudad: "",
   region: "",
   fechaNacimiento: "",
   vigencia: "Activo",
@@ -59,8 +62,19 @@ const VACIO: Campos = {
         <label>Correo<input pInputText type="email" name="email" [(ngModel)]="c.email" /></label>
         <label>Teléfono<input pInputText name="telefono" [(ngModel)]="c.telefono" /></label>
         <label class="lm-span-2">Dirección<input pInputText name="direccion" [(ngModel)]="c.direccion" /></label>
-        <label>Comuna<input pInputText name="comuna" [(ngModel)]="c.comuna" /></label>
-        <label>Región<input pInputText name="region" [(ngModel)]="c.region" /></label>
+        <label
+          >Región
+          <p-select name="region" [(ngModel)]="c.region" [options]="regionNombres()" [editable]="true" [filter]="false"
+            appendTo="body" placeholder="Región" (onChange)="cargarLugares()"></p-select>
+        </label>
+        <label
+          >Ciudad
+          <p-select name="ciudad" [(ngModel)]="c.ciudad" [options]="ciudades()" [editable]="true" appendTo="body" placeholder="Ciudad"></p-select>
+        </label>
+        <label
+          >Comuna
+          <p-select name="comuna" [(ngModel)]="c.comuna" [options]="comunas()" [editable]="true" appendTo="body" placeholder="Comuna"></p-select>
+        </label>
         <label>Fecha de nacimiento<input pInputText type="date" name="fechaNacimiento" [(ngModel)]="c.fechaNacimiento" /></label>
         <label *ngIf="afiliado"
           >Vigencia
@@ -87,6 +101,11 @@ const VACIO: Campos = {
 export class AfiliadoFormComponent implements OnChanges {
   private api = inject(AfiliadosApiService);
   private msg = inject(MessageService);
+  private maestros = inject(MaestrosApiService);
+  private regiones: Region[] = [];
+  protected regionNombres = signal<string[]>([]);
+  protected ciudades = signal<string[]>([]);
+  protected comunas = signal<string[]>([]);
 
   @Input() visible = false;
   @Input() afiliado: Afiliado | null = null;
@@ -105,6 +124,13 @@ export class AfiliadoFormComponent implements OnChanges {
 
   ngOnChanges() {
     if (!this.visible) return;
+    if (!this.regiones.length) {
+      this.maestros.listar("regiones", { vigente: true }).subscribe((r) => {
+        this.regiones = r;
+        this.regionNombres.set(r.map((x) => x.nombre));
+        this.cargarLugares();
+      });
+    }
     this.error.set(null);
     const a = this.afiliado;
     this.c = a
@@ -117,11 +143,25 @@ export class AfiliadoFormComponent implements OnChanges {
           telefono: a.telefono ?? "",
           direccion: a.direccion ?? "",
           comuna: a.comuna ?? "",
+          ciudad: a.ciudad ?? "",
           region: a.region ?? "",
           fechaNacimiento: a.fechaNacimiento ?? "",
           vigencia: a.vigencia === "Inactivo" ? "Inactivo" : "Activo",
         }
       : { ...VACIO, rut: this.rutInicial };
+    this.cargarLugares();
+  }
+
+  // Ciudades y comunas de la región elegida (si la región está en el maestro).
+  cargarLugares() {
+    const region = this.regiones.find((r) => r.nombre === this.c.region?.trim());
+    if (!region) {
+      this.ciudades.set([]);
+      this.comunas.set([]);
+      return;
+    }
+    this.maestros.listar("ciudades", { vigente: true, regionId: region.id }).subscribe((r) => this.ciudades.set(r.map((x) => x.nombre)));
+    this.maestros.listar("comunas", { vigente: true, regionId: region.id }).subscribe((r) => this.comunas.set(r.map((x) => x.nombre)));
   }
 
   // Campos vacíos viajan como null (o se omiten) para no chocar con las validaciones de formato.
@@ -135,8 +175,9 @@ export class AfiliadoFormComponent implements OnChanges {
       email: t(this.c.email),
       telefono: t(this.c.telefono),
       direccion: t(this.c.direccion),
-      comuna: t(this.c.comuna),
-      region: t(this.c.region),
+      comuna: t(this.c.comuna ?? ""),
+      ciudad: t(this.c.ciudad ?? ""),
+      region: t(this.c.region ?? ""),
       fechaNacimiento: t(this.c.fechaNacimiento),
       ...(this.afiliado ? { vigencia: this.c.vigencia } : {}),
     };
@@ -177,6 +218,7 @@ const ETIQUETA: Record<string, string> = {
   telefono: "Teléfono",
   direccion: "Dirección",
   comuna: "Comuna",
+  ciudad: "Ciudad",
   region: "Región",
   fechaNacimiento: "Fecha de nacimiento",
 };

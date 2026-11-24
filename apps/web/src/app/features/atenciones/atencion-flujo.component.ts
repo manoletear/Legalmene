@@ -1,3 +1,4 @@
+import { PermisoDirective } from "../../core/permisos";
 import { Component, OnInit, computed, effect, inject, input, output, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
@@ -50,6 +51,7 @@ const MONEDAS: MonedaCuantia[] = ["CLP", "UF", "UTM", "USD"];
   selector: "lm-atencion-flujo",
   standalone: true,
   imports: [
+    PermisoDirective,
     DialogModule,
     CommonModule,
     FormsModule,
@@ -172,6 +174,15 @@ const MONEDAS: MonedaCuantia[] = ["CLP", "UF", "UTM", "USD"];
       <!-- Datos judiciales -->
       <div *ngIf="a.tipo !== 'Consulta'" class="lm-info-card" style="margin-bottom:16px;">
         <div class="lm-info-card-header"><i class="pi pi-building-columns"></i> Datos {{ a.tipo === 'Juicio' ? 'judiciales' : 'de la asesoría' }}</div>
+        <div *ngIf="a.tipo === 'Juicio'" class="lm-row lm-small" style="gap:8px; margin-bottom:8px; flex-wrap:wrap;" data-testid="vb-primera-presentacion">
+          <span class="lm-muted">Primera presentación:</span>
+          <span *ngIf="a.vbPrimeraPresentacion">V°B° de jefatura el {{ a.vbPrimeraPresentacion.fecha | date: 'dd-MM-yyyy HH:mm' }}</span>
+          <ng-container *ngIf="!a.vbPrimeraPresentacion">
+            <span>pendiente de V°B° de jefatura</span>
+            <button *lmPermiso="'atenciones.aprobar_termino'" pButton size="small" [text]="true" icon="pi pi-check"
+              label="Dar V°B°" (click)="vbPrimeraPresentacion(a)"></button>
+          </ng-container>
+        </div>
         <div class="lm-grid lm-grid-3" style="gap:12px;">
           <div *ngIf="a.tipo === 'Asesoria'" class="lm-col">
             <label class="lm-small">Organismo</label>
@@ -448,6 +459,10 @@ export class AtencionFlujoComponent implements OnInit {
         },
         error: (e) => this.error(e),
       });
+  }
+
+  vbPrimeraPresentacion(a: AtencionConMaestros) {
+    this.api.vbPrimeraPresentacion(a.id).subscribe({ next: () => this.ok("V°B° a la primera presentación registrado"), error: (e) => this.error(e) });
   }
 
   aprobarTermino(a: AtencionConMaestros) {

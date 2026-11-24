@@ -304,6 +304,7 @@ export class AppComponent implements OnInit {
         { label: "Posesiones efectivas", icon: "pi-book", route: "/posesiones" },
         { label: "Derivaciones", icon: "pi-share-alt", route: "/derivaciones", permisos: ["derivaciones.solicitar", "derivaciones.aprobar"] },
         { label: "Gestiones", icon: "pi-check-square", route: "/gestiones" },
+        { label: "Agenda", icon: "pi-calendar", route: "/agenda", permisos: ["agenda.ver"] },
         { label: "Documentos", icon: "pi-folder", route: "/documentos" },
       ],
     },
@@ -323,6 +324,7 @@ export class AppComponent implements OnInit {
         { label: "Provisiones", icon: "pi-wallet", route: "/provisiones" },
         { label: "Pagos", icon: "pi-credit-card", route: "/pagos", permisos: ["pagos.ver"] },
         { label: "Bandeja de finanzas", icon: "pi-money-bill", route: "/finanzas", permisos: ["finanzas.ver"] },
+        { label: "Cuenta corriente", icon: "pi-book", route: "/cuenta-corriente", permisos: ["finanzas.ver"] },
       ],
     },
     {

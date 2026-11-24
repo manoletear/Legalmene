@@ -51,6 +51,9 @@ function traducirZod(error: ZodError): { path: string[]; mensaje: string; codigo
 export class I18nExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(I18nExceptionFilter.name);
 
+  // alAvisar: aviso a los administradores de un error de funcionamiento (Anexo §I l.66).
+  constructor(private readonly alAvisar?: (ruta: string, detalle: string) => Promise<void>) {}
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const res = ctx.getResponse<Response>();
@@ -114,6 +117,9 @@ export class I18nExceptionFilter implements ExceptionFilter {
     // Fallback: error no controlado. Log + 500 sin filtrar detalles.
     const detail = exception instanceof Error ? exception.message : String(exception);
     this.logger.error(`Error no controlado en ${path}: ${detail}`, exception instanceof Error ? exception.stack : undefined);
+    if (this.alAvisar) {
+      this.alAvisar(path, detail).catch((e) => this.logger.warn(`No se pudo avisar el error a los administradores: ${e}`));
+    }
     res.status(500).json({
       statusCode: 500,
       error: "Internal Server Error",

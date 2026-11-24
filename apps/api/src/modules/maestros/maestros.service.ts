@@ -3,12 +3,18 @@ import { and, asc, eq, getTableColumns, SQL } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import type { ZodTypeAny } from "zod";
 import {
+  CreateCanalSchema,
   CreateCompetenciaSchema,
+  CreateLugarSchema,
+  CreateRegionSchema,
   CreateMaestroSimpleSchema,
   CreateMateriaSchema,
   CreateProcedimientoSchema,
   CreateTribunalSchema,
+  UpdateCanalSchema,
   UpdateCompetenciaSchema,
+  UpdateLugarSchema,
+  UpdateRegionSchema,
   UpdateMaestroSimpleSchema,
   UpdateMateriaSchema,
   UpdateProcedimientoSchema,
@@ -19,14 +25,18 @@ import { DRIZZLE, Database } from "../../db/database.module";
 import {
   calidadesProcesales,
   causasTermino,
+  ciudades,
   competencias,
+  comunas,
   materias,
   organismos,
   procedimientos,
+  regiones,
   tiposConsulta,
   tribunales,
   type MateriaRow,
 } from "../../db/schema/maestros";
+import { canales } from "../../db/schema/planes";
 import { esViolacionUnica } from "../../common/utils/pg-errors";
 
 interface DefMaestro {
@@ -36,6 +46,8 @@ interface DefMaestro {
   update: ZodTypeAny;
   // Maestros que dependen de una competencia (materias, procedimientos).
   porCompetencia?: boolean;
+  // Maestros que dependen de una región (ciudades, comunas).
+  porRegion?: boolean;
 }
 
 export const MAESTROS = {
@@ -68,6 +80,10 @@ export const MAESTROS = {
     create: CreateMaestroSimpleSchema,
     update: UpdateMaestroSimpleSchema,
   },
+  canales: { table: canales, etiqueta: "canal", create: CreateCanalSchema, update: UpdateCanalSchema },
+  regiones: { table: regiones, etiqueta: "región", create: CreateRegionSchema, update: UpdateRegionSchema },
+  ciudades: { table: ciudades, etiqueta: "ciudad", create: CreateLugarSchema, update: UpdateLugarSchema, porRegion: true },
+  comunas: { table: comunas, etiqueta: "comuna", create: CreateLugarSchema, update: UpdateLugarSchema, porRegion: true },
 } satisfies Record<string, DefMaestro>;
 
 export type TipoMaestro = keyof typeof MAESTROS;
@@ -75,6 +91,7 @@ export type TipoMaestro = keyof typeof MAESTROS;
 export interface FiltroMaestro {
   vigente?: boolean;
   competenciaId?: string;
+  regionId?: string;
   // Solo materias: aplica al tipo de atención indicado.
   aplicaA?: TipoAtencion;
 }
@@ -115,6 +132,7 @@ export class MaestrosService {
     const condiciones: (SQL | undefined)[] = [
       filtro.vigente === undefined ? undefined : eq(c.vigente, filtro.vigente),
       d.porCompetencia && filtro.competenciaId ? eq(c.competenciaId, filtro.competenciaId) : undefined,
+      d.porRegion && filtro.regionId ? eq(c.regionId, filtro.regionId) : undefined,
       tipo === "materias" && filtro.aplicaA ? eq(c[COLUMNA_APLICA[filtro.aplicaA]], true) : undefined,
     ];
     return this.db
@@ -128,6 +146,7 @@ export class MaestrosService {
     const d = this.def(tipo);
     const data = this.parse<Record<string, unknown>>(d.create, body);
     if (d.porCompetencia) await this.assertCompetencia(String(data.competenciaId));
+    if (d.porRegion) await this.assertRegion(String(data.regionId));
     try {
       const [row] = await this.db.insert(d.table).values(data).returning();
       return row;
@@ -142,6 +161,7 @@ export class MaestrosService {
     const data = this.parse<Record<string, unknown>>(d.update, body);
     if (Object.keys(data).length === 0) throw new BadRequestException("Nada que actualizar");
     if (d.porCompetencia && data.competenciaId) await this.assertCompetencia(String(data.competenciaId));
+    if (d.porRegion && data.regionId) await this.assertRegion(String(data.regionId));
     try {
       const [row] = await this.db.update(d.table).set(data).where(eq(c.id, id)).returning();
       if (!row) throw new NotFoundException(`No existe ${d.etiqueta} ${id}`);
@@ -160,6 +180,11 @@ export class MaestrosService {
   private async assertCompetencia(id: string) {
     const [row] = await this.db.select({ id: competencias.id }).from(competencias).where(eq(competencias.id, id));
     if (!row) throw new BadRequestException(`Competencia ${id} no existe`);
+  }
+
+  private async assertRegion(id: string) {
+    const [row] = await this.db.select({ id: regiones.id }).from(regiones).where(eq(regiones.id, id));
+    if (!row) throw new BadRequestException(`Región ${id} no existe`);
   }
 
   private traducir(err: unknown, d: DefMaestro, nombre: string): unknown {

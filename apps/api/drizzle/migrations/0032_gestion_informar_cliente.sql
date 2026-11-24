@@ -1,0 +1,1 @@
+ALTER TABLE "gestiones" ADD COLUMN "informar_cliente" boolean DEFAULT false NOT NULL;

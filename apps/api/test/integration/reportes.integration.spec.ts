@@ -183,4 +183,39 @@ const PERIODO = { desde: "2025-07-01", hasta: "2025-12-31" };
     const propias = await ejecutarComo(como(abogadoB), () => exportsSrv.busqueda("consultas", { codPlan: PLAN }));
     expect(propias.filas).toBe(0);
   });
+
+  it("exportación de juicios: incluye la columna Bienes", async () => {
+    const { archivo } = await ejecutarComo(como(gerencia), () => exportsSrv.busqueda("juicios", { codPlan: PLAN }));
+    const wb = await leerLibro(archivo);
+    expect(encabezados(wb.worksheets[0])).toContain("Bienes");
+  });
+
+  it("reporte por plan y por canal: el Excel trae el listado de las atenciones contadas", async () => {
+    const plan = await leerLibro(await ejecutarComo(como(gerencia), () => reportes.xlsxPorPlan(PERIODO, PLAN)));
+    const hoja = plan.getWorksheet("Atenciones")!;
+    expect(encabezados(hoja).slice(0, 3)).toEqual(["Plan reportado", "Correlativo", "Tipo"]);
+    expect(hoja.rowCount).toBe(3); // la consulta dentro de la vigencia y el juicio
+    const canal = await leerLibro(await ejecutarComo(como(gerencia), () => reportes.xlsxPorCanal(PERIODO, canalId)));
+    expect(canal.worksheets.map((w) => w.name)).toEqual(["Resumen por canal", "Detalle por plan", "Atenciones"]);
+    expect(canal.getWorksheet("Atenciones")!.rowCount).toBe(3);
+  });
+
+  it("afiliados activos por mes: el Excel trae la lista de RUT vigentes por canal y plan", async () => {
+    const wb = await leerLibro(await reportes.xlsxAfiliadosMes(PERIODO, { codPlan: PLAN }));
+    const hoja = wb.getWorksheet("RUT vigentes")!;
+    expect(encabezados(hoja).slice(0, 4)).toEqual(["Canal", "Cód. plan", "Plan", "RUT"]);
+    expect(hoja.rowCount).toBe(3); // a1 y a2; a3 terminó antes del período
+  });
+
+  it("informe de afiliados: hoja Resumen por plan y listado con los campos elegidos", async () => {
+    const wb = await leerLibro(
+      await reportes.informeAfiliadosXlsx({ ...PERIODO, codPlan: PLAN, campos: ["rut", "nombre", "fechaTermino", "vigenteHoy"] }),
+    );
+    expect(wb.worksheets.map((w) => w.name)).toEqual(["Resumen", "Afiliados"]);
+    const resumen = wb.getWorksheet("Resumen")!;
+    expect((resumen.getRow(2).values as unknown[]).slice(2)).toEqual([PLAN, `Test ${PLAN}`, 2, 0, 1, 1]);
+    const listado = wb.getWorksheet("Afiliados")!;
+    expect(encabezados(listado)).toEqual(["RUT", "Nombre", "Término vigencia", "Vigente hoy"]);
+    expect(listado.rowCount).toBe(3);
+  });
 });

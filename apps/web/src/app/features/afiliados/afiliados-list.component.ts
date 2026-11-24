@@ -16,12 +16,13 @@ import { CriteriosBusquedaComponent, type Criterios } from "../../shared/criteri
 import { descargarArchivo } from "../../shared/descarga";
 import { PermisoDirective } from "../../core/permisos";
 import { AfiliadoFormComponent } from "./afiliado-form.component";
+import { ResumenPlanesComponent } from "../../shared/resumen-planes.component";
 
 // Búsqueda de afiliados por RUT, plan o canal (Anexo §XI B), sin precarga.
 @Component({
   selector: "lm-afiliados-list",
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, CardModule, TableModule, ButtonModule, SelectModule, TagModule, TooltipModule, CriteriosBusquedaComponent, PermisoDirective, AfiliadoFormComponent],
+  imports: [CommonModule, FormsModule, RouterLink, CardModule, TableModule, ButtonModule, SelectModule, TagModule, TooltipModule, CriteriosBusquedaComponent, PermisoDirective, AfiliadoFormComponent, ResumenPlanesComponent],
   template: `
     <p-card>
       <ng-template pTemplate="header">
@@ -49,6 +50,11 @@ import { AfiliadoFormComponent } from "./afiliado-form.component";
         <p>Ingrese criterios y presione Buscar</p>
       </div>
       <ng-template #resultados>
+        <lm-resumen-planes
+          *ngIf="criterios()?.['codPlan'] || criterios()?.['canalId']"
+          [codPlan]="criterios()?.['codPlan']"
+          [canalId]="criterios()?.['canalId']"
+        ></lm-resumen-planes>
         <p-table
           [value]="data()"
           [lazy]="true"

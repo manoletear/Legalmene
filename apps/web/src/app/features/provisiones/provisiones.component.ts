@@ -15,6 +15,8 @@ import { MeService } from "../../core/services/me.service";
 import { PromptService } from "../../shared/prompt.service";
 import { CriteriosBusquedaComponent, type Criterios } from "../../shared/criterios-busqueda.component";
 import { descargarArchivo } from "../../shared/descarga";
+import { PagoDialogService } from "../../shared/pago-dialog.component";
+import { GastoDialogService } from "../../shared/gasto-dialog.component";
 import { AccionProvision, accionesProvision, severidadProvision } from "../../shared/provision-acciones";
 import { Observable } from "rxjs";
 
@@ -35,7 +37,7 @@ import { Observable } from "rxjs";
 
     <p-card>
       <lm-criterios-busqueda
-        [campos]="['correlativo', 'rut', 'abogado', 'plan', 'fechas']"
+        [campos]="['correlativo', 'rut', 'tipoAtencion', 'abogado', 'plan', 'fechas']"
         [estados]="estadoOpts"
         [iniciales]="iniciales"
         etiquetaFecha="Solicitud"
@@ -81,6 +83,10 @@ import { Observable } from "rxjs";
             <td class="lm-small">{{ p.solicitadaPorEmail }}</td>
             <td class="lm-small">{{ p.fechaSolicitud | date: 'dd/MM/yyyy' }}</td>
             <td style="text-align:right; white-space:nowrap;">
+              <button *ngIf="p.fechaEntrega" pButton type="button" class="p-button-sm p-button-text" icon="pi pi-print"
+                label="Entrega" title="Comprobante de entrega de fondos al abogado (2 copias)" (click)="comprobanteEntrega(p)"></button>
+              <button *ngIf="p.fechaPagoCliente" pButton type="button" class="p-button-sm p-button-text" icon="pi pi-print"
+                label="Comprobante" title="Recibo del dinero entregado por el cliente (2 copias)" (click)="comprobante(p)"></button>
               <button
                 *ngFor="let ac of acciones(p)"
                 pButton
@@ -103,6 +109,26 @@ import { Observable } from "rxjs";
 export class ProvisionesComponent implements OnInit {
   private api = inject(ProvisionesApiService);
   private me = inject(MeService);
+  private pagoDialog = inject(PagoDialogService);
+  private gastoDialog = inject(GastoDialogService);
+
+  // Anexo §X 12: comprobante de entrega de fondos al abogado.
+  async comprobanteEntrega(p: { id: string; correlativo: string }) {
+    try {
+      await descargarArchivo(`/exports/comprobantes/entrega/${p.id}.pdf`, `entrega-${p.correlativo}.pdf`);
+    } catch (e) {
+      this.msg.add({ severity: "error", summary: "No se pudo generar el comprobante", detail: (e as Error).message, life: 5000 });
+    }
+  }
+
+  // Anexo §X 05.1: recibo del dinero de la provisión (dos copias en el PDF).
+  async comprobante(p: { id: string; correlativo: string }) {
+    try {
+      await descargarArchivo(`/exports/comprobantes/provision/${p.id}.pdf`, `comprobante-provision-${p.correlativo}.pdf`);
+    } catch (e) {
+      this.msg.add({ severity: "error", summary: "No se pudo generar el comprobante", detail: (e as Error).message, life: 5000 });
+    }
+  }
   private msg = inject(MessageService);
   private prompt = inject(PromptService);
   private route = inject(ActivatedRoute);
@@ -187,13 +213,9 @@ export class ProvisionesComponent implements OnInit {
     let req: Observable<unknown> | null = null;
     switch (ac.id) {
       case "pago": {
-        const medio = await this.prompt.open({ header: "Pago del cliente", label: "Medio (WebPay, CasaCentral o Transferencia)", initialValue: "Transferencia", required: true });
-        if (!medio) return;
-        if (!["WebPay", "CasaCentral", "Transferencia"].includes(medio.trim())) {
-          this.msg.add({ severity: "warn", summary: "Medio inválido", detail: "Use WebPay, CasaCentral o Transferencia", life: 4000 });
-          return;
-        }
-        req = this.api.pagoCliente(p.id, medio.trim() as "WebPay");
+        const pago = await this.pagoDialog.open(`Pago de la provisión ${p.correlativo}`, { detalle: `Monto: $ ${p.monto.toLocaleString("es-CL")}` });
+        if (!pago) return;
+        req = this.api.pagoCliente(p.id, pago.medio, { fecha: pago.fecha, cuotas: pago.cuotas, referencia: pago.referencia });
         break;
       }
       case "solicitarEntrega":
@@ -217,24 +239,23 @@ export class ProvisionesComponent implements OnInit {
       case "entregar":
         req = this.api.entregar(p.id);
         break;
-      case "gasto":
-      case "reintegro": {
-        const monto = await this.monto(ac.id === "gasto" ? `Gasto contra ${p.correlativo}` : `Reintegro de saldo de ${p.correlativo}`);
+      case "gasto": {
+        // El gasto se registra en el diálogo, junto con su comprobante.
+        if (await this.gastoDialog.open({ provisionId: p.id, atencionId: p.atencionId, correlativo: p.correlativo })) {
+          this.msg.add({ severity: "success", summary: ac.label, detail: p.correlativo, life: 2500 });
+          this.recargar();
+        }
+        return;
+      }
+      case "reingreso": {
+        const monto = await this.monto(`Saldo devuelto por el abogado (${p.correlativo})`);
         if (monto === null) return;
-        const glosa = await this.prompt.open({ header: ac.id === "gasto" ? "Detalle del gasto" : "Detalle del reintegro", label: "Glosa", required: true });
-        if (!glosa) return;
-        req = this.api.registrarMovimiento(p.id, { tipo: ac.id === "gasto" ? "Gasto" : "Reintegro", monto, glosa });
+        req = this.api.reingreso(p.id, monto);
         break;
       }
       case "rendir":
         req = this.api.rendir(p.id);
         break;
-      case "devolucion": {
-        const cheque = await this.prompt.open({ header: "Devolución al cliente", label: "Número de cheque", required: true });
-        if (!cheque) return;
-        req = this.api.devolucion(p.id, cheque.trim());
-        break;
-      }
     }
     req?.subscribe({
       next: () => {
