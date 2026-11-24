@@ -3,7 +3,10 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import PDFDocument = require("pdfkit");
 import { Writable } from "stream";
-import { ESTADO_PROVISION_LABEL, type EstadoProvision } from "@legalmene/shared";
+import { ESTADO_PROVISION_LABEL, TIPO_DOCUMENTO_LABEL, type EstadoProvision, type TipoDocumento } from "@legalmene/shared";
+import { gestiones } from "../../db/schema/gestiones";
+import { documentos } from "../../db/schema/documentos";
+import { causasTermino } from "../../db/schema/maestros";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { filtroAtenciones } from "../../common/acceso/alcance";
 import { atenciones } from "../../db/schema/atenciones";
@@ -248,6 +251,86 @@ export class ComprobantesPdfService {
       ],
       nota: "Con este documento LegalChile rinde al cliente los fondos provisionados para su atención.",
       firmas: ["Finanzas LegalChile", "Abogado responsable", "Cliente (recibí conforme)"],
+    };
+  }
+
+  // Anexo §VII l.915 / §VIII l.1178: informe final al cliente con el resultado, las gestiones
+  // realizadas, los documentos del caso y la rendición de los fondos provisionados.
+  async informeFinal(atencionId: string): Promise<Comprobante> {
+    const a = await this.atencion(atencionId);
+    const [extra] = await this.db
+      .select({ estado: atenciones.estado, fechaApertura: atenciones.fechaApertura, fechaCierre: atenciones.fechaCierre, causa: causasTermino.nombre, abogadoId: atenciones.abogadoAsignadoId })
+      .from(atenciones)
+      .leftJoin(causasTermino, eq(causasTermino.id, atenciones.causaTerminoId))
+      .where(eq(atenciones.id, atencionId));
+    const [gs, docs, provs, rend] = await Promise.all([
+      this.db
+        .select({ titulo: gestiones.titulo, fecha: gestiones.fechaEjecucion, resultado: gestiones.resultado })
+        .from(gestiones)
+        .where(and(eq(gestiones.atencionId, atencionId), eq(gestiones.estado, "Completada")))
+        .orderBy(asc(gestiones.fechaEjecucion)),
+      this.db
+        .select({ nombre: documentos.nombre, tipo: documentos.tipo, fecha: documentos.fechaSubida })
+        .from(documentos)
+        .where(eq(documentos.atencionId, atencionId))
+        .orderBy(asc(documentos.fechaSubida)),
+      this.db.select().from(provisiones).where(eq(provisiones.atencionId, atencionId)),
+      this.db
+        .select({ monto: rendicionesCliente.monto })
+        .from(rendicionesCliente)
+        .where(and(eq(rendicionesCliente.atencionId, atencionId), inArray(rendicionesCliente.estado, ["ChequeEmitido", "Entregada"]))),
+    ]);
+    const pagadas = provs.filter((p) => p.fechaPagoCliente && !["Solicitada", "Rechazada"].includes(p.estado));
+    const gastos = pagadas.length
+      ? await this.db
+          .select({ monto: provisionMovimientos.monto })
+          .from(provisionMovimientos)
+          .where(and(inArray(provisionMovimientos.provisionId, pagadas.map((p) => p.id)), eq(provisionMovimientos.tipo, "Gasto")))
+      : [];
+    const corto = (t: string | null, n = 90) => (t && t.length > n ? `${t.slice(0, n - 1)}…` : (t ?? ""));
+    const totalPagado = pagadas.reduce((x, p) => x + p.monto, 0);
+    const totalGastos = gastos.reduce((x, m) => x + m.monto, 0);
+    const devuelto = rend.reduce((x, r) => x + (r.monto ?? 0), 0);
+    return {
+      titulo: "Informe final de la atención",
+      numero: `${a.correlativo}-INF`,
+      copias: ["Cliente"],
+      secciones: [
+        this.seccionAtencion(a),
+        {
+          titulo: "Resultado",
+          filas: [
+            ["Estado", extra.estado],
+            ["Inicio", fecha(extra.fechaApertura)],
+            ["Término", extra.fechaCierre ? fecha(extra.fechaCierre) : "En curso"],
+            ["Causa de término", extra.causa ?? "—"],
+            ["Abogado", await this.nombreUsuario(extra.abogadoId)],
+          ],
+        },
+        {
+          titulo: "Gestiones realizadas",
+          filas: gs.length
+            ? gs.map((g) => [`${fecha(g.fecha)} · ${corto(g.titulo, 40)}`, corto(g.resultado) || "—"] as [string, string])
+            : [["Sin gestiones completadas", "—"]],
+        },
+        {
+          titulo: "Documentos del caso",
+          filas: docs.length
+            ? docs.map((d) => [`${fecha(d.fecha)} · ${TIPO_DOCUMENTO_LABEL[d.tipo as TipoDocumento] ?? d.tipo}`, corto(d.nombre, 70)] as [string, string])
+            : [["Sin documentos", "—"]],
+        },
+        {
+          titulo: "Rendición de gastos",
+          filas: [
+            ["Total provisionado", clp(totalPagado)],
+            ["Total gastado", clp(totalGastos)],
+            ["Devuelto al cliente", clp(devuelto)],
+            ["Saldo", clp(totalPagado - totalGastos - devuelto)],
+          ],
+        },
+      ],
+      nota: "Los documentos indicados están disponibles en el expediente digital de LegalChile; puede solicitarlos a su abogado.",
+      firmas: ["Abogado responsable"],
     };
   }
 

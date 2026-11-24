@@ -202,6 +202,12 @@ const FECHA_PAGO = "2001-03-15";
 
     expect((await atencionesSrv.cambiarEstado(a.id, { estado: "Pendiente" })).estado).toBe("Pendiente");
     expect((await nueva("EscritoJudicial")).estado).toBe("Pendiente");
+
+    // Informe final al cliente: resultado, gestiones completadas y rendición de gastos.
+    const informe = await comprobantes.informeFinal(a.id);
+    expect(informe.copias).toEqual(["Cliente"]);
+    expect(informe.secciones.map((x) => x.titulo)).toEqual(["Cliente y atención", "Resultado", "Gestiones realizadas", "Documentos del caso", "Rendición de gastos"]);
+    expect(informe.secciones[2].filas[0][1]).toBe("Se informa el copago");
     const eventos = await arancelSrv.eventos(a.id);
     expect(eventos.map((e) => e.estadoHasta)).toEqual(["Requerido", "EnAprobacion", "Rechazado", "EnAprobacion", "Aprobado", "Pagado"]);
   });

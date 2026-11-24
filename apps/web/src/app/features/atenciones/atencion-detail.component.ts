@@ -491,6 +491,8 @@ interface PipelineStep {
                 ></button>
               </ng-container>
               <button pButton icon="pi pi-pencil" label="Registrar gestión" [text]="true" severity="secondary" (click)="abrirNuevaGestion(a.id)"></button>
+              <button *ngIf="a.tipo !== 'Consulta'" pButton icon="pi pi-file-pdf" label="Informe final al cliente (PDF)" [text]="true" severity="secondary"
+                data-testid="informe-final" (click)="descargarInformeFinal(a.id, a.correlativo)"></button>
             </div>
           </p-card>
 
@@ -900,6 +902,15 @@ export class AtencionDetailComponent implements OnInit {
   }
 
   // Anexo §IX 5.4: comprobante del pago del arancel (dos copias en el PDF).
+  // Anexo §VII l.915 / §VIII l.1178: resultado, gestiones, documentos y rendición de gastos.
+  async descargarInformeFinal(atencionId: string, correlativo: string) {
+    try {
+      await descargarArchivo(`/exports/informe-final/${atencionId}.pdf`, `informe-final-${correlativo}.pdf`);
+    } catch (e) {
+      this.msg.add({ severity: "error", summary: "No se pudo generar el informe", detail: (e as Error).message, life: 5000 });
+    }
+  }
+
   async imprimirComprobanteArancel(atencionId: string, correlativo: string) {
     try {
       await descargarArchivo(`/exports/comprobantes/arancel/${atencionId}.pdf`, `comprobante-arancel-${correlativo}.pdf`);

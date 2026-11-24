@@ -56,6 +56,13 @@ export class ExportsController {
   }
 
   // Anexo §X 19: rendición de fondos al cliente, en tres copias.
+  // Informe final al cliente (Anexo §VII l.915, §VIII l.1178): visible para quien ve la atención.
+  @Get("informe-final/:atencionId.pdf")
+  async informeFinal(@Param("atencionId", ParseUUIDPipe) atencionId: string, @Res() res: Response) {
+    const c = await this.comprobantes.informeFinal(atencionId);
+    this.enviarComprobante(c, `informe-final-${c.numero}.pdf`, res);
+  }
+
   @Get("comprobantes/rendicion/:atencionId.pdf")
   @Permiso("finanzas.ver")
   async rendicionCliente(@Param("atencionId", ParseUUIDPipe) atencionId: string, @Res() res: Response) {
