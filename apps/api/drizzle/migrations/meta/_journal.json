@@ -260,6 +260,13 @@
       "when": 1795528984238,
       "tag": "0036_formatos_exportacion",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1795529387912,
+      "tag": "0037_campos_adicionales",
+      "breakpoints": true
     }
   ]
 }

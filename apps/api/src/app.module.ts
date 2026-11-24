@@ -1,3 +1,4 @@
+import { CamposAdicionalesModule } from "./modules/campos-adicionales/campos-adicionales.module";
 import { CorreccionesModule } from "./modules/correcciones/correcciones.module";
 import { CorreosModule } from "./modules/correos/correos.module";
 import { AgendaModule } from "./modules/agenda/agenda.module";
@@ -57,6 +58,7 @@ import { PosesionesModule } from "./modules/posesiones/posesiones.module";
     GestionesModule,
     ComitesModule,
     AgendaModule,
+    CamposAdicionalesModule,
     CorreosModule,
     CorreccionesModule,
     PagosModule,

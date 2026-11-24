@@ -134,6 +134,11 @@ export const routes: Routes = [
       import("./features/admin/admin-maestros.component").then((m) => m.AdminMaestrosComponent),
   },
   {
+    path: "admin/campos-adicionales",
+    canActivate: [permisoGuard("maestros.administrar")],
+    loadComponent: () => import("./features/admin/admin-campos-adicionales.component").then((m) => m.AdminCamposAdicionalesComponent),
+  },
+  {
     path: "admin/formatos-exportacion",
     canActivate: [permisoGuard("exportar.formatos")],
     loadComponent: () => import("./features/admin/admin-formatos-exportacion.component").then((m) => m.AdminFormatosExportacionComponent),

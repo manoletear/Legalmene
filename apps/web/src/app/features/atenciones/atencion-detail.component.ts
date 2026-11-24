@@ -24,6 +24,7 @@ import { AtencionesApiService, type CorreoEnviado } from "../../core/services/at
 import { GestionesApiService } from "../../core/services/gestiones.service";
 import { ComitePanelComponent } from "./comite-panel.component";
 import { CitasAtencionComponent } from "./citas-atencion.component";
+import { CamposAdicionalesAtencionComponent } from "./campos-adicionales-atencion.component";
 import { DocumentosApiService, DocumentoMeta } from "../../core/services/documentos.service";
 import { ProvisionesApiService } from "../../core/services/provisiones.service";
 import { MeService } from "../../core/services/me.service";
@@ -95,6 +96,7 @@ interface PipelineStep {
     PermisoDirective,
     ComitePanelComponent,
     CitasAtencionComponent,
+    CamposAdicionalesAtencionComponent,
     CardModule,
     TagModule,
     ButtonModule,
@@ -301,6 +303,7 @@ interface PipelineStep {
                 <a routerLink="/provisiones">Ver provisiones →</a>
               </div>
             </div>
+            <lm-campos-adicionales-atencion [atencionId]="a.id" [cerrada]="['Terminada', 'Abandonada', 'Derivada'].includes(a.estado)"></lm-campos-adicionales-atencion>
           </div>
 
           <lm-atencion-flujo [atencion]="a" (cambio)="cargar(a.id)"></lm-atencion-flujo>

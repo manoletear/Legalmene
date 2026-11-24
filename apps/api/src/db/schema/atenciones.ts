@@ -137,6 +137,8 @@ export const atenciones = pgTable(
     causaTerminoId: uuid("causa_termino_id").references(() => causasTermino.id, { onDelete: "restrict" }),
     // Carga (familiar) del titular atendida bajo su plan; null si se atiende al titular.
     cargaId: uuid("carga_id").references(() => cargasAfiliado.id, { onDelete: "restrict" }),
+    // Valores de los campos adicionales del administrador (por id de campo; Anexo §XIII l.2396).
+    camposAdicionales: jsonb("campos_adicionales").$type<Record<string, string | number | boolean | null>>(),
     metadata: jsonb("metadata").$type<Record<string, unknown>>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
