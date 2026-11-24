@@ -108,7 +108,7 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 - [ ] Despliegue en AWS con la infraestructura CDK (Aurora Multi-AZ, ECS, S3, WAF), sin `AUTH_DISABLED`. (§I l.51) — *imagen, stack y runbook listos y verificados sin credenciales; falta la cuenta AWS, el dominio y SSL hacia Aurora.*
 - [ ] Migración SQL Server 2008 → Aurora: scripts, ensayo y validación. (§I l.58)
 - [x] Herramientas del administrador para reabrir o retroceder flujos. (§II l.156)
-- [ ] Manuales de usuario y de administrador; capacitación. (§I l.70)
+- [ ] Manuales de usuario y de administrador; capacitación. (§I l.70) — *manuales en `docs/manual-usuario.md` y `docs/manual-administrador.md`; falta la capacitación.*
 - [ ] Revalidar con una auditoría completa las unidades de run-1 cuyo código cambió, y las 3 áreas diferidas de run-2 (edición de atención vs comité, decisión de comité vs votos, comprobantes de otra atención).
 
 ---
@@ -152,4 +152,5 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 | 2026-11-24 | 2 | Correos de los flujos sobre SES con plantillas en español y bitácora por atención (`correos_enviados`): arancel (con aprueba.arancel@), provisiones (solicitud.fondos@, autoriza.provision@), rendición al cliente, asignación de abogado, consultas a la jefatura, primera presentación, errores a administradores y resumen de cargas a operaciones@ con RUT nuevos y terminados. Al cliente: presentación del abogado, solicitud de antecedentes, inicio y término de gestiones marcadas y término de la atención (migraciones 0031–0032) | 27ec343 |
 | 2026-11-24 | 7 | Correcciones del administrador (`flujos.corregir`): reabrir atenciones, reiniciar derivaciones y retroceder aranceles y provisiones un paso, con motivo en la bitácora y auditoría; pantalla Administración → Correcciones | b93bbe0 |
 | 2026-11-24 | 7 | Preparación del despliegue: Dockerfile corregido (lockfile, `pnpm deploy`, Node 22) y probado (migra y responde /health); la API arma la URL de la base con las variables que entrega ECS; el stack Compute pasa secreto de sesión, Entra ID, origen web, SES y casillas; el archivo de auditoría va a S3 y no borra filas si no pudo guardarlas; CI con síntesis estricta (dev y prod) y job que construye y prueba la imagen | 3d6041b |
-| 2026-11-24 | 7 | "Ingresar con Microsoft" en la web con MSAL (ventana emergente; token de la API con vencimiento; se oculta sin `entra.clientId`) | ver commit |
+| 2026-11-24 | 7 | "Ingresar con Microsoft" en la web con MSAL (ventana emergente; token de la API con vencimiento; se oculta sin `entra.clientId`) | d2c266e |
+| 2026-11-24 | 7 | Manual de usuario (por perfil y flujo) y manual del administrador | ver commit |
