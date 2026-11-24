@@ -21,8 +21,9 @@ const RUN = !!process.env.DATABASE_URL;
   const CORTE = new Date("2000-01-01T00:00:00Z");
   let dir: string;
 
+  // Configuración aislada: ConfigService también lee process.env (en CI, STORAGE_BACKEND=local).
   const servicio = (env: Record<string, string>) =>
-    new AuditArchiveService(db, new ConfigService(env) as ConfigService);
+    new AuditArchiveService(db, { get: (k: string) => env[k] } as unknown as ConfigService);
   const filas = () => drizzle(pool).select().from(auditoria).where(eq(auditoria.entidad, ENTIDAD));
   const sembrar = () =>
     drizzle(pool).insert(auditoria).values([
@@ -45,7 +46,7 @@ const RUN = !!process.env.DATABASE_URL;
 
   it("si S3 falla, no borra las filas", async () => {
     await sembrar();
-    const s3Caido = servicio({ S3_ENDPOINT: "http://127.0.0.1:9", S3_DOCUMENTS_BUCKET: "no-existe", AWS_ACCESS_KEY_ID: "x", AWS_SECRET_ACCESS_KEY: "x" });
+    const s3Caido = servicio({ STORAGE_BACKEND: "s3", S3_ENDPOINT: "http://127.0.0.1:9", S3_DOCUMENTS_BUCKET: "no-existe" });
     await expect(s3Caido.archivar(CORTE)).rejects.toThrow();
     expect(await filas()).toHaveLength(2);
   });
