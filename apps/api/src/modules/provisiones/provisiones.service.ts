@@ -24,7 +24,7 @@ import {
 import { DRIZZLE, Database } from "../../db/database.module";
 import { filtroAtenciones } from "../../common/acceso/alcance";
 import { atenciones } from "../../db/schema/atenciones";
-import { perfilPermisos, usuarios } from "../../db/schema/usuarios";
+import { usuarios } from "../../db/schema/usuarios";
 import {
   provisiones,
   provisionesEventos,
