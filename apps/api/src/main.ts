@@ -1,3 +1,4 @@
+import { AuditService } from "./modules/audit/audit.service";
 import "reflect-metadata";
 import { NotifInboxService } from "./modules/notif-inbox/notif-inbox.service";
 import { CorreosService } from "./modules/correos/correos.service";
@@ -59,9 +60,12 @@ async function bootstrap() {
   const notifInbox = app.get(NotifInboxService);
   const db = app.get<Database>(DRIZZLE);
   const correos = app.get(CorreosService);
+  const audit = app.get(AuditService);
   app.useGlobalFilters(
     new I18nExceptionFilter(async (ruta, detalle) => {
       const limpia = ruta.split("?")[0];
+      // Anexo §I l.63: cada error del servidor queda en la auditoría (patrón de ruta y tipo, sin datos).
+      await audit.log({ accion: "ERROR", entidad: "sistema", entidadId: limpia.slice(0, 64), cambios: { after: { tipo: detalle } } });
       const clave = `${limpia}|${hoyChileISO()}`;
       const admins = await administradores(db);
       let nuevos = 0;

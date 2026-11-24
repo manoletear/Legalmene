@@ -1,3 +1,4 @@
+import { AuditarProceso } from "../audit/auditar-proceso";
 import { escaparHtml, textoLinea } from "../../common/utils/html";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
@@ -22,6 +23,7 @@ export class VencimientosScheduler {
   // Cada día 08:00 UTC: avisa gestiones que vencen en 24h (info) y las ya
   // vencidas que siguen Pendientes (critical). Email + notif persistente.
   @Cron(CronExpression.EVERY_DAY_AT_8AM)
+  @AuditarProceso("gestiones.vencimientos")
   async revisarVencimientos(): Promise<void> {
     const ahora = new Date();
     const en24h = new Date(ahora.getTime() + 24 * 60 * 60 * 1000);

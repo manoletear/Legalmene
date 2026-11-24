@@ -37,7 +37,7 @@ export class EntraStrategy extends PassportStrategy(Strategy, "jwt-entra") {
 
   // Upsert al login: garantiza que usuarios.id exista. El perfil y permisos los resuelve
   // JwtAuthGuard desde la base (los administra la aplicación, no el token).
-  async validate(payload: EntraClaims): Promise<{ id: string }> {
+  async validate(payload: EntraClaims): Promise<{ id: string; email: string; exp?: number }> {
     const oid = payload.oid ?? payload.sub;
     if (!oid) throw new UnauthorizedException("Token sin oid/sub");
     const email = payload.email ?? payload.preferred_username;
@@ -47,6 +47,6 @@ export class EntraStrategy extends PassportStrategy(Strategy, "jwt-entra") {
       email,
       nombre: payload.name ?? email,
     });
-    return { id: usuario.id };
+    return { id: usuario.id, email, exp: (payload as { exp?: number }).exp };
   }
 }

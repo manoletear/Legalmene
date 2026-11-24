@@ -1,3 +1,4 @@
+import { AuditarProceso } from "./auditar-proceso";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
 import { ConfigService } from "@nestjs/config";
@@ -34,6 +35,7 @@ export class AuditArchiveService {
 
   // Mensual el día 1 a las 04:00 UTC. Idempotente: si no hay filas, no escribe.
   @Cron("0 4 1 * *")
+  @AuditarProceso("auditoria.archivo")
   async ejecutar(): Promise<{ archivadas: number; archivo?: string } | null> {
     return this.archivar();
   }

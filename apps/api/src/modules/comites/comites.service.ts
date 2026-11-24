@@ -1,3 +1,4 @@
+import { AuditarProceso } from "../audit/auditar-proceso";
 import { Inject, Injectable, Logger, NotFoundException, BadRequestException, ConflictException, ForbiddenException } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
 import { alias } from "drizzle-orm/pg-core";
@@ -329,6 +330,7 @@ export class ComitesService {
 
   // Cada día hábil a las 08:40 de Chile: avisa al responsable de cada compromiso vencido.
   @Cron("40 12 * * 1-5")
+  @AuditarProceso("comites.compromisos_vencidos")
   async avisarCompromisosVencidos(): Promise<number> {
     const vencidos = await this.db
       .select({ c: compromisosComite, codPlan: atenciones.codPlan, correlativo: atenciones.correlativo })

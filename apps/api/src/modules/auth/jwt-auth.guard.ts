@@ -7,6 +7,10 @@ import { fijarAcceso } from "../../common/acceso/contexto";
 import type { AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 import { dominioPermitido } from "./dominio";
 import { tokenBearer, verificarSesion } from "./sesion";
+import { createHash } from "crypto";
+
+// Tokens de Entra ID ya registrados como ingreso (hash → vencimiento), para auditar una vez por token.
+const ingresosEntra = new Map<string, number>();
 
 export { dominioPermitido };
 
@@ -45,6 +49,7 @@ export class JwtAuthGuard extends AuthGuard("jwt-entra") {
       if (!entraConfigurado()) throw new UnauthorizedException("Sesión no válida. Ingrese nuevamente.");
       await (super.canActivate(context) as Promise<boolean>);
       usuarioId = (req.user as { id: string }).id;
+      await this.registrarIngresoEntra(req, bearer!, usuarioId);
     }
 
     let user: AuthenticatedUser;
@@ -69,6 +74,27 @@ export class JwtAuthGuard extends AuthGuard("jwt-entra") {
     req.user = user;
     fijarAcceso({ usuarioId: user.id, permisos: new Set(user.permisos) });
     return true;
+  }
+
+  // Anexo §I l.63: el ingreso con Microsoft queda en la auditoría la primera vez que se usa cada token.
+  private async registrarIngresoEntra(req: Request, token: string, usuarioId: string): Promise<void> {
+    const clave = createHash("sha256").update(token).digest("hex");
+    const ahora = Date.now();
+    if ((ingresosEntra.get(clave) ?? 0) > ahora) return;
+    if (ingresosEntra.size > 5000) for (const [k, v] of ingresosEntra) if (v <= ahora) ingresosEntra.delete(k);
+    const exp = Number((req.user as { exp?: number }).exp ?? 0) * 1000;
+    ingresosEntra.set(clave, exp > ahora ? exp : ahora + 3600_000);
+    const u = req.user as { id: string; email?: string };
+    await this.audit.log({
+      actorId: usuarioId,
+      actorEmail: u.email ?? null,
+      accion: "INGRESO",
+      entidad: "usuarios",
+      entidadId: usuarioId,
+      cambios: { after: { metodo: "EntraID" } },
+      ip: req.ip ?? null,
+      userAgent: req.get?.("user-agent") ?? null,
+    });
   }
 
   private async denegar(req: Request, u: { id: string; email: string }, motivo: string): Promise<void> {

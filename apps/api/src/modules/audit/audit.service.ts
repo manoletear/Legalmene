@@ -1,3 +1,4 @@
+import { fijarAuditoriaProcesos } from "./auditar-proceso";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { auditoria, NuevaAuditoria } from "../../db/schema/auditoria";
@@ -18,7 +19,9 @@ export interface AuditEntry {
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
 
-  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+  constructor(@Inject(DRIZZLE) private readonly db: Database) {
+    fijarAuditoriaProcesos(this);
+  }
 
   // Best-effort: si falla, log pero no rompe la request del usuario.
   async log(entry: AuditEntry): Promise<void> {

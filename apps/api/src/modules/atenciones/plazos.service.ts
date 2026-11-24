@@ -1,3 +1,4 @@
+import { AuditarProceso } from "../audit/auditar-proceso";
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { CorreosService } from "../correos/correos.service";
 import { plantillaAviso } from "../correos/plantillas";
@@ -183,6 +184,7 @@ export class PlazosService {
   // Cada día hábil a las 08:30 de Chile (12:30 UTC aprox.): avisa al responsable de cada plazo
   // vencido sin cumplir. Una notificación por plazo mientras no la haya visto.
   @Cron("30 12 * * 1-5")
+  @AuditarProceso("atenciones.plazos_vencidos")
   async avisarVencidos(): Promise<number> {
     const abiertas = await this.db
       .select({ id: atenciones.id })

@@ -8,6 +8,7 @@ import { EnlacesAccesoService, type OrigenSolicitud } from "./enlaces-acceso.ser
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import { UsuariosService } from "../usuarios/usuarios.service";
 import { CurrentUser, type AuthenticatedUser } from "../../common/decorators/current-user.decorator";
+import { AuditService } from "../audit/audit.service";
 
 class SolicitarEnlaceDto extends createZodDto(SolicitarEnlaceSchema) {}
 class VerificarEnlaceDto extends createZodDto(VerificarEnlaceSchema) {}
@@ -27,14 +28,17 @@ export class AuthController {
   constructor(
     @Inject(EnlacesAccesoService) private readonly enlaces: EnlacesAccesoService,
     @Inject(UsuariosService) private readonly usuarios: UsuariosService,
+    @Inject(AuditService) private readonly audit: AuditService,
   ) {}
 
   // Cerrar sesión: invalida en el servidor todas las sesiones del usuario.
   @Post("logout")
   @HttpCode(204)
   @UseGuards(JwtAuthGuard)
-  async logout(@CurrentUser() user: AuthenticatedUser): Promise<void> {
+  async logout(@CurrentUser() user: AuthenticatedUser, @Req() req: Request): Promise<void> {
     await this.usuarios.revocarSesiones(user.id);
+    // /auth/* no pasa por el AuditInterceptor: el cierre de sesión se registra aquí.
+    await this.audit.log({ actorId: user.id, actorEmail: user.email, accion: "LOGOUT", entidad: "usuarios", entidadId: user.id, ...origen(req) });
   }
 
   @Post("enlace")
