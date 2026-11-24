@@ -1,4 +1,6 @@
-import { ForbiddenException, HttpException, Inject, Injectable, Logger, BadRequestException, NotFoundException } from "@nestjs/common";
+import { CorreosService } from "../correos/correos.service";
+import { plantillaResumenCarga } from "../correos/plantillas";
+import { ForbiddenException, HttpException, Inject, Injectable, Logger, BadRequestException, NotFoundException, Optional } from "@nestjs/common";
 import { parse } from "csv-parse/sync";
 import { and, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
@@ -78,6 +80,7 @@ export class CargasMasivasService {
     @Inject(DRIZZLE) private readonly db: Database,
     @Inject(NotifInboxService) private readonly notif: NotifInboxService,
     @Inject(AtencionesService) private readonly atenciones: AtencionesService,
+    @Optional() @Inject(CorreosService) private readonly correos?: CorreosService,
   ) {}
 
   // Materias vigentes por "competencia|materia" normalizado (sin tildes ni mayúsculas).
@@ -406,9 +409,13 @@ export class CargasMasivasService {
             updatedAt: new Date(),
           },
         })
-        .returning({ id: planesAfiliado.id, isNew: sql<boolean>`xmax = 0` });
+        .returning({ id: planesAfiliado.id, afiliadoId: planesAfiliado.afiliadoId, isNew: sql<boolean>`xmax = 0` });
 
       resultado.insertados = relaciones.filter((r) => r.isNew).length;
+      const nuevosIds = relaciones.filter((r) => r.isNew).map((r) => r.afiliadoId);
+      resultado.rutsNuevos = nuevosIds.length
+        ? (await tx.select({ rut: afiliados.rut }).from(afiliados).where(inArray(afiliados.id, nuevosIds))).map((x) => x.rut).sort()
+        : [];
       resultado.actualizados = relaciones.length - resultado.insertados;
 
       if (tipo === "STOCK") {
@@ -426,8 +433,11 @@ export class CargasMasivasService {
               ne(planesAfiliado.vigencia, "Eliminado"),
             ),
           )
-          .returning({ id: planesAfiliado.id });
+          .returning({ id: planesAfiliado.id, afiliadoId: planesAfiliado.afiliadoId });
         resultado.eliminados = terminadas.length;
+        resultado.rutsEliminados = terminadas.length
+          ? (await tx.select({ rut: afiliados.rut }).from(afiliados).where(inArray(afiliados.id, terminadas.map((t) => t.afiliadoId)))).map((x) => x.rut).sort()
+          : [];
       }
     });
 
@@ -687,7 +697,8 @@ export class CargasMasivasService {
     return r;
   }
 
-  // Aviso en la aplicación a quienes ejecutan cargas (el correo a operaciones@ queda para SES).
+  // Aviso en la aplicación a quienes ejecutan cargas y correo con el resumen (RUT nuevos y
+  // terminados) a ellos y a la casilla de operaciones (Anexo §III l.308).
   private async notificar(r: CargaMasivaResultado): Promise<void> {
     const destinatarios = await this.db
       .select({ id: usuarios.id })
@@ -711,6 +722,24 @@ export class CargasMasivasService {
         metadata: { carga: { entidad: r.entidad, tipo: r.tipo, insertados: r.insertados, actualizados: r.actualizados, eliminados: r.eliminados, errores: r.errores.length } },
       })),
     );
+    if (this.correos) {
+      await this.correos.aUsuarios(
+        destinatarios.map((u) => u.id),
+        plantillaResumenCarga({
+          entidad: r.entidad,
+          tipo: r.tipo,
+          codPlan: r.codPlan,
+          total: r.totalRegistros,
+          insertados: r.insertados,
+          actualizados: r.actualizados,
+          eliminados: r.eliminados,
+          errores: r.errores.length,
+          rutsNuevos: r.rutsNuevos ?? [],
+          rutsEliminados: r.rutsEliminados ?? [],
+        }),
+        { plantilla: "carga.resumen", casillas: ["operaciones"] },
+      );
+    }
   }
 
   // Reporte de la carga (Anexo §III: resumen y filas con error en XLSX).
@@ -744,6 +773,10 @@ export class CargasMasivasService {
         ],
         filas: r.errores,
       },
+      ...(r.rutsNuevos?.length ? [{ nombre: "RUT nuevos", columnas: [{ titulo: "RUT", valor: (x: string) => x, ancho: 16 }], filas: r.rutsNuevos }] : []),
+      ...(r.rutsEliminados?.length
+        ? [{ nombre: "RUT terminados", columnas: [{ titulo: "RUT", valor: (x: string) => x, ancho: 16 }], filas: r.rutsEliminados }]
+        : []),
     ]);
   }
 }

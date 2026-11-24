@@ -88,6 +88,13 @@ export const AtencionSchema = z.object({
 });
 export type Atencion = z.infer<typeof AtencionSchema>;
 
+// Solicitud de antecedentes al cliente por correo (Anexo §VI l.537, §VII): una línea por documento.
+export const SolicitarAntecedentesSchema = z.object({
+  antecedentes: z.string().trim().min(1, "Indique los antecedentes").max(4000),
+  plazo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+});
+export type SolicitarAntecedentes = z.infer<typeof SolicitarAntecedentesSchema>;
+
 
 // Respuesta de lectura: incluye los nombres de los maestros y el riesgo total.
 export type AtencionConMaestros = Atencion & {

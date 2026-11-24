@@ -20,7 +20,7 @@ import { PromptService } from "../../shared/prompt.service";
 import { descargarArchivo } from "../../shared/descarga";
 import { PagoDialogService } from "../../shared/pago-dialog.component";
 import type { Observable } from "rxjs";
-import { AtencionesApiService } from "../../core/services/atenciones.service";
+import { AtencionesApiService, type CorreoEnviado } from "../../core/services/atenciones.service";
 import { GestionesApiService } from "../../core/services/gestiones.service";
 import { ComitePanelComponent } from "./comite-panel.component";
 import { CitasAtencionComponent } from "./citas-atencion.component";
@@ -385,6 +385,20 @@ interface PipelineStep {
                 </p-tabpanel>
 
                 <p-tabpanel value="historial">
+                  <div class="lm-row" style="margin-bottom:12px; gap:8px; flex-wrap:wrap;">
+                    <h4 style="margin:0;" class="lm-grow">Correos enviados</h4>
+                    <button *lmPermiso="'atenciones.editar'" pButton size="small" [outlined]="true" icon="pi pi-envelope"
+                      label="Solicitar antecedentes al cliente" (click)="solicitarAntecedentes(a.id)"></button>
+                  </div>
+                  <p *ngIf="!correos().length" class="lm-muted lm-small">Sin correos enviados.</p>
+                  <table *ngIf="correos().length" class="lm-small" style="width:100%; border-collapse:collapse; margin-bottom:16px;" data-testid="correos">
+                    <tr *ngFor="let c of correos()" style="border-bottom:1px solid #f1f5f9;">
+                      <td style="padding:6px 4px; white-space:nowrap;">{{ c.createdAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+                      <td style="padding:6px 4px;">{{ c.asunto }}</td>
+                      <td style="padding:6px 4px;" class="lm-muted">{{ c.destinatarios.join(', ') }}</td>
+                      <td style="padding:6px 4px;"><p-tag [value]="c.estado === 'Omitido' ? 'No enviado (sin SES)' : c.estado" [severity]="c.estado === 'Enviado' ? 'success' : c.estado === 'Error' ? 'danger' : 'secondary'"></p-tag></td>
+                    </tr>
+                  </table>
                   <p class="lm-muted">Historial completo de la atención disponible en Auditoría.</p>
                   <a routerLink="/auditoria" style="color:#2563eb;">Ir a Auditoría →</a>
                 </p-tabpanel>
@@ -487,6 +501,10 @@ interface PipelineStep {
           <label class="lm-col" style="gap:4px; flex:1; min-width:160px;">Fecha de inicio *<input pInputText type="date" name="ngInicio" [(ngModel)]="ng.inicio" /></label>
           <label class="lm-col" style="gap:4px; flex:1; min-width:160px;">Fecha de compromiso<input pInputText type="date" name="ngCompromiso" [(ngModel)]="ng.compromiso" [min]="ng.inicio" /></label>
         </div>
+        <label class="lm-row lm-small" style="gap:6px; align-items:center;">
+          <input type="checkbox" name="ngInformar" [(ngModel)]="ng.informarCliente" />
+          Informar al cliente por correo el inicio y el término
+        </label>
         <div style="display:flex; justify-content:flex-end; gap:8px;">
           <button pButton label="Cancelar" [text]="true" (click)="ngVisible.set(false)"></button>
           <button pButton label="Crear gestión" icon="pi pi-check" [disabled]="!ng.titulo.trim() || !ng.responsableId || !ng.inicio" [loading]="ngGuardando()" (click)="crearGestion()"></button>
@@ -546,7 +564,8 @@ export class AtencionDetailComponent implements OnInit {
   protected hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(new Date());
   protected ngVisible = signal(false);
   protected ngGuardando = signal(false);
-  protected ng = { tipo: "Reunion" as TipoGestion, titulo: "", detalle: "", responsableId: "", inicio: "", compromiso: "" };
+  protected ng = { tipo: "Reunion" as TipoGestion, titulo: "", detalle: "", responsableId: "", inicio: "", compromiso: "", informarCliente: false };
+  protected correos = signal<CorreoEnviado[]>([]);
   protected responsableOpts = signal<{ label: string; value: string }[]>([]);
   protected completando = signal<Gestion | null>(null);
   protected cg = { resultado: "", fecha: "" };
@@ -650,6 +669,7 @@ export class AtencionDetailComponent implements OnInit {
   }
 
   cargar(id: string) {
+    this.api.correos(id).subscribe({ next: (c) => this.correos.set(c), error: () => this.correos.set([]) });
     this.api.obtener(id).subscribe((a) => this.atencion.set(a));
     this.gestionesApi.listar(id).subscribe((g) => this.gestiones.set(g));
     this.api.plazos(id).subscribe({ next: (p) => this.plazos.set(p), error: () => this.plazos.set([]) });
@@ -841,7 +861,7 @@ export class AtencionDetailComponent implements OnInit {
   // Anexo §VII l.860, §VIII l.1122: responsable, fecha de inicio y compromiso.
   abrirNuevaGestion(atencionId: string) {
     this.atencionGestion = atencionId;
-    this.ng = { tipo: "Reunion", titulo: "", detalle: "", responsableId: this.responsableId() ?? "", inicio: this.hoy, compromiso: "" };
+    this.ng = { tipo: "Reunion", titulo: "", detalle: "", responsableId: this.responsableId() ?? "", inicio: this.hoy, compromiso: "", informarCliente: false };
     this.ngVisible.set(true);
   }
 
@@ -867,6 +887,7 @@ export class AtencionDetailComponent implements OnInit {
         // El compromiso vence al final del día elegido.
         fechaCompromiso: this.ng.compromiso ? new Date(`${this.ng.compromiso}T23:59:00`).toISOString() : null,
         documentosIds: [],
+        informarCliente: this.ng.informarCliente,
       })
       .subscribe({
         next: () => {
@@ -900,6 +921,28 @@ export class AtencionDetailComponent implements OnInit {
         this.msg.add({ severity: "error", summary: "No se pudo completar", detail: err.error?.message ?? err.message, life: 5000 });
         this.cargar(g.atencionId);
       },
+    });
+  }
+
+  async solicitarAntecedentes(atencionId: string) {
+    const antecedentes = await this.prompt.open({
+      header: "Solicitar antecedentes al cliente",
+      label: "Antecedentes requeridos (uno por línea)",
+      multiline: true,
+      required: true,
+    });
+    if (!antecedentes) return;
+    this.api.solicitarAntecedentes(atencionId, { antecedentes }).subscribe({
+      next: (r) => {
+        this.msg.add({
+          severity: r.estado === "Error" ? "warn" : "success",
+          summary: r.estado === "Omitido" ? "Correo registrado (envío desactivado en este ambiente)" : "Correo enviado",
+          detail: r.para,
+          life: 4000,
+        });
+        this.cargar(atencionId);
+      },
+      error: (err) => this.msg.add({ severity: "error", summary: "No se pudo enviar", detail: err.error?.message ?? err.message, life: 5000 }),
     });
   }
 

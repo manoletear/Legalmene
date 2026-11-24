@@ -12,27 +12,31 @@ async function responderPrompt(page: Page, texto: string) {
 test.describe("Agenda", () => {
   test("se agenda una audiencia en el calendario, aparece en el día y se cancela", async ({ page }) => {
     const titulo = `Audiencia E2E ${Date.now()}`;
-    await page.goto("/agenda?fecha=2031-05-14");
-    await expect(page.getByTestId("mes")).toHaveText(/mayo 2031/i);
+    // Un día distinto en cada corrida (2031–2040) para no chocar con citas de corridas anteriores.
+    const anio = 2031 + Math.floor(Math.random() * 10);
+    const dia = String(1 + Math.floor(Math.random() * 28)).padStart(2, "0");
+    const fecha = `${anio}-05-${dia}`;
+    await page.goto(`/agenda?fecha=${fecha}`);
+    await expect(page.getByTestId("mes")).toHaveText(new RegExp(`mayo ${anio}`, "i"));
     await page.getByRole("button", { name: "Agendar" }).click();
     const dlg = page.getByRole("dialog", { name: "Agendar cita" });
     await dlg.locator("p-select[name='tipo']").click();
     await page.getByRole("option", { name: "Audiencia" }).click();
     await dlg.locator("input[name='titulo']").fill(titulo);
-    await dlg.locator("input[name='fecha']").fill("2031-05-14");
+    await dlg.locator("input[name='fecha']").fill(fecha);
     await dlg.locator("input[name='horaInicio']").fill("10:00");
     await dlg.locator("input[name='horaFin']").fill("11:00");
     await dlg.getByRole("button", { name: "Agendar" }).click();
     await expect(dlg).toBeHidden();
 
-    await expect(page.locator(".lm-dia[data-fecha='2031-05-14']")).toContainText(titulo);
+    await expect(page.locator(`.lm-dia[data-fecha='${fecha}']`)).toContainText(titulo);
     const fila = page.getByTestId("cita-dia").filter({ hasText: titulo });
     await expect(fila).toContainText("Programada");
 
     // Un tope con la misma hora se rechaza.
     await page.getByRole("button", { name: "Agendar" }).click();
     await dlg.locator("input[name='titulo']").fill("Otra cosa");
-    await dlg.locator("input[name='fecha']").fill("2031-05-14");
+    await dlg.locator("input[name='fecha']").fill(fecha);
     await dlg.locator("input[name='horaInicio']").fill("10:30");
     await dlg.locator("input[name='horaFin']").fill("11:30");
     await dlg.getByRole("button", { name: "Agendar" }).click();
@@ -43,7 +47,7 @@ test.describe("Agenda", () => {
     await expect(fila).toContainText("Cancelada");
 
     const [descarga] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Excel" }).click()]);
-    expect(descarga.suggestedFilename()).toBe("agenda-2031-05.xlsx");
+    expect(descarga.suggestedFilename()).toBe(`agenda-${anio}-05.xlsx`);
   });
 });
 

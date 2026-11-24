@@ -15,3 +15,4 @@ export * from "./provisiones";
 export * from "./finanzas";
 export * from "./posesiones";
 export * from "./agenda";
+export * from "./correos";

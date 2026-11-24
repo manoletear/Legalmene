@@ -1,3 +1,5 @@
+import { plantillaAviso } from "../correos/plantillas";
+import { CorreosService } from "../correos/correos.service";
 import { documentos } from "../../db/schema/documentos";
 import type { CriteriosBusqueda } from "@legalmene/shared";
 import { avisar, jefeDe, usuariosConPermiso as conPermiso } from "../notif-inbox/destinatarios";
@@ -9,6 +11,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import { and, asc, count, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import {
@@ -76,6 +79,7 @@ export class ProvisionesService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     @Inject(NotifInboxService) private readonly notif: NotifInboxService,
+    @Optional() @Inject(CorreosService) private readonly correos?: CorreosService,
   ) {}
 
   async listar(filtro: FiltroProvisiones = {}) {
@@ -452,17 +456,21 @@ export class ProvisionesService {
       .onConflictDoNothing()
       .returning();
     if (!row) throw new ConflictException("Ya hay una rendición al cliente en curso para esta atención");
+    // Anexo §X 17: aviso y correo a EF y EC.
     const destinatarios = await this.usuariosConPermiso(["provisiones.disponer_entregar", "provisiones.registrar_pago"]);
-    for (const id of destinatarios) {
-      await this.notif.crear({
+    await avisar(
+      this.notif,
+      destinatarios,
+      {
         codPlan: atencion.codPlan,
-        usuarioId: id,
         severidad: "warn",
         titulo: `Rendición al cliente: ${atencion.correlativo}`,
         detalle: `Emitir cheque de devolución por ${clp(c.saldo)}`,
         accionUrl: `/atenciones/${atencionId}`,
-      });
-    }
+      },
+      usuarioId,
+      { servicio: this.correos, atencionId, plantilla: "rendicion.solicitada" },
+    );
     return row;
   }
 
@@ -494,16 +502,19 @@ export class ProvisionesService {
     if (!row) throw new ConflictException("La rendición ya fue procesada");
     // Aviso al abogado que la pidió y a su jefatura: el cheque está disponible para retiro.
     const [sol] = await this.db.select({ jefeId: usuarios.jefeId }).from(usuarios).where(eq(usuarios.id, actual.solicitadaPorId));
-    for (const id of new Set([actual.solicitadaPorId, sol?.jefeId].filter((x): x is string => !!x))) {
-      await this.notif.crear({
+    await avisar(
+      this.notif,
+      [actual.solicitadaPorId, sol?.jefeId],
+      {
         codPlan: atencion.codPlan,
-        usuarioId: id,
         severidad: "info",
         titulo: `Cheque de devolución disponible: ${atencion.correlativo}`,
         detalle: `Cheque ${numeroCheque} por ${clp(c.saldo)}`,
         accionUrl: `/atenciones/${atencionId}`,
-      });
-    }
+      },
+      usuarioId,
+      { servicio: this.correos, atencionId, plantilla: "rendicion.cheque" },
+    );
     return row;
   }
 
@@ -543,8 +554,9 @@ export class ProvisionesService {
       .where(eq(atenciones.id, p.atencionId));
     if (!a) return;
     const jefe = await jefeDe(this.db, p.solicitadaPorId);
+    const avisados: string[] = [];
     for (const usuarioId of new Set([p.solicitadaPorId, jefe].filter((x): x is string => !!x))) {
-      await this.notif.crearSiNoExisteUnseen(
+      const creada = await this.notif.crearSiNoExisteUnseen(
         {
           codPlan: a.codPlan,
           usuarioId,
@@ -556,6 +568,18 @@ export class ProvisionesService {
         },
         "recordatorioRetiro",
         p.id,
+      );
+      if (creada) avisados.push(usuarioId);
+    }
+    if (avisados.length && this.correos) {
+      await this.correos.aUsuarios(
+        avisados,
+        plantillaAviso({
+          titulo: `Retire hoy los fondos de ${a.correlativo}`,
+          detalle: `${clp(p.monto)}: si no se retiran hoy, mañana vuelven a la compañía`,
+          url: this.correos.url(`/atenciones/${p.atencionId}`),
+        }),
+        { plantilla: "provision.recordatorioRetiro", atencionId: p.atencionId },
       );
     }
   }
@@ -716,6 +740,13 @@ export class ProvisionesService {
         metadata: { provisionId: p.id, estado },
       },
       actorId,
+      {
+        servicio: this.correos,
+        atencionId: p.atencionId,
+        plantilla: `provision.${reversion ? "Revertida" : estado}`,
+        // Anexo §X: solicitud.fondos@ al solicitar; autoriza.provision@ al autorizar.
+        casillas: estado === "Solicitada" ? ["solicitudFondos"] : estado === "Autorizada" && !reversion ? ["autorizaProvision"] : [],
+      },
     );
   }
 

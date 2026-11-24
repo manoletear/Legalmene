@@ -1,6 +1,7 @@
+import { CorreosService } from "../correos/correos.service";
 import type { CriteriosBusqueda } from "@legalmene/shared";
 import { condicionAtencion } from "../../common/busqueda/criterios";
-import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { and, asc, desc, eq } from "drizzle-orm";
 import {
   ESTADO_ARANCEL_LABEL,
@@ -32,6 +33,7 @@ export class ArancelesAtencionService {
     @Inject(DRIZZLE) private readonly db: Database,
     @Inject(CoberturasService) private readonly coberturas: CoberturasService,
     @Inject(NotifInboxService) private readonly notif: NotifInboxService,
+    @Optional() @Inject(CorreosService) private readonly correos?: CorreosService,
   ) {}
 
   private async snapshot(atencionId: string) {
@@ -137,16 +139,24 @@ export class ArancelesAtencionService {
     const equipo = await equipoDeAtencion(this.db, atencionId);
     if (!equipo) return;
     const base = { codPlan: equipo.codPlan, accionUrl: `/atenciones/${atencionId}`, metadata: { atencionId, arancel: etapa } };
+    const correo = { servicio: this.correos, atencionId, plantilla: `arancel.${etapa}` };
     if (etapa === "EnAprobacion") {
       const aprobadores = equipo.jefeId ? [equipo.jefeId] : await usuariosConPermiso(this.db, ["aranceles_atencion.aprobar"]);
-      await avisar(this.notif, aprobadores, { ...base, severidad: "warn", titulo: `Arancel por aprobar: ${equipo.correlativo}` }, actorId);
+      // Anexo §IX: correo a la jefatura y a aprueba.arancel@ con RUT, tipo y correlativo.
+      await avisar(
+        this.notif,
+        aprobadores,
+        { ...base, severidad: "warn", titulo: `Arancel por aprobar: ${equipo.correlativo}`, detalle: `${equipo.tipo} · RUT ${equipo.afiliadoRut ?? "—"}` },
+        actorId,
+        { ...correo, casillas: ["apruebaArancel"] },
+      );
     } else if (etapa === "Rechazado") {
-      await avisar(this.notif, [equipo.abogadoId], { ...base, severidad: "warn", titulo: `Arancel rechazado: ${equipo.correlativo}`, detalle }, actorId);
+      await avisar(this.notif, [equipo.abogadoId], { ...base, severidad: "warn", titulo: `Arancel rechazado: ${equipo.correlativo}`, detalle }, actorId, correo);
     } else if (etapa === "Aprobado") {
       const finanzas = await usuariosConPermiso(this.db, ["aranceles_atencion.registrar_pago"]);
-      await avisar(this.notif, [...finanzas, equipo.abogadoId], { ...base, titulo: `Arancel aprobado, pendiente de pago: ${equipo.correlativo}` }, actorId);
+      await avisar(this.notif, [...finanzas, equipo.abogadoId], { ...base, titulo: `Arancel aprobado, pendiente de pago: ${equipo.correlativo}` }, actorId, correo);
     } else {
-      await avisar(this.notif, [equipo.abogadoId, equipo.jefeId], { ...base, titulo: `Arancel pagado: ${equipo.correlativo}`, detalle }, actorId);
+      await avisar(this.notif, [equipo.abogadoId, equipo.jefeId], { ...base, titulo: `Arancel pagado: ${equipo.correlativo}`, detalle }, actorId, correo);
     }
   }
 

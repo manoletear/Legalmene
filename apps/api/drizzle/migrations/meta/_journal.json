@@ -218,6 +218,20 @@
       "when": 1795482653605,
       "tag": "0030_vb_primera_presentacion",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1795482932676,
+      "tag": "0031_correos_enviados",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795483247043,
+      "tag": "0032_gestion_informar_cliente",
+      "breakpoints": true
     }
   ]
 }

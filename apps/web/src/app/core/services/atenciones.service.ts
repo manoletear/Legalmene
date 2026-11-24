@@ -42,6 +42,16 @@ export interface BuscarAtencionesOpts extends Partial<CriteriosBusqueda> {
   q?: string;
 }
 
+// Bitácora de correos de una atención (sin el cuerpo).
+export interface CorreoEnviado {
+  id: string;
+  plantilla: string;
+  destinatarios: string[];
+  asunto: string;
+  estado: "Enviado" | "Omitido" | "Error";
+  createdAt: string;
+}
+
 @Injectable({ providedIn: "root" })
 export class AtencionesApiService {
   private http = inject(HttpClient);
@@ -80,6 +90,14 @@ export class AtencionesApiService {
   // V°B° de jefatura para terminar asesorías y juicios.
   solicitarTermino(id: string, payload: SolicitarTermino): Observable<Atencion> {
     return this.http.post<Atencion>(`${this.base}/${id}/termino/solicitar`, payload);
+  }
+
+  solicitarAntecedentes(id: string, body: { antecedentes: string; plazo?: string | null }): Observable<{ estado: string | null; para: string }> {
+    return this.http.post<{ estado: string | null; para: string }>(`${this.base}/${id}/solicitar-antecedentes`, body);
+  }
+
+  correos(id: string): Observable<CorreoEnviado[]> {
+    return this.http.get<CorreoEnviado[]>(`${this.base}/${id}/correos`);
   }
 
   vbPrimeraPresentacion(id: string): Observable<Atencion> {

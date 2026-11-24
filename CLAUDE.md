@@ -196,6 +196,13 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   convoca, solo con el comité abierto; se validan (Cumplido/NoCumplido) en un comité posterior de la misma atención
   (`comites.convocar`), nunca en el mismo, y un comité no se cierra con compromisos anteriores sin validar. Los vencidos se
   avisan cada día hábil.
+- **Correos (`modules/correos`)**: todo correo de negocio sale por `CorreosService` (plantillas en `plantillas.ts`, datos con
+  `escaparHtml()`), que registra cada envío en `correos_enviados` (sin el cuerpo; "Omitido" si SES está desactivado). Los avisos
+  de flujo usan `avisar(notif, destinatarios, aviso, actor, { servicio: this.correos, casillas, atencionId })`
+  (`notif-inbox/destinatarios.ts`): mismo aviso en la aplicación y por correo, nunca a quien hizo la acción. Las casillas
+  institucionales (`aprueba.arancel@`, `solicitud.fondos@`, `autoriza.provision@`, `operaciones@`) vienen de `CORREO_*`.
+  Al cliente solo van la presentación del abogado, la solicitud de antecedentes, el inicio/término de gestiones con
+  `informarCliente` y el término de la atención.
 - **Posesión efectiva**: es un tipo de atención (`PosesionEfectiva`, prefijo POSE); causante y
   herederos se manejan solo vía `PosesionesService`. La ficha PDF es un resumen interno, nunca el
   formulario oficial del Registro Civil.
@@ -250,7 +257,7 @@ y el detalle requisito por requisito en `docs/cumplimiento-anexo-detalle.md`. El
 `docs/requerimientos-anexo-psl.md` §5. Pendientes técnicos:
 
 1. Integración real Transbank WebPay (reemplazar stub en `pagos.service.ts`).
-2. Notificaciones por correo de vencimientos y flujos (SES), incluido el resumen de cargas masivas.
+2. Correos en producción: activar SES (`SES_ENABLED`, `SES_FROM`) y las casillas `CORREO_*`; formularios oficiales al cliente (antecedentes, cuestionario de divorcio) e informe final en PDF.
 3. AWS CDK en `infra/` para Aurora + ECS + ALB + S3 (corregir `apps/api/Dockerfile`, que no copia `pnpm-lock.yaml`).
 4. Migración SQL Server 2008 → Aurora (AWS DMS + SCT) — ver plan en `docs/`.
 5. Formularios oficiales de posesión efectiva (discovery).

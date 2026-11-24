@@ -1,5 +1,7 @@
+import { plantillaGestionCliente } from "../correos/plantillas";
+import { CorreosService } from "../correos/correos.service";
 import { avisar, equipoDeAtencion } from "../notif-inbox/destinatarios";
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { and, count, desc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { filtroAtenciones } from "../../common/acceso/alcance";
@@ -35,6 +37,7 @@ export class GestionesService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     @Inject(NotifInboxService) private readonly notif: NotifInboxService,
+    @Optional() @Inject(CorreosService) private readonly correos?: CorreosService,
   ) {}
 
   async listarPorAtencion(atencionId: string): Promise<Gestion[]> {
@@ -126,6 +129,7 @@ export class GestionesService {
       fechaProgramada: input.fechaProgramada ? new Date(input.fechaProgramada) : null,
       fechaCompromiso: input.fechaCompromiso ? new Date(input.fechaCompromiso) : null,
       documentosIds: input.documentosIds ?? [],
+      informarCliente: input.informarCliente ?? false,
     };
     const [row] = await this.db.insert(gestiones).values(payload).returning();
     await this.db
@@ -149,7 +153,28 @@ export class GestionesService {
       accionUrl: `/atenciones/${input.atencionId}`,
       metadata: { gestionId: row.id, atencionId: input.atencionId },
     });
+    if (row.informarCliente) await this.informarCliente(row, "inicio");
     return row;
+  }
+
+  // Correo al cliente con el inicio o el término de una gestión marcada para informarle.
+  private async informarCliente(g: { atencionId: string; titulo: string; fechaProgramada: Date | null; fechaEjecucion: Date | null; resultado: string | null }, etapa: "inicio" | "termino") {
+    if (!this.correos) return;
+    const equipo = await equipoDeAtencion(this.db, g.atencionId);
+    if (!equipo?.afiliadoEmail) return;
+    const cuando = etapa === "inicio" ? (g.fechaProgramada ?? new Date()) : (g.fechaEjecucion ?? new Date());
+    await this.correos.enviar(
+      [equipo.afiliadoEmail],
+      plantillaGestionCliente({
+        cliente: equipo.afiliadoNombre ?? "cliente",
+        correlativo: equipo.correlativo,
+        gestion: g.titulo,
+        etapa,
+        fecha: cuando.toLocaleDateString("es-CL", { timeZone: "America/Santiago" }),
+        resultado: etapa === "termino" ? g.resultado : null,
+      }),
+      { plantilla: `cliente.gestion.${etapa}`, atencionId: g.atencionId },
+    );
   }
 
   async completar(gestionId: string, input: CompletarGestion): Promise<Gestion> {
@@ -196,6 +221,7 @@ export class GestionesService {
       .set({ fechaUltimaGestion: new Date(), updatedAt: new Date() })
       .where(eq(atenciones.id, row.atencionId));
     if (row.tipo === "EscritoJudicial") await this.avisarPrimeraPresentacion(row.atencionId, row.responsableId);
+    if (updated.informarCliente) await this.informarCliente(updated, "termino");
     return updated;
   }
 
@@ -226,6 +252,7 @@ export class GestionesService {
         metadata: { atencionId, primeraPresentacion: true },
       },
       responsableId,
+      { servicio: this.correos, atencionId, plantilla: "juicio.primeraPresentacion" },
     );
   }
 

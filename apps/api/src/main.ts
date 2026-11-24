@@ -1,5 +1,7 @@
 import "reflect-metadata";
 import { NotifInboxService } from "./modules/notif-inbox/notif-inbox.service";
+import { CorreosService } from "./modules/correos/correos.service";
+import { plantillaAviso } from "./modules/correos/plantillas";
 import { administradores } from "./modules/notif-inbox/destinatarios";
 import { DRIZZLE, type Database } from "./db/database.module";
 import { hoyChileISO } from "./common/utils/dias-habiles";
@@ -56,12 +58,15 @@ async function bootstrap() {
   // mientras no lo hayan visto (sin query string, que puede llevar datos).
   const notifInbox = app.get(NotifInboxService);
   const db = app.get<Database>(DRIZZLE);
+  const correos = app.get(CorreosService);
   app.useGlobalFilters(
     new I18nExceptionFilter(async (ruta, detalle) => {
       const limpia = ruta.split("?")[0];
       const clave = `${limpia}|${hoyChileISO()}`;
-      for (const usuarioId of await administradores(db)) {
-        await notifInbox.crearSiNoExisteUnseen(
+      const admins = await administradores(db);
+      let nuevos = 0;
+      for (const usuarioId of admins) {
+        const creada = await notifInbox.crearSiNoExisteUnseen(
           {
             codPlan: null,
             usuarioId,
@@ -74,6 +79,13 @@ async function bootstrap() {
           "errorServidor",
           clave,
         );
+        if (creada) nuevos++;
+      }
+      // Correo a los administradores solo la primera vez de esa ruta en el día.
+      if (nuevos) {
+        await correos.aUsuarios(admins, plantillaAviso({ titulo: "Error de funcionamiento en NEXUS", detalle: `${limpia}: ${detalle.slice(0, 300)}`, url: correos.url("/auditoria") }), {
+          plantilla: "sistema.error",
+        });
       }
     }),
   );

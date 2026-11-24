@@ -60,13 +60,13 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 
 > Ya existe `NotificacionesService` (SES; con `SES_ENABLED=false` solo registra en el log) y lo usan el enlace de acceso y los vencimientos. Falta conectarlo a los flujos: los avisos en la aplicación de cada etapa ya están (revisión 24-11).
 
-- [ ] Servicio de correo (SES en producción; proveedor alternativo para la demo), plantillas en español y bitácora de envíos por atención.
-- [ ] Aranceles: al enviar (a AJ), al aprobar (`aprueba.arancel@`), al rechazar con motivo (a AR), al registrar el pago (AR y jefatura). (§IX)
-- [ ] Provisiones: solicitud (`solicitud.fondos@`), autorización (`autoriza.provision@`, EF, GAF), disponible (AR, AJ), recordatorio antes de 48 h, reversión (EF), entrega. (§X)
-- [ ] Asignación de abogado y aviso a jefatura de entrevistas/correos/chats. (§VI l.667, §VIII l.980)
-- [ ] Cliente: presentación del abogado, formulario de antecedentes (y cuestionario de divorcio), inicio y término de gestiones, informe final. (§VI l.537, §VII, §VIII l.1125)
-- [ ] Resumen de cargas masivas a `operaciones@`, con RUT nuevos y eliminados. (§III l.308)
-- [ ] Aviso al administrador de errores de funcionamiento. (§I l.66)
+- [x] Servicio de correo (SES en producción; proveedor alternativo para la demo), plantillas en español y bitácora de envíos por atención. *(SES; sin `SES_ENABLED` el correo queda "no enviado" en la bitácora. Falta configurar SES y las casillas `CORREO_*` en producción.)*
+- [x] Aranceles: al enviar (a AJ), al aprobar (`aprueba.arancel@`), al rechazar con motivo (a AR), al registrar el pago (AR y jefatura). (§IX)
+- [x] Provisiones: solicitud (`solicitud.fondos@`), autorización (`autoriza.provision@`, EF, GAF), disponible (AR, AJ), recordatorio antes de 48 h, reversión (EF), entrega. (§X)
+- [x] Asignación de abogado y aviso a jefatura de entrevistas/correos/chats. (§VI l.667, §VIII l.980)
+- [ ] Cliente: presentación del abogado, formulario de antecedentes (y cuestionario de divorcio), inicio y término de gestiones, informe final. (§VI l.537, §VII, §VIII l.1125) — *hecho: presentación, solicitud de antecedentes, inicio/término de gestiones marcadas y correo de término. Falta: el formulario oficial y el cuestionario de divorcio (documentos del cliente) y el informe final en PDF.*
+- [x] Resumen de cargas masivas a `operaciones@`, con RUT nuevos y eliminados. (§III l.308)
+- [x] Aviso al administrador de errores de funcionamiento. (§I l.66)
 
 ## Fase 3 — Controles y plazos del negocio (~1 semana)
 
@@ -148,4 +148,5 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 | 2026-11-23 | 5 | Canales editables y maestros de regiones (16 precargadas), ciudades y comunas por región; campo Ciudad en afiliados (formulario, carga masiva, Excel e informe) (migración 0028) | 8c166e2 |
 | 2026-11-23 | 5 | Carga masiva de coberturas (FLUJO reemplaza, STOCK desactiva ausentes; exige `coberturas.administrar`) y de atenciones (solo FLUJO, por `AtencionesService.crear`). Fase 5 completa salvo comité obligatorio (decisión del cliente) | 169f29a |
 | 2026-11-24 | 6 | Agenda de citas (entrevistas, videollamadas, reuniones, audiencias y comparendos) con calendario mensual, topes, alcance por equipo, aviso de audiencias y Excel; comité como bitácora de compromisos con responsable y plazo, validados en el comité siguiente y con aviso de vencidos (migración 0029) | 15cdd91 |
-| 2026-11-24 | 2–3 | Avisos en la aplicación de los flujos de arancel y provisiones, consultas a la jefatura y errores 500 a administradores; reglas: provisión impaga detiene asesorías, procedimiento en juicios, cierre de comité marca "Revisado", espera de antecedentes en consultas, V°B° de la primera presentación y comprobante obligatorio en gastos (migración 0030). Cruce del detalle: 66 filas marcadas como cumplidas | 6da29a5, 094acd1 |
+| 2026-11-24 | 2–3 | Avisos en la aplicación de los flujos de arancel y provisiones, consultas a la jefatura y errores 500 a administradores; reglas: provisión impaga detiene asesorías, procedimiento en juicios, cierre de comité marca "Revisado", espera de antecedentes en consultas, V°B° de la primera presentación y comprobante obligatorio en gastos (migración 0030). Cruce del detalle: 66 filas marcadas como cumplidas | 6da29a5, 094acd1, 90d8019 |
+| 2026-11-24 | 2 | Correos de los flujos sobre SES con plantillas en español y bitácora por atención (`correos_enviados`): arancel (con aprueba.arancel@), provisiones (solicitud.fondos@, autoriza.provision@), rendición al cliente, asignación de abogado, consultas a la jefatura, primera presentación, errores a administradores y resumen de cargas a operaciones@ con RUT nuevos y terminados. Al cliente: presentación del abogado, solicitud de antecedentes, inicio y término de gestiones marcadas y término de la atención (migraciones 0031–0032) | ver commit |

@@ -1,3 +1,5 @@
+import { plantillaPresentacionAbogado, plantillaSolicitudAntecedentes, plantillaTerminoAtencion } from "../correos/plantillas";
+import { CorreosService } from "../correos/correos.service";
 import { avisar, jefeDe } from "../notif-inbox/destinatarios";
 import {
   Inject,
@@ -6,6 +8,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Optional,
 } from "@nestjs/common";
 import { and, asc, eq, count, inArray, isNull, or, sql, desc, getTableColumns } from "drizzle-orm";
 import {
@@ -21,6 +24,7 @@ import {
   type AutorizacionCobertura,
   type FichaAtencion,
   type CambiarEstado,
+  type SolicitarAntecedentes,
   type CreateContraparte,
   type NuevoCorrelativo,
   type TipoAtencion,
@@ -95,6 +99,7 @@ export class AtencionesService {
     @Inject(NotifInboxService) private readonly notif: NotifInboxService,
     @Inject(PlantillasService) private readonly plantillas: PlantillasService,
     @Inject(ArancelesAtencionService) private readonly arancelesAtencion: ArancelesAtencionService,
+    @Optional() @Inject(CorreosService) private readonly correos?: CorreosService,
   ) {}
 
   async buscar(filtro: FiltroAtencionesDto) {
@@ -324,17 +329,7 @@ export class AtencionesService {
     }
 
     await this.webhooks.emitir(codPlan, "atencion.creada", { atencion: row });
-    if (row.abogadoAsignadoId) {
-      await this.notif.crear({
-        codPlan,
-        usuarioId: row.abogadoAsignadoId,
-        severidad: "info",
-        titulo: `Nueva ${row.tipo}: ${row.correlativo}`,
-        detalle: row.asunto,
-        accionUrl: `/atenciones/${row.id}`,
-        metadata: { atencionId: row.id, tipo: row.tipo },
-      });
-    }
+    if (row.abogadoAsignadoId) await this.avisarAsignacion(row, actor?.id ?? null);
     // La jefatura de consultas queda informada de las consultas de su equipo (Anexo §VI l.667).
     if (row.tipo === "Consulta") {
       const jefe = await jefeDe(this.db, row.abogadoAsignadoId ?? row.creadoPorId);
@@ -349,6 +344,7 @@ export class AtencionesService {
           metadata: { atencionId: row.id, tipo: row.tipo, aviso: "jefatura" },
         },
         actor?.id,
+        { servicio: this.correos, atencionId: row.id, plantilla: "consulta.jefatura" },
       );
     }
     return row;
@@ -402,6 +398,10 @@ export class AtencionesService {
     if (row.tipo !== "Consulta" && row.materiaId !== actual.materiaId) {
       await this.arancelesAtencion.recalcular(row.id, actor?.id ?? null);
       await this.sincronizarCobertura(row.id);
+    }
+
+    if (row.abogadoAsignadoId && row.abogadoAsignadoId !== actual.abogadoAsignadoId) {
+      await this.avisarAsignacion(row, actor?.id ?? null);
     }
 
     // Al definir el procedimiento de un juicio se agregan sus gestiones predefinidas.
@@ -560,7 +560,80 @@ export class AtencionesService {
       .set({ solicitudTermino: null, metadata: { ...(row.metadata ?? {}), vistoBuenoTermino: { porId: actor.id, en: new Date().toISOString() } } })
       .where(eq(atenciones.id, id))
       .returning();
+    await this.avisarTerminoCliente(id, s.causaTerminoId, actor.id);
     return limpia;
+  }
+
+  // Al asignar el abogado: aviso (y correo) al abogado y, en asesorías, juicios y posesiones,
+  // correo de presentación al cliente (Anexo §VII l.765, §VIII l.980).
+  private async avisarAsignacion(row: { id: string; tipo: string; correlativo: string; codPlan: string; asunto: string; abogadoAsignadoId: string | null; materiaId: string }, actorId: string | null) {
+    if (!row.abogadoAsignadoId) return;
+    await avisar(
+      this.notif,
+      [row.abogadoAsignadoId],
+      {
+        codPlan: row.codPlan,
+        severidad: "info",
+        titulo: `Atención asignada: ${row.tipo} ${row.correlativo}`,
+        detalle: row.asunto,
+        accionUrl: `/atenciones/${row.id}`,
+        metadata: { atencionId: row.id, tipo: row.tipo },
+      },
+      null,
+      { servicio: this.correos, atencionId: row.id, plantilla: "atencion.asignada" },
+    );
+    if (row.tipo === "Consulta" || !this.correos) return;
+    const [d] = await this.db
+      .select({ cliente: afiliados.nombres, email: afiliados.email, abogado: usuarios.nombre, correoAbogado: usuarios.email, materia: materias.nombre })
+      .from(atenciones)
+      .innerJoin(afiliados, eq(afiliados.id, atenciones.afiliadoId))
+      .innerJoin(usuarios, eq(usuarios.id, row.abogadoAsignadoId))
+      .innerJoin(materias, eq(materias.id, atenciones.materiaId))
+      .where(eq(atenciones.id, row.id));
+    if (!d?.email) return;
+    await this.correos.enviar(
+      [d.email],
+      plantillaPresentacionAbogado({ cliente: d.cliente, abogado: d.abogado, correoAbogado: d.correoAbogado, correlativo: row.correlativo, materia: d.materia }),
+      { plantilla: "cliente.presentacion", atencionId: row.id, enviadoPorId: actorId },
+    );
+  }
+
+  // Al terminar una asesoría o un juicio (V°B°), correo al cliente (Anexo §VII l.1050, §VIII l.1180).
+  private async avisarTerminoCliente(id: string, causaTerminoId: string, actorId: string) {
+    if (!this.correos) return;
+    const [d] = await this.db
+      .select({ correlativo: atenciones.correlativo, cliente: afiliados.nombres, email: afiliados.email, abogado: usuarios.nombre })
+      .from(atenciones)
+      .innerJoin(afiliados, eq(afiliados.id, atenciones.afiliadoId))
+      .leftJoin(usuarios, eq(usuarios.id, atenciones.abogadoAsignadoId))
+      .where(eq(atenciones.id, id));
+    if (!d?.email) return;
+    const [c] = await this.db.select({ nombre: causasTermino.nombre }).from(causasTermino).where(eq(causasTermino.id, causaTerminoId));
+    await this.correos.enviar(
+      [d.email],
+      plantillaTerminoAtencion({ cliente: d.cliente, correlativo: d.correlativo, causa: c?.nombre ?? "término", abogado: d.abogado ?? "a cargo" }),
+      { plantilla: "cliente.termino", atencionId: id, enviadoPorId: actorId },
+    );
+  }
+
+  // El abogado pide antecedentes al cliente por correo (Anexo §VI l.537, §VII l.770).
+  async solicitarAntecedentes(id: string, input: SolicitarAntecedentes, actor: Actor) {
+    await asegurarAtencionVisible(this.db, id);
+    const [d] = await this.db
+      .select({ correlativo: atenciones.correlativo, cliente: afiliados.nombres, email: afiliados.email, abogadoId: atenciones.abogadoAsignadoId })
+      .from(atenciones)
+      .innerJoin(afiliados, eq(afiliados.id, atenciones.afiliadoId))
+      .where(eq(atenciones.id, id));
+    if (!d.email) throw new BadRequestException("El afiliado no tiene correo registrado; agréguelo en su ficha");
+    if (!this.correos) throw new BadRequestException("El envío de correos no está disponible");
+    const [ab] = d.abogadoId ? await this.db.select({ nombre: usuarios.nombre }).from(usuarios).where(eq(usuarios.id, d.abogadoId)) : [];
+    const plazo = input.plazo ? input.plazo.split("-").reverse().join("-") : null;
+    const estado = await this.correos.enviar(
+      [d.email],
+      plantillaSolicitudAntecedentes({ cliente: d.cliente, abogado: ab?.nombre ?? "su abogado", correlativo: d.correlativo, antecedentes: input.antecedentes, plazo }),
+      { plantilla: "cliente.antecedentes", atencionId: id, enviadoPorId: actor.id },
+    );
+    return { estado, para: d.email };
   }
 
   async rechazarTermino(id: string, motivo: string, actor: Actor): Promise<Atencion> {

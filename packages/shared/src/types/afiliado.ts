@@ -95,6 +95,9 @@ export const CargaMasivaResultadoSchema = z.object({
     }),
   ),
   duracionMs: z.number().int(),
+  // Nómina: RUT con relación nueva y RUT terminados por STOCK (Anexo §III l.308).
+  rutsNuevos: z.array(z.string()).optional(),
+  rutsEliminados: z.array(z.string()).optional(),
 });
 export type CargaMasivaResultado = z.infer<typeof CargaMasivaResultadoSchema>;
 
