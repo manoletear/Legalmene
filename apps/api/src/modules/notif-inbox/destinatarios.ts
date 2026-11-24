@@ -102,7 +102,7 @@ export async function avisar(
     await correo.servicio.aUsuarios(ids, contenido, {
       plantilla: correo.plantilla ?? "aviso",
       atencionId: correo.atencionId,
-      enviadoPorId: excluir ?? null,
+      enviadoPorId: excluir || null,
       casillas: correo.casillas,
     });
   }

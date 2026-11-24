@@ -45,7 +45,7 @@ test.describe("Arancel por WebPay, decisión de provisión y campos adicionales"
 
     await page.goto(`/atenciones/${juicio.id}`);
     await page.getByTestId("notificar-pago").click();
-    await expect(page.getByText("Pago notificado")).toBeVisible();
+    await expect(page.getByText("Pago notificado", { exact: true })).toBeVisible();
     await expect(page.getByTestId("arancel-camino")).toContainText("WebPay");
 
     const ar = await request.get(`${API}/atenciones/${juicio.id}/arancel`).then((r) => r.json());
@@ -78,7 +78,7 @@ test.describe("Arancel por WebPay, decisión de provisión y campos adicionales"
       const caja = page.getByTestId("campos-adicionales");
       await caja.getByLabel(etiqueta).fill("2500");
       await caja.getByRole("button", { name: "Guardar campos" }).click();
-      await expect(page.getByText("Campos guardados")).toBeVisible();
+      await expect(page.getByText("Campos guardados", { exact: true })).toBeVisible();
       const r = await request.get(`${API}/atenciones/${juicio.id}/campos-adicionales`).then((x) => x.json());
       expect(r.valores[campo.id]).toBe(2500);
     } finally {
@@ -95,7 +95,7 @@ test.describe("Arancel por WebPay, decisión de provisión y campos adicionales"
     // Se quita la primera columna y se guarda.
     await page.getByLabel(pagos.disponibles[0], { exact: true }).click();
     await page.getByTestId("formato-guardar").click();
-    await expect(page.getByText("Formato guardado")).toBeVisible();
+    await expect(page.getByText("Formato guardado", { exact: true })).toBeVisible();
     const guardado = (await request.get(`${API}/exports/formatos`).then((r) => r.json())).find((f: { clave: string }) => f.clave === "pagos");
     expect(guardado.columnas).toEqual(pagos.disponibles.slice(1));
     expect((await request.delete(`${API}/exports/formatos/pagos`)).ok()).toBeTruthy();

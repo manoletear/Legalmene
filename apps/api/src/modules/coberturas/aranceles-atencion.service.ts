@@ -142,7 +142,7 @@ export class ArancelesAtencionService {
 
   // Avisos del flujo de arancel (Anexo §IX): a la jefatura al enviarlo, al abogado al rechazarlo,
   // a Finanzas al aprobarlo y al abogado y su jefatura al registrar el pago.
-  private async avisar(atencionId: string, etapa: "EnAprobacion" | "Rechazado" | "Aprobado" | "Pagado", actorId: string, detalle?: string) {
+  private async avisar(atencionId: string, etapa: "EnAprobacion" | "Rechazado" | "Aprobado" | "Pagado", actorId: string | null, detalle?: string) {
     const equipo = await equipoDeAtencion(this.db, atencionId);
     if (!equipo) return;
     const base = { codPlan: equipo.codPlan, accionUrl: `/atenciones/${atencionId}`, metadata: { atencionId, arancel: etapa } };
@@ -311,7 +311,7 @@ export class ArancelesAtencionService {
       );
       return null;
     }
-    await this.avisar(actual.atencionId, "Pagado", "", `${pago.monto.toLocaleString("es-CL")} pesos (WebPay)`);
+    await this.avisar(actual.atencionId, "Pagado", null, `${pago.monto.toLocaleString("es-CL")} pesos (WebPay)`);
     return row;
   }
 
