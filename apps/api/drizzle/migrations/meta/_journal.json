@@ -211,6 +211,13 @@
       "when": 1795480448497,
       "tag": "0029_agenda_compromisos",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1795482653605,
+      "tag": "0030_vb_primera_presentacion",
+      "breakpoints": true
     }
   ]
 }

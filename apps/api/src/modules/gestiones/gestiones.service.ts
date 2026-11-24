@@ -1,3 +1,4 @@
+import { avisar, equipoDeAtencion } from "../notif-inbox/destinatarios";
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { and, count, desc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { DRIZZLE, Database } from "../../db/database.module";
@@ -194,7 +195,38 @@ export class GestionesService {
       .update(atenciones)
       .set({ fechaUltimaGestion: new Date(), updatedAt: new Date() })
       .where(eq(atenciones.id, row.atencionId));
+    if (row.tipo === "EscritoJudicial") await this.avisarPrimeraPresentacion(row.atencionId, row.responsableId);
     return updated;
+  }
+
+  // Anexo §VIII l.1092: la jefatura judicial revisa la primera presentación del juicio. Al completarse
+  // el primer escrito se le avisa para que dé su V°B° en la ficha.
+  private async avisarPrimeraPresentacion(atencionId: string, responsableId: string | null) {
+    const [a] = await this.db
+      .select({ tipo: atenciones.tipo, vb: atenciones.vbPrimeraPresentacion })
+      .from(atenciones)
+      .where(eq(atenciones.id, atencionId));
+    if (!a || a.tipo !== "Juicio" || a.vb) return;
+    const [n] = await this.db
+      .select({ n: count() })
+      .from(gestiones)
+      .where(and(eq(gestiones.atencionId, atencionId), eq(gestiones.tipo, "EscritoJudicial"), eq(gestiones.estado, "Completada")));
+    if (Number(n?.n ?? 0) !== 1) return;
+    const equipo = await equipoDeAtencion(this.db, atencionId);
+    if (!equipo) return;
+    await avisar(
+      this.notif,
+      [equipo.jefeId],
+      {
+        codPlan: equipo.codPlan,
+        severidad: "warn",
+        titulo: `Revise la primera presentación: ${equipo.correlativo}`,
+        detalle: "Primer escrito presentado; falta su V°B°",
+        accionUrl: `/atenciones/${atencionId}`,
+        metadata: { atencionId, primeraPresentacion: true },
+      },
+      responsableId,
+    );
   }
 
   // Anexo §VII l.797: con el arancel impago la atención queda detenida. Solo se permiten las

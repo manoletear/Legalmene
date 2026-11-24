@@ -82,6 +82,10 @@ export class AtencionesApiService {
     return this.http.post<Atencion>(`${this.base}/${id}/termino/solicitar`, payload);
   }
 
+  vbPrimeraPresentacion(id: string): Observable<Atencion> {
+    return this.http.post<Atencion>(`${this.base}/${id}/vb-primera-presentacion`, {});
+  }
+
   aprobarTermino(id: string): Observable<Atencion> {
     return this.http.post<Atencion>(`${this.base}/${id}/termino/aprobar`, {});
   }

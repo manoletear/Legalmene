@@ -7,7 +7,7 @@ import {
   ConflictException,
   ForbiddenException,
 } from "@nestjs/common";
-import { and, eq, count, inArray, isNull, or, sql, desc, getTableColumns } from "drizzle-orm";
+import { and, asc, eq, count, inArray, isNull, or, sql, desc, getTableColumns } from "drizzle-orm";
 import {
   ESTADOS_PROVISION_ABIERTOS,
   ESTADO_INICIAL,
@@ -352,6 +352,29 @@ export class AtencionesService {
       );
     }
     return row;
+  }
+
+  // V°B° de la jefatura judicial a la primera presentación (Anexo §VIII l.1092): requiere un
+  // escrito judicial completado y no lo da quien lo presentó. Una sola vez (409 si ya se dio).
+  async vbPrimeraPresentacion(id: string, actor: Actor): Promise<Atencion> {
+    await asegurarAtencionVisible(this.db, id);
+    const [a] = await this.db.select().from(atenciones).where(eq(atenciones.id, id));
+    if (a.tipo !== "Juicio") throw new BadRequestException("El V°B° de la primera presentación es solo para juicios");
+    const [escrito] = await this.db
+      .select({ responsableId: gestiones.responsableId })
+      .from(gestiones)
+      .where(and(eq(gestiones.atencionId, id), eq(gestiones.tipo, "EscritoJudicial"), eq(gestiones.estado, "Completada")))
+      .orderBy(asc(gestiones.fechaEjecucion))
+      .limit(1);
+    if (!escrito) throw new BadRequestException("Aún no hay un escrito judicial presentado");
+    if (escrito.responsableId === actor.id) throw new ForbiddenException("Quien presentó el escrito no puede darle el V°B°");
+    const [row] = await this.db
+      .update(atenciones)
+      .set({ vbPrimeraPresentacion: { usuarioId: actor.id, fecha: new Date().toISOString() }, updatedAt: new Date() })
+      .where(and(eq(atenciones.id, id), isNull(atenciones.vbPrimeraPresentacion)))
+      .returning();
+    if (!row) throw new ConflictException("La primera presentación ya tiene V°B°");
+    return row as unknown as Atencion;
   }
 
   async actualizar(id: string, patch: UpdateAtencionDto, actor?: Actor): Promise<Atencion> {

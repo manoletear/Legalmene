@@ -159,6 +159,9 @@ const como = (u: UsuarioPrueba): Acceso => ({ usuarioId: u.id, permisos: new Set
     // No se valida en el mismo comité.
     await expect(comitesSrv.validarCompromiso(c1.id, comp.id, jefe.id, { estado: "Cumplido" })).rejects.toBeInstanceOf(BadRequestException);
     await comitesSrv.cerrar(c1.id, "Aprobado", "Acta 1");
+    // Cerrar el comité deja la atención "Revisada por comité".
+    const [revisada] = await drizzle(pool).select({ r: atenciones.revisadoPorComite }).from(atenciones).where(eq(atenciones.id, atencionId));
+    expect(revisada.r).toBe(true);
 
     const db = drizzle(pool);
     const c2 = await comitesSrv.convocar(jefe.id, { atencionId, motivo: "Seguimiento", participantesIds: [jefe.id] });

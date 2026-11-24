@@ -41,6 +41,11 @@ export const AtencionSchema = z.object({
     })
     .optional()
     .nullable(),
+  // V°B° de la jefatura judicial a la primera presentación del juicio (Anexo §VIII l.1092).
+  vbPrimeraPresentacion: z
+    .object({ usuarioId: z.string().uuid(), fecha: z.string().datetime() })
+    .optional()
+    .nullable(),
   // Solicitud de término pendiente de V°B° de jefatura (asesorías y juicios).
   solicitudTermino: z
     .object({
@@ -133,6 +138,7 @@ export const CreateAtencionSchema = AtencionSchema.omit({
   fechaUltimaGestion: true,
   fechaPrimerContacto: true,
   solicitudTermino: true,
+  vbPrimeraPresentacion: true,
   autorizacionCobertura: true,
   horaInicio: true,
   horaTermino: true,

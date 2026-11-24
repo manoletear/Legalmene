@@ -1,3 +1,4 @@
+import { documentos } from "../../db/schema/documentos";
 import type { CriteriosBusqueda } from "@legalmene/shared";
 import { avisar, jefeDe, usuariosConPermiso as conPermiso } from "../notif-inbox/destinatarios";
 import { condicionAtencion } from "../../common/busqueda/criterios";
@@ -612,6 +613,13 @@ export class ProvisionesService {
       if (input.monto > saldo) {
         throw new BadRequestException(`El gasto supera el saldo disponible de la provisión (${clp(saldo)})`);
       }
+      // Anexo §X 13: cada gasto real se respalda con su comprobante, subido a la misma atención.
+      if (!input.documentoId) throw new BadRequestException("Adjunte el comprobante del gasto");
+      const [doc] = await tx
+        .select({ id: documentos.id })
+        .from(documentos)
+        .where(and(eq(documentos.id, input.documentoId), eq(documentos.atencionId, prov.atencionId)));
+      if (!doc) throw new BadRequestException("El comprobante no corresponde a un documento de esta atención");
       const [mov] = await tx
         .insert(provisionMovimientos)
         .values({

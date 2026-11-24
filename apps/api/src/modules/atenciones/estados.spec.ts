@@ -42,10 +42,10 @@ describe("mapa de transiciones", () => {
 });
 
 describe("requisitos por etapa", () => {
-  it("juicio a Pendiente exige tribunal, ROL y cuantía", () => {
+  it("juicio a Pendiente exige tribunal, procedimiento, ROL y cuantía", () => {
     const faltan = validarTransicion(base, "Pendiente", sinPendientes);
-    expect(faltan).toEqual(["tribunal", "ROL/RIT de la causa", "cuantía y moneda"]);
-    const completo = { ...base, tribunalId: "t", rolCausa: "C-1-2026", cuantiaMonto: 100, cuantiaMoneda: "CLP" };
+    expect(faltan).toEqual(["tribunal", "procedimiento", "ROL/RIT de la causa", "cuantía y moneda"]);
+    const completo = { ...base, tribunalId: "t", procedimientoId: "p", rolCausa: "C-1-2026", cuantiaMonto: 100, cuantiaMoneda: "CLP" };
     expect(validarTransicion(completo, "Pendiente", sinPendientes)).toEqual([]);
   });
 
@@ -118,15 +118,25 @@ describe("posesión efectiva", () => {
   });
 });
 
-describe("provisión impaga (Anexo §VIII l.1076)", () => {
-  const listo = { ...base, tribunalId: "t", rolCausa: "C-1-2026", cuantiaMonto: 1, cuantiaMoneda: "CLP" as const };
+describe("provisión impaga (Anexo §VII l.1003, §VIII l.1076)", () => {
+  const listo = { ...base, tribunalId: "t", procedimientoId: "p", rolCausa: "C-1-2026", cuantiaMonto: 1, cuantiaMoneda: "CLP" as const };
   it("un juicio no inicia la tramitación con provisiones solicitadas sin pagar", () => {
     expect(validarTransicion(listo, "Pendiente", { ...sinPendientes, provisionesImpagas: 1 })).toEqual([
       "pago de 1 provisión(es) solicitada(s) al cliente",
     ]);
     expect(validarTransicion(listo, "EnEsperaProvision", { ...sinPendientes, provisionesImpagas: 1 })).toEqual([]);
     expect(validarTransicion(listo, "Pendiente", { ...sinPendientes, provisionesImpagas: 0 })).toEqual([]);
-    // En asesorías no aplica.
-    expect(validarTransicion({ ...base, tipo: "Asesoria" }, "Pendiente", { ...sinPendientes, provisionesImpagas: 2 })).toEqual([]);
+    // Las asesorías también quedan detenidas.
+    expect(validarTransicion({ ...base, tipo: "Asesoria" }, "Pendiente", { ...sinPendientes, provisionesImpagas: 2 })).toEqual([
+      "pago de 2 provisión(es) solicitada(s) al cliente",
+    ]);
+  });
+});
+
+describe("consultas a la espera de documentos (Anexo §VI 3.3–3.4)", () => {
+  it("una consulta puede esperar antecedentes y luego responderse", () => {
+    const consulta = { ...base, tipo: "Consulta" as const, estado: "Iniciada" as const };
+    expect(validarTransicion(consulta, "EnEsperaAntecedentes", sinPendientes)).toEqual([]);
+    expect(validarTransicion({ ...consulta, estado: "EnEsperaAntecedentes" }, "Respondida", sinPendientes)).toEqual([]);
   });
 });

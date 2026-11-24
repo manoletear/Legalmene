@@ -133,6 +133,12 @@ export class ComitesService {
       .where(and(eq(comites.id, comiteId), inArray(comites.estado, ["Convocado", "EnSesion"])))
       .returning();
     if (!updated) throw new ConflictException(`El comité ya está ${comite.estado.toLowerCase()}; su decisión no se puede cambiar`);
+    // Cerrar el comité deja la atención "Revisada por comité" (Anexo §VIII l.1196) y la saca de
+    // EnComite si estaba ahí.
+    await this.db
+      .update(atenciones)
+      .set({ revisadoPorComite: true, updatedAt: new Date() })
+      .where(eq(atenciones.id, comite.atencionId));
     await this.db
       .update(atenciones)
       .set({ estado: "EnGestion", updatedAt: new Date() })

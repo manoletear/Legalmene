@@ -129,6 +129,13 @@ export class AtencionesController {
     return this.service.aprobarTermino(id, user);
   }
 
+  // V°B° de la jefatura judicial a la primera presentación del juicio.
+  @Post(":id/vb-primera-presentacion")
+  @Permiso("atenciones.aprobar_termino")
+  vbPrimeraPresentacion(@Param("id", ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.vbPrimeraPresentacion(id, user);
+  }
+
   @Post("atenciones/:id/termino/rechazar")
   @Permiso("atenciones.aprobar_termino")
   rechazarTermino(@Param("id", ParseUUIDPipe) id: string, @Body() body: RechazarTerminoDto, @CurrentUser() user: AuthenticatedUser) {

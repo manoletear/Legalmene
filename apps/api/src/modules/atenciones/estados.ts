@@ -13,6 +13,7 @@ export interface AtencionParaTransicion {
   tipo: TipoAtencion;
   estado: EstadoAtencion;
   tribunalId: string | null;
+  procedimientoId?: string | null;
   rolCausa: string | null;
   cuantiaMonto: number | null;
   cuantiaMoneda: string | null;
@@ -76,12 +77,15 @@ export function validarTransicion(
     faltan.push(...faltantesCausante(ctx.posesion?.causante));
     if (["ListaEmision", "Terminada"].includes(destino) && (ctx.posesion?.herederos ?? 0) === 0) faltan.push("al menos un heredero");
   }
-  // Anexo §VIII l.1076: la tramitación del juicio se inicia con arancel y provisión regularizados.
-  if (a.tipo === "Juicio" && ["Pendiente", "EnGestion"].includes(destino) && (ctx.provisionesImpagas ?? 0) > 0) {
+  // Anexo §VII l.1003 y §VIII l.1076: asesorías y juicios quedan detenidos hasta el depósito de
+  // las provisiones solicitadas al cliente.
+  if ((a.tipo === "Juicio" || a.tipo === "Asesoria") && ["Pendiente", "EnGestion"].includes(destino) && (ctx.provisionesImpagas ?? 0) > 0) {
     faltan.push(`pago de ${ctx.provisionesImpagas} provisión(es) solicitada(s) al cliente`);
   }
   if (a.tipo === "Juicio" && destino === "Pendiente") {
     if (!a.tribunalId) faltan.push("tribunal");
+    // Anexo §VIII l.986: el abogado ingresa competencia, materia y procedimiento.
+    if (!a.procedimientoId) faltan.push("procedimiento");
     if (!a.rolCausa) faltan.push("ROL/RIT de la causa");
     if (a.cuantiaMonto == null || !a.cuantiaMoneda) faltan.push("cuantía y moneda");
   }

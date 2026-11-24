@@ -21,6 +21,7 @@ import {
   planAleatorio,
   rutAleatorio,
   usuarioDePrueba,
+  comprobanteDePrueba,
   type MateriaPrueba,
 } from "./helpers";
 
@@ -141,7 +142,12 @@ const RUN = !!process.env.DATABASE_URL;
     const [cc] = await service.cuentaCorriente(abogado);
     expect(cc).toMatchObject({ abogadoId: abogado, porRendir: 450_000, porReingresar: 0 });
 
-    await service.registrarMovimiento(p.id, abogado, { tipo: "Gasto", monto: 300_000, glosa: "Honorario perito" });
+    // El gasto exige comprobante de la misma atención.
+    await expect(service.registrarMovimiento(p.id, abogado, { tipo: "Gasto", monto: 300_000, glosa: "Sin comprobante" })).rejects.toThrow(
+      /comprobante/,
+    );
+    const comprobante = await comprobanteDePrueba(drizzle(pool), p.atencionId, abogado);
+    await service.registrarMovimiento(p.id, abogado, { tipo: "Gasto", monto: 300_000, glosa: "Honorario perito", documentoId: comprobante });
     // El abogado ya no registra reintegros: el saldo lo registra el contador al recibirlo.
     await expect(service.registrarMovimiento(p.id, abogado, { tipo: "Reintegro", monto: 150_000, glosa: "Saldo" })).rejects.toThrow(
       /lo registra el contador/,

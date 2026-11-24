@@ -29,6 +29,7 @@ import {
   planAleatorio,
   rutAleatorio,
   usuarioDePrueba,
+  comprobanteDePrueba,
   type MateriaPrueba,
 } from "./helpers";
 
@@ -214,7 +215,8 @@ const FECHA_PAGO = "2001-03-15";
       await provisionesSrv.marcarDisponible(p.id, jefe.id);
       await pool.query("UPDATE provisiones SET fecha_resolucion = now() - interval '10 days' WHERE id = $1", [p.id]);
       await provisionesSrv.entregar(p.id, jefe.id);
-      await provisionesSrv.registrarMovimiento(p.id, abogado.id, { tipo: "Gasto", monto: 10_000, glosa: "Receptor" });
+      const comprobante = await comprobanteDePrueba(drizzle(pool), a.id, abogado.id);
+      await provisionesSrv.registrarMovimiento(p.id, abogado.id, { tipo: "Gasto", monto: 10_000, glosa: "Receptor", documentoId: comprobante });
       await provisionesSrv.rendir(p.id, abogado.id);
       await atencionesSrv.solicitarTermino(a.id, { causaTerminoId: causaId }, abogado);
       const t = await atencionesSrv.aprobarTermino(a.id, jefe);

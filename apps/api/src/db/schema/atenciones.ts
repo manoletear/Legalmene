@@ -95,6 +95,8 @@ export const atenciones = pgTable(
     fechaPrimerContacto: timestamp("fecha_primer_contacto", { withTimezone: true }),
     // Término solicitado, a la espera del V°B° de jefatura (null si no hay solicitud).
     solicitudTermino: jsonb("solicitud_termino").$type<SolicitudTermino>(),
+    // V°B° de la jefatura judicial a la primera presentación del juicio (Anexo §VIII l.1092).
+    vbPrimeraPresentacion: jsonb("vb_primera_presentacion").$type<{ usuarioId: string; fecha: string }>(),
     // Sin cobertura del plan: autorización de Gerencia de Servicios (null si el plan cubre).
     autorizacionCobertura: jsonb("autorizacion_cobertura").$type<AutorizacionCobertura>(),
     prioridad: prioridadEnum("prioridad").notNull().default("Media"),

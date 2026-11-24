@@ -16,6 +16,7 @@ import { PromptService } from "../../shared/prompt.service";
 import { CriteriosBusquedaComponent, type Criterios } from "../../shared/criterios-busqueda.component";
 import { descargarArchivo } from "../../shared/descarga";
 import { PagoDialogService } from "../../shared/pago-dialog.component";
+import { GastoDialogService } from "../../shared/gasto-dialog.component";
 import { AccionProvision, accionesProvision, severidadProvision } from "../../shared/provision-acciones";
 import { Observable } from "rxjs";
 
@@ -109,6 +110,7 @@ export class ProvisionesComponent implements OnInit {
   private api = inject(ProvisionesApiService);
   private me = inject(MeService);
   private pagoDialog = inject(PagoDialogService);
+  private gastoDialog = inject(GastoDialogService);
 
   // Anexo §X 12: comprobante de entrega de fondos al abogado.
   async comprobanteEntrega(p: { id: string; correlativo: string }) {
@@ -238,12 +240,12 @@ export class ProvisionesComponent implements OnInit {
         req = this.api.entregar(p.id);
         break;
       case "gasto": {
-        const monto = await this.monto(`Gasto contra ${p.correlativo}`);
-        if (monto === null) return;
-        const glosa = await this.prompt.open({ header: "Detalle del gasto", label: "Glosa", required: true });
-        if (!glosa) return;
-        req = this.api.registrarMovimiento(p.id, { tipo: "Gasto", monto, glosa });
-        break;
+        // El gasto se registra en el diálogo, junto con su comprobante.
+        if (await this.gastoDialog.open({ provisionId: p.id, atencionId: p.atencionId, correlativo: p.correlativo })) {
+          this.msg.add({ severity: "success", summary: ac.label, detail: p.correlativo, life: 2500 });
+          this.recargar();
+        }
+        return;
       }
       case "reingreso": {
         const monto = await this.monto(`Saldo devuelto por el abogado (${p.correlativo})`);
