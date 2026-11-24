@@ -2,7 +2,7 @@ import { Injectable, inject } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { Observable } from "rxjs";
 import { environment } from "../../../environments/environment";
-import type { Comite, ConvocarComite } from "@legalmene/shared";
+import type { BitacoraComite, Comite, CompromisoComite, ConvocarComite, CrearCompromiso, ValidarCompromiso } from "@legalmene/shared";
 
 @Injectable({ providedIn: "root" })
 export class ComitesApiService {
@@ -29,5 +29,17 @@ export class ComitesApiService {
     payload: { decision: "Aprobado" | "Rechazado" | "Diferido"; acta: string },
   ): Observable<Comite> {
     return this.http.post<Comite>(`${this.base}/comites/${comiteId}/cerrar`, payload);
+  }
+
+  bitacora(comiteId: string): Observable<BitacoraComite> {
+    return this.http.get<BitacoraComite>(`${this.base}/comites/${comiteId}/compromisos`);
+  }
+
+  agregarCompromiso(comiteId: string, payload: CrearCompromiso): Observable<CompromisoComite> {
+    return this.http.post<CompromisoComite>(`${this.base}/comites/${comiteId}/compromisos`, payload);
+  }
+
+  validarCompromiso(comiteId: string, compromisoId: string, payload: ValidarCompromiso): Observable<CompromisoComite> {
+    return this.http.post<CompromisoComite>(`${this.base}/comites/${comiteId}/compromisos/${compromisoId}/validar`, payload);
   }
 }

@@ -72,8 +72,8 @@ Dos hallazgos que corrigen lo que dice la documentación del propio repo:
 | 335-336 | Opciones habilitadas según el usuario | Cumple | `app.component.ts:349`; `permisoGuard` en `app.routes.ts`. |
 | 338-340, 424-428 | Admin crea perfiles y define accesos (módulos y lógica); crea usuarios | Parcial | Perfiles: sí. Crear usuarios: no (ver §II). |
 | 347-351 | Admin con acceso total, más un nivel con menos privilegios | Cumple | ADMIN tiene todos los permisos (`permisos.ts:102`); se pueden crear perfiles reducidos (`CreatePerfilSchema`, `copiarDe`). |
-| 358-362 | Jefaturas: informes, atenciones, agendas; aprobar aranceles, provisiones y derivaciones de su equipo | Parcial | Permisos en `permisos.ts:134-147`; alcance "equipo" en `common/acceso/alcance.ts:25-27` (solo reportes directos). **No hay agenda.** |
-| 369-374 | Abogado: varios usuarios, ve solo sus atenciones, agenda, relación con su jefatura | Parcial | Alcance propio en `alcance.ts:20-24`; jefatura en `usuarios.ts:54`. **Agenda y citas: no cumple.** |
+| 358-362 | Jefaturas: informes, atenciones, agendas; aprobar aranceles, provisiones y derivaciones de su equipo | Cumple (fase 6) | Agenda con alcance de equipo (`modules/agenda`, `filtroCitas()`). Antes: Permisos en `permisos.ts:134-147`; alcance "equipo" en `common/acceso/alcance.ts:25-27` (solo reportes directos). **No hay agenda.** |
+| 369-374 | Abogado: varios usuarios, ve solo sus atenciones, agenda, relación con su jefatura | Cumple (fase 6) | Agenda propia (`/agenda`). Antes: Alcance propio en `alcance.ts:20-24`; jefatura en `usuarios.ts:54`. **Agenda y citas: no cumple.** |
 | 382-385 | Tramitador: edita gestiones de asesorías y juicios; notas para el abogado | Parcial | Tiene `gestiones.registrar` y `atenciones.editar` (`permisos.ts:180-198`), pero solo ve lo que creó o donde tiene una gestión (`alcance.ts:20-24`), no todas las asesorías y juicios. No hay notas para el abogado. |
 | 387-388 | Tramitador crea atenciones y las asigna al abogado, con correo | Parcial | El API acepta `abogadoAsignadoId` y avisa en la aplicación (`atenciones.service.ts:296-305`). Faltan: **correo** y selector de abogado en el formulario web. |
 | 395-404 | Contador y Asistente Contable: provisiones, aranceles, compra de planes web | Parcial | Provisiones y aranceles: sí (`permisos.ts:149-157`). Compra de planes web: no (WebPay es un stub ligado a afiliado y atención). |
@@ -132,7 +132,7 @@ Revisé solo leyendo el código; no modifiqué nada ni ejecuté builds o tests. 
 | 632–634 | "Guardar" muestra el correlativo de la atención | Cumple | Correlativo con `siguienteCorrelativo` (`atenciones.service.ts:267`); aviso con el correlativo (`atencion-form.component.ts:366`) |
 | 643–644 | AR decide si solicita derivación según los beneficios del plan | Parcial | El botón de derivar existe, pero no se valida que el plan dé derecho a asesoría o juicio. Hoy la decisión queda solo en el criterio del abogado |
 | 651–654 | Botón "Solicita Derivación"; ejecuta AR, responde JC | Cumple | `DerivacionesService.solicitar` (`derivaciones.service.ts:85-102`); aprobar o rechazar con `derivaciones.aprobar` y regla de cuatro ojos (`:113-216`); botones en `atencion-flujo.component.ts:119-122` |
-| 662–665 | Entrevista o videollamada: AR ve en agenda día y hora y luego registra | Parcial | Se puede registrar la atención con canal Presencial o Videoconferencia. No hay agenda ni reserva de horas |
+| 662–665 | Entrevista o videollamada: AR ve en agenda día y hora y luego registra | Cumple (fase 6) | Citas Entrevista/Videollamada en la agenda, ligadas a la atención o al afiliado. Antes: Se puede registrar la atención con canal Presencial o Videoconferencia. No hay agenda ni reserva de horas |
 | 667, 678 | JC queda informado de las entrevistas y de los e-mail o chat | No cumple | No se notifica a la jefatura al crear consultas (`notif` solo va al abogado asignado, `atenciones.service.ts:296-306`) |
 | 674–676 | E-mail o chat: adjuntar la consulta y la respuesta en "Archivos" | Parcial | Mismo problema de subida en la web que en la fila 567–570 |
 | 685–689 | Requiere documentos y formulario de antecedentes (canales no telefónicos) | No cumple | Igual que la fila 537–541 |
@@ -172,7 +172,7 @@ Revisé solo leyendo el código; no modifiqué nada ni ejecuté builds o tests. 
 | 937–939 | AR comunica, registra gestiones y sube documentos | Parcial | Registrar gestiones: sí. Subir documentos desde la web: no está conectado. Comunicación con el cliente: no existe |
 | 941–942 | AJA revisa y valida la atención de AR | Parcial | Las jefaturas ven a su equipo (`atenciones.ver_equipo`). No hay validación formal |
 | 947–949 | Códigos de grabación en todos los módulos | No cumple | No hay `codigoGrabacion` en asesorías (`atenciones.service.ts:61,250-255`) |
-| 951–952 | Submódulo Comité como bitácora y control de compromisos de AR o AJA | Parcial | No hay entradas de bitácora con compromiso, plazo y responsable dentro del comité. Solo motivo y acta |
+| 951–952 | Submódulo Comité como bitácora y control de compromisos de AR o AJA | Cumple (fase 6) | `compromisos_comite` con responsable y plazo (`ComitesService.agregarCompromiso`). Antes: No hay entradas de bitácora con compromiso, plazo y responsable dentro del comité. Solo motivo y acta |
 
 **Observación aparte (fuera del alcance funcional):** `cambiarEstado` escribe el estado sin la condición `WHERE estado = <actual>` (`atenciones.service.ts:405`). Lo mismo pasa al marcar la consulta como Derivada (`derivaciones.service.ts:171-179`). Eso va contra la regla de CLAUDE.md sobre escrituras de estado condicionales (auditoría run-2).
 
@@ -226,8 +226,8 @@ Leí las 519 líneas del alcance y contrasté cada requisito con el código actu
 | 1125-1126 | Informar al cliente por correo el inicio y el término de cada gestión | No cumple | No se envía ningún correo al cliente. |
 | 1128 | Ingresar recursos e incidentes | Fuera de alcance | Lo excluye la línea 1258; correctamente no implementado. |
 | 1129-1130 | Correo a AR el día anterior al vencimiento de una gestión con plazo | Cumple | `vencimientos.scheduler.ts:24-78`: correo y aviso en la aplicación 24 h antes. Los plazos no consideran feriados (TODO). |
-| 1130-1132 | Audiencias y comparendos en agenda; avisar al Jefe de Procuradores para el calendario mensual | No cumple | Solo existe el tipo de gestión "Audiencia" (`schema/gestiones.ts:23`). No hay agenda, calendario ni aviso. |
-| 1142-1144 | Comité: tareas con fecha de cumplimiento; validación en el comité siguiente | No cumple | El comité es una votación (`schema/comites.ts`, `comites.service.ts:22-122`), sin bitácora de tareas, fecha comprometida ni validación de cumplimiento. |
+| 1130-1132 | Audiencias y comparendos en agenda; avisar al Jefe de Procuradores para el calendario mensual | Cumple (fase 6) | Aviso a `agenda.calendario_audiencias`; calendario mensual y Excel en `/agenda`. Antes: Solo existe el tipo de gestión "Audiencia" (`schema/gestiones.ts:23`). No hay agenda, calendario ni aviso. |
+| 1142-1144 | Comité: tareas con fecha de cumplimiento; validación en el comité siguiente | Cumple (fase 6) | Validación en el comité siguiente (`validarCompromiso`); no se cierra un comité con compromisos anteriores sin validar. Antes: El comité es una votación (`schema/comites.ts`, `comites.service.ts:22-122`), sin bitácora de tareas, fecha comprometida ni validación de cumplimiento. |
 | 1153-1157 | Mantener informado al cliente, con constancia en "Archivos" o código de grabación | Parcial | Solo documentos; no hay código de grabación en juicios. |
 | 1168-1171 | Al terminar una gestión, decidir si hay nuevas (volver a etapa 04) | Cumple (implícito) | Se pueden crear gestiones en cualquier momento. |
 | 1178-1180 | Informar término y resultado al cliente; rendición de gastos para su aprobación | Parcial | Hay rendición de provisiones (`provisiones.service.ts:280-288`). No hay aprobación de la rendición por el cliente ni aviso del término. |
@@ -238,7 +238,7 @@ Leí las 519 líneas del alcance y contrasté cada requisito con el código actu
 | 1230-1231 | Fin: cuentas de provisión cerradas | Cumple | `cerrarProvisionesDeAtencion` (`provisiones.service.ts:447-458`), llamada en `atenciones.service.ts:406` |
 | 1239-1245 | Roles AJJ y AR | Cumple | Los roles se modelan como permisos (`permisos.ts:16,44-46`). |
 | 1251-1253 | Códigos de grabación en **todos** los módulos | Parcial | Solo en consultas; en asesorías y juicios se eliminan (`atenciones.service.ts:61`). |
-| 1255-1256 | Submódulo "Comité" como bitácora de gestiones comprometidas por AR/AJJ | No cumple | Igual que 1142. |
+| 1255-1256 | Submódulo "Comité" como bitácora de gestiones comprometidas por AR/AJJ | Cumple (fase 6) | Igual que 1142. Antes: Igual que 1142. |
 | 1258 | No incluir Recursos/Incidentes | Cumple | No existe ese módulo. |
 | 1260-1261 | Riesgo = materia + cuantía + cliente | Cumple | `atencion.ts:84-87`; pantalla en `atencion-flujo.component.ts:173-180`. Cada factor va de 0 a 10; la escala no la define el Anexo (validar). |
 

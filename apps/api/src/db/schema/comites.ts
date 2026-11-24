@@ -5,6 +5,7 @@ import {
   timestamp,
   pgEnum,
   index,
+  date,
 } from "drizzle-orm/pg-core";
 import { atenciones } from "./atenciones";
 import { usuarios } from "./usuarios";
@@ -76,3 +77,39 @@ export const participantesComite = pgTable("participantes_comite", {
 export type Comite = typeof comites.$inferSelect;
 export type NuevoComite = typeof comites.$inferInsert;
 export type ParticipanteComite = typeof participantesComite.$inferSelect;
+
+export const estadoCompromisoEnum = pgEnum("estado_compromiso", ["Pendiente", "Cumplido", "NoCumplido"]);
+
+// Bitácora del comité (Anexo §VII l.951, §VIII l.1142): compromiso con responsable y fecha; se
+// valida en el comité siguiente de la misma atención (validado_en_comite_id).
+export const compromisosComite = pgTable(
+  "compromisos_comite",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    comiteId: uuid("comite_id")
+      .notNull()
+      .references(() => comites.id, { onDelete: "cascade" }),
+    atencionId: uuid("atencion_id")
+      .notNull()
+      .references(() => atenciones.id, { onDelete: "cascade" }),
+    descripcion: text("descripcion").notNull(),
+    responsableId: uuid("responsable_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "restrict" }),
+    fechaCompromiso: date("fecha_compromiso", { mode: "string" }).notNull(),
+    estado: estadoCompromisoEnum("estado").notNull().default("Pendiente"),
+    validadoEnComiteId: uuid("validado_en_comite_id").references(() => comites.id, { onDelete: "set null" }),
+    validadoPorId: uuid("validado_por_id").references(() => usuarios.id, { onDelete: "restrict" }),
+    validadoAt: timestamp("validado_at", { withTimezone: true }),
+    observacion: text("observacion"),
+    creadoPorId: uuid("creado_por_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    comiteIdx: index("compromisos_comite_comite_idx").on(t.comiteId),
+    atencionEstadoIdx: index("compromisos_comite_atencion_estado_idx").on(t.atencionId, t.estado),
+  }),
+);
+export type CompromisoComiteRow = typeof compromisosComite.$inferSelect;

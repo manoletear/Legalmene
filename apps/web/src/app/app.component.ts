@@ -304,6 +304,7 @@ export class AppComponent implements OnInit {
         { label: "Posesiones efectivas", icon: "pi-book", route: "/posesiones" },
         { label: "Derivaciones", icon: "pi-share-alt", route: "/derivaciones", permisos: ["derivaciones.solicitar", "derivaciones.aprobar"] },
         { label: "Gestiones", icon: "pi-check-square", route: "/gestiones" },
+        { label: "Agenda", icon: "pi-calendar", route: "/agenda", permisos: ["agenda.ver"] },
         { label: "Documentos", icon: "pi-folder", route: "/documentos" },
       ],
     },

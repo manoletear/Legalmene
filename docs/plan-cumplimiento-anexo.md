@@ -96,9 +96,9 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 
 ## Fase 6 — Agenda, comité y telefonía (~2 semanas; requiere levantamiento)
 
-- [ ] Agenda de citas por abogado y jefatura; calendario mensual de audiencias. (§IV l.358, §VI l.662, §VIII l.1130)
-- [ ] Comité como bitácora: compromisos con plazo y responsable, validación en la sesión siguiente. (§VII l.951, §VIII l.1142)
-- [ ] Central telefónica: "Obtener grabación" por anexo y "Mantención de audio". (§VI l.583, l.619) — *depende del proveedor*
+- [x] Agenda de citas por abogado y jefatura; calendario mensual de audiencias. (§IV l.358, §VI l.662, §VIII l.1130)
+- [x] Comité como bitácora: compromisos con plazo y responsable, validación en la sesión siguiente. (§VII l.951, §VIII l.1142)
+- [ ] Central telefónica: "Obtener grabación" por anexo y "Mantención de audio". (§VI l.583, l.619) — *depende del proveedor: falta saber qué central usa LegalChile (API de grabaciones, identificación por anexo y formato del audio)*
 
 ## Fase 7 — Producción (~2–3 semanas, en paralelo desde fase 2)
 
@@ -144,4 +144,5 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 | 2026-11-23 | 5 | Búsqueda de afiliados por plan o canal y ficha del afiliado muestran los planes vigentes con RUT vigentes, coberturas y materias (`GET /coberturas/resumen-planes`) | 616ccdb |
 | 2026-11-23 | 5 | Informe de afiliados (campos elegibles, hoja Resumen por plan con altas y términos); los Excel por plan y canal traen el listado de atenciones contadas y el de afiliados por mes, la lista de RUT vigentes por canal y plan. Los reportes ya no cuentan relaciones ni afiliados eliminados | 4c85129 |
 | 2026-11-23 | 5 | Canales editables y maestros de regiones (16 precargadas), ciudades y comunas por región; campo Ciudad en afiliados (formulario, carga masiva, Excel e informe) (migración 0028) | 8c166e2 |
-| 2026-11-23 | 5 | Carga masiva de coberturas (FLUJO reemplaza, STOCK desactiva ausentes; exige `coberturas.administrar`) y de atenciones (solo FLUJO, por `AtencionesService.crear`). Fase 5 completa salvo comité obligatorio (decisión del cliente) | ver commit |
+| 2026-11-23 | 5 | Carga masiva de coberturas (FLUJO reemplaza, STOCK desactiva ausentes; exige `coberturas.administrar`) y de atenciones (solo FLUJO, por `AtencionesService.crear`). Fase 5 completa salvo comité obligatorio (decisión del cliente) | 169f29a |
+| 2026-11-24 | 6 | Agenda de citas (entrevistas, videollamadas, reuniones, audiencias y comparendos) con calendario mensual, topes, alcance por equipo, aviso de audiencias y Excel; comité como bitácora de compromisos con responsable y plazo, validados en el comité siguiente y con aviso de vencidos (migración 0029) | ver commit |

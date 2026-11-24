@@ -187,6 +187,15 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   También se cargan coberturas (FLUJO reemplaza la regla de igual materia y tipo; STOCK desactiva las ausentes;
   exige `coberturas.administrar`) y atenciones (solo FLUJO; cada fila pasa por `AtencionesService.crear()` y por el
   permiso de crear su tipo). Las materias se buscan por nombre de competencia + materia, sin tildes ni mayúsculas.
+- **Agenda (`modules/agenda`)**: citas (Entrevista, Videollamada, Reunión, Audiencia, Comparendo, Otro) con responsable,
+  opcionalmente ligadas a una atención (visible para quien agenda) o a un afiliado. Lectura con `filtroCitas()` (propias,
+  equipo o todas, según el alcance de atenciones); se agenda para uno mismo, su equipo, cualquiera con `ver_todas` o el
+  abogado de la atención. Un responsable no tiene dos citas programadas que se crucen (409). Cancelar no borra. Audiencias y
+  comparendos avisan a quienes tienen `agenda.calendario_audiencias` (calendario mensual; Excel en `/agenda/calendario.xlsx`).
+- **Comité como bitácora**: `compromisos_comite` (descripción, responsable, plazo). Los registra un participante o quien
+  convoca, solo con el comité abierto; se validan (Cumplido/NoCumplido) en un comité posterior de la misma atención
+  (`comites.convocar`), nunca en el mismo, y un comité no se cierra con compromisos anteriores sin validar. Los vencidos se
+  avisan cada día hábil.
 - **Posesión efectiva**: es un tipo de atención (`PosesionEfectiva`, prefijo POSE); causante y
   herederos se manejan solo vía `PosesionesService`. La ficha PDF es un resumen interno, nunca el
   formulario oficial del Registro Civil.

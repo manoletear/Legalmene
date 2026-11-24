@@ -1,11 +1,15 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from "@nestjs/common";
+import { createZodDto } from "nestjs-zod";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ComitesService } from "./comites.service";
 import { CurrentUser, AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 import { Permiso } from "../../common/decorators/permiso.decorator";
 import { PermisosGuard } from "../../common/guards/permisos.guard";
-import type { ConvocarComite } from "@legalmene/shared";
+import { CrearCompromisoSchema, ValidarCompromisoSchema, type ConvocarComite } from "@legalmene/shared";
+
+class CrearCompromisoDto extends createZodDto(CrearCompromisoSchema) {}
+class ValidarCompromisoDto extends createZodDto(ValidarCompromisoSchema) {}
 
 @ApiTags("comites")
 @ApiBearerAuth("EntraID")
@@ -49,5 +53,28 @@ export class ComitesController {
     @Body() body: { decision: "Aprobado" | "Rechazado" | "Diferido"; acta: string },
   ) {
     return this.service.cerrar(id, body.decision, body.acta);
+  }
+
+  // Bitácora del comité: compromisos propios y de comités anteriores por validar.
+  @Get("comites/:id/compromisos")
+  bitacora(@Param("id", ParseUUIDPipe) id: string) {
+    return this.service.bitacora(id);
+  }
+
+  @Post("comites/:id/compromisos")
+  @Permiso("comites.votar")
+  agregarCompromiso(@Param("id", ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser, @Body() body: CrearCompromisoDto) {
+    return this.service.agregarCompromiso(id, user, body);
+  }
+
+  @Post("comites/:id/compromisos/:compromisoId/validar")
+  @Permiso("comites.convocar")
+  validarCompromiso(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Param("compromisoId", ParseUUIDPipe) compromisoId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: ValidarCompromisoDto,
+  ) {
+    return this.service.validarCompromiso(id, compromisoId, user.id, body);
   }
 }

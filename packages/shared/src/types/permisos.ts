@@ -25,6 +25,14 @@ export const MODULOS_PERMISOS = [
     },
   },
   {
+    modulo: "Agenda",
+    permisos: {
+      "agenda.ver": "Ver la agenda (propia, de su equipo o de todos según su alcance de atenciones)",
+      "agenda.gestionar": "Agendar, reprogramar y cancelar citas",
+      "agenda.calendario_audiencias": "Recibir el aviso de audiencias y comparendos para el calendario mensual",
+    },
+  },
+  {
     modulo: "Afiliados y planes",
     permisos: {
       "afiliados.ver": "Ver afiliados y vigencias",
@@ -131,6 +139,8 @@ const OPERACION_ATENCION: Permiso[] = [
   "provisiones.solicitar",
   "provisiones.registrar_movimientos",
   "provisiones.rendir",
+  "agenda.ver",
+  "agenda.gestionar",
   // Solo lectura de aranceles y pagos WebPay de sus atenciones (Anexo §XI l.1967, l.2001).
   "finanzas.ver",
   "pagos.ver",
@@ -177,10 +187,10 @@ export const PERFILES_SISTEMA: PerfilSistema[] = [
     codigo: "GERENCIA_SERVICIOS",
     nombre: "Gerencia de Servicios",
     descripcion: "Ve todas las atenciones, aprueba flujos y accede a informes.",
-    permisos: [...JEFATURA.filter((p) => p !== "atenciones.ver_equipo"), "atenciones.ver_todas", "atenciones.autorizar_sin_cobertura", "finanzas.ver", "pagos.ver", "webhooks.ver", "aranceles.administrar", "cargas.ejecutar"],
+    permisos: [...JEFATURA.filter((p) => p !== "atenciones.ver_equipo"), "atenciones.ver_todas", "agenda.calendario_audiencias", "atenciones.autorizar_sin_cobertura", "finanzas.ver", "pagos.ver", "webhooks.ver", "aranceles.administrar", "cargas.ejecutar"],
   },
   { codigo: "JEFATURA_CONSULTAS", nombre: "Jefatura Consultas", descripcion: "Jefatura del área consultas: ve y aprueba lo de su equipo.", permisos: JEFATURA },
-  { codigo: "JEFATURA_JUDICIAL", nombre: "Jefatura Judicial", descripcion: "Jefatura del área judicial: ve y aprueba lo de su equipo.", permisos: JEFATURA },
+  { codigo: "JEFATURA_JUDICIAL", nombre: "Jefatura Judicial", descripcion: "Jefatura del área judicial: ve y aprueba lo de su equipo.", permisos: [...JEFATURA, "agenda.calendario_audiencias"] },
   { codigo: "JEFATURA_FRAUDE", nombre: "Jefatura Fraude", descripcion: "Jefatura del área fraude: ve y aprueba lo de su equipo.", permisos: JEFATURA },
   { codigo: "ABOGADO", nombre: "Abogado", descripcion: "Atiende y gestiona solo sus atenciones.", permisos: OPERACION_ATENCION },
   {
@@ -200,6 +210,8 @@ export const PERFILES_SISTEMA: PerfilSistema[] = [
       "documentos.subir",
       "pagos.ver",
       "pagos.iniciar",
+      "agenda.ver",
+      "agenda.gestionar",
     ],
   },
   {

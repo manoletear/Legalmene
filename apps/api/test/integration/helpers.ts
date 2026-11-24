@@ -17,8 +17,10 @@ export function planAleatorio(prefijo = "TEST"): string {
 }
 
 // Fecha AAAA-MM-DD desplazada en días desde hoy (UTC; los tests usan márgenes de varios días).
+// Fecha (AAAA-MM-DD) a `dias` de hoy en Chile: las vigencias se evalúan con la fecha de Chile,
+// que entre las 21:00 y la medianoche no coincide con la de UTC.
 export function fechaRelativa(dias: number): string {
-  return new Date(Date.now() + dias * 86_400_000).toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(new Date(Date.now() + dias * 86_400_000));
 }
 
 export interface MateriaPrueba {

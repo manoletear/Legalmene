@@ -204,6 +204,13 @@
       "when": 1795476645040,
       "tag": "0028_territorio_ciudad",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1795480448497,
+      "tag": "0029_agenda_compromisos",
+      "breakpoints": true
     }
   ]
 }

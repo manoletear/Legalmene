@@ -1,11 +1,15 @@
 import { authHeaders } from "../core/interceptors/auth.interceptor";
 import { environment } from "../../environments/environment";
 
-export type Parametros = Record<string, string | number | boolean | undefined | null>;
+export type Parametros = Record<string, string | number | boolean | string[] | undefined | null>;
 
+// Un arreglo se envía como parámetro repetido (?tipo=a&tipo=b).
 export function queryString(params: Parametros): string {
   const q = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+  for (const [k, v] of Object.entries(params)) {
+    if (Array.isArray(v)) for (const x of v) q.append(k, x);
+    else if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+  }
   const s = q.toString();
   return s ? `?${s}` : "";
 }

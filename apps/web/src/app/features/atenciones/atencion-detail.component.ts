@@ -22,7 +22,8 @@ import { PagoDialogService } from "../../shared/pago-dialog.component";
 import type { Observable } from "rxjs";
 import { AtencionesApiService } from "../../core/services/atenciones.service";
 import { GestionesApiService } from "../../core/services/gestiones.service";
-import { ComitesApiService } from "../../core/services/comites.service";
+import { ComitePanelComponent } from "./comite-panel.component";
+import { CitasAtencionComponent } from "./citas-atencion.component";
 import { DocumentosApiService, DocumentoMeta } from "../../core/services/documentos.service";
 import { ProvisionesApiService } from "../../core/services/provisiones.service";
 import { MeService } from "../../core/services/me.service";
@@ -34,7 +35,6 @@ import {
   ETAPAS_PIPELINE,
   ESTADOS_TERMINALES,
   type FichaAtencion,
-  type Comite,
   type CopagoResultado,
   type EstadoAtencion,
   type Gestion,
@@ -89,6 +89,8 @@ interface PipelineStep {
     DialogModule,
     RouterLink,
     PermisoDirective,
+    ComitePanelComponent,
+    CitasAtencionComponent,
     CardModule,
     TagModule,
     ButtonModule,
@@ -309,6 +311,7 @@ interface PipelineStep {
                 <p-tab value="gestiones">Gestiones</p-tab>
                 <p-tab value="documentos">Documentos</p-tab>
                 <p-tab value="comite">Comité</p-tab>
+                <p-tab value="agenda" *lmPermiso="'agenda.ver'">Agenda</p-tab>
                 <p-tab value="historial">Historial</p-tab>
               </p-tablist>
               <p-tabpanels>
@@ -374,17 +377,11 @@ interface PipelineStep {
                 </p-tabpanel>
 
                 <p-tabpanel value="comite">
-                  <div class="lm-row" style="margin-bottom:12px;">
-                    <button pButton [outlined]="true" label="Convocar comité" (click)="convocarComite(a.id)"></button>
-                  </div>
-                  <div *ngFor="let c of comites()" style="margin-bottom:12px; padding:12px; border:1px solid #e2e8f0; border-radius:8px;">
-                    <div class="lm-row">
-                      <strong>Comité del {{ c.fechaConvocatoria | date: 'short' }}</strong>
-                      <p-tag [value]="c.estado"></p-tag>
-                      <p-tag [value]="c.decision" [severity]="decisionSeverity(c.decision)"></p-tag>
-                    </div>
-                    <p class="lm-small" style="margin:8px 0 0;">{{ c.motivo }}</p>
-                  </div>
+                  <lm-comite-panel [atencionId]="a.id"></lm-comite-panel>
+                </p-tabpanel>
+
+                <p-tabpanel value="agenda">
+                  <lm-citas-atencion [atencionId]="a.id" [abogadoId]="a.abogadoAsignadoId ?? null"></lm-citas-atencion>
                 </p-tabpanel>
 
                 <p-tabpanel value="historial">
@@ -515,7 +512,6 @@ export class AtencionDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private api = inject(AtencionesApiService);
   private gestionesApi = inject(GestionesApiService);
-  private comitesApi = inject(ComitesApiService);
   private documentosApi = inject(DocumentosApiService);
   private msg = inject(MessageService);
   private prompt = inject(PromptService);
@@ -543,7 +539,6 @@ export class AtencionDetailComponent implements OnInit {
   protected gestiones = signal<Gestion[]>([]);
   protected plazos = signal<PlazoAtencion[]>([]);
   protected contactoPendiente = computed(() => this.plazos().some((p) => p.tipo === "ContactoCliente" && !p.cumplidoEn));
-  protected comites = signal<Comite[]>([]);
   protected documentos = signal<DocumentoMeta[]>([]);
   protected uploading = signal(false);
   protected pestana = signal<string>("gestiones");
@@ -658,7 +653,6 @@ export class AtencionDetailComponent implements OnInit {
     this.api.obtener(id).subscribe((a) => this.atencion.set(a));
     this.gestionesApi.listar(id).subscribe((g) => this.gestiones.set(g));
     this.api.plazos(id).subscribe({ next: (p) => this.plazos.set(p), error: () => this.plazos.set([]) });
-    this.comitesApi.listar(id).subscribe((c) => this.comites.set(c));
     this.documentosApi.listar(id).subscribe((d) => this.documentos.set(d));
     this.api.copago(id).subscribe({ next: (c) => this.copago.set(c), error: () => this.copago.set(null) });
     this.api.arancel(id).subscribe({ next: (r) => this.arancel.set(r), error: () => this.arancel.set(null) });
@@ -733,13 +727,6 @@ export class AtencionDetailComponent implements OnInit {
     if (e === "Abandonada" || e === "Derivada") return "secondary";
     if (e.startsWith("EnEspera") || e === "EnComite") return "warn";
     return "info";
-  }
-
-  decisionSeverity(d: string): Severity {
-    if (d === "Aprobado") return "success";
-    if (d === "Rechazado") return "danger";
-    if (d === "Diferido") return "warn";
-    return "secondary";
   }
 
   formatBytes(b: number): string {
@@ -914,22 +901,6 @@ export class AtencionDetailComponent implements OnInit {
         this.cargar(g.atencionId);
       },
     });
-  }
-
-  async convocarComite(atencionId: string) {
-    const motivo = await this.prompt.open({
-      header: "Convocar comité",
-      label: "Motivo",
-      multiline: true,
-      required: true,
-    });
-    if (!motivo) return;
-    this.comitesApi
-      .convocar(atencionId, { motivo, participantesIds: [this.me.user()?.id ?? ""].filter(Boolean) })
-      .subscribe(() => {
-        this.msg.add({ severity: "success", summary: "Comité convocado", life: 2000 });
-        this.cargar(atencionId);
-      });
   }
 
   descargarPdf(atencionId: string) {

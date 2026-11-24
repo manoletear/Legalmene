@@ -134,6 +134,11 @@ export const routes: Routes = [
       import("./features/admin/admin-maestros.component").then((m) => m.AdminMaestrosComponent),
   },
   {
+    path: "agenda",
+    canActivate: [permisoGuard("agenda.ver")],
+    loadComponent: () => import("./features/agenda/agenda.component").then((m) => m.AgendaComponent),
+  },
+  {
     path: "cuenta-corriente",
     canActivate: [permisoGuard("finanzas.ver")],
     loadComponent: () =>
