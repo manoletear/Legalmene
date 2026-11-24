@@ -1,3 +1,4 @@
+import { documentos } from "../../db/schema/documentos";
 import { CorreosService } from "../correos/correos.service";
 import type { CriteriosBusqueda } from "@legalmene/shared";
 import { condicionAtencion } from "../../common/busqueda/criterios";
@@ -197,6 +198,13 @@ export class ArancelesAtencionService {
     const [uf] = await this.db.select().from(valoresUf).where(eq(valoresUf.fecha, input.fechaPago));
     if (!uf) {
       throw new BadRequestException(`No hay valor UF cargado para el ${fechaCl(input.fechaPago)}; cárguelo antes de registrar el pago`);
+    }
+    if (input.comprobanteDocumentoId) {
+      const [doc] = await this.db
+        .select({ id: documentos.id })
+        .from(documentos)
+        .where(and(eq(documentos.id, input.comprobanteDocumentoId), eq(documentos.atencionId, atencionId)));
+      if (!doc) throw new BadRequestException("El comprobante no corresponde a un documento de esta atención");
     }
     const montoClp = ufCentesimasAClp(actual.copagoUfCentesimas ?? 0, uf.valorCentavos);
     const row = await this.transicionar(atencionId, "Pagado", usuarioId, {

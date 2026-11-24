@@ -375,6 +375,21 @@ export class AtencionesService {
 
   async actualizar(id: string, patch: UpdateAtencionDto, actor?: Actor): Promise<Atencion> {
     const actual = await this.fila(id);
+    // Una atención cerrada no se edita (se reabre con Correcciones). Con un comité abierto no
+    // cambian la materia, el abogado ni el riesgo que el comité está revisando.
+    if (["Terminada", "Abandonada", "Derivada"].includes(actual.estado)) {
+      throw new ConflictException(`La atención está ${actual.estado.toLowerCase()}; no se puede editar`);
+    }
+    const tocaRevisado = ["competenciaId", "materiaId", "abogadoAsignadoId", "riesgoMateria", "riesgoCuantia", "riesgoCliente"].some(
+      (k) => (patch as Record<string, unknown>)[k] !== undefined && (patch as Record<string, unknown>)[k] !== (actual as Record<string, unknown>)[k],
+    );
+    if (tocaRevisado) {
+      const [c] = await this.db
+        .select({ n: count() })
+        .from(comites)
+        .where(and(eq(comites.atencionId, id), inArray(comites.estado, ["Convocado", "EnSesion"])));
+      if (Number(c?.n ?? 0) > 0) throw new ConflictException("Hay un comité abierto: no se cambian materia, abogado ni riesgo hasta cerrarlo");
+    }
     if (patch.revisadoPorComite !== undefined && !actor?.permisos?.includes("atenciones.revisar_comite")) {
       throw new ForbiddenException("Su perfil no puede marcar 'Revisado por comité'");
     }
@@ -396,6 +411,10 @@ export class AtencionesService {
       .returning();
 
     if (row.tipo !== "Consulta" && row.materiaId !== actual.materiaId) {
+      // La autorización de cobertura era para la materia anterior: se vuelve a evaluar desde cero.
+      if (actual.autorizacionCobertura) {
+        await this.db.update(atenciones).set({ autorizacionCobertura: null }).where(eq(atenciones.id, id));
+      }
       await this.arancelesAtencion.recalcular(row.id, actor?.id ?? null);
       await this.sincronizarCobertura(row.id);
     }

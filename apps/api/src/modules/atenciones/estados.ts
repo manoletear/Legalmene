@@ -97,6 +97,7 @@ export function validarTransicion(
   }
   if (destino === "Abandonada") {
     if (!a.causaTerminoId) faltan.push("causa de término");
+    if (ctx.comitesAbiertos > 0) faltan.push("comité abierto");
     if (riesgoTotal(a) >= UMBRAL_RIESGO_COMITE && !a.revisadoPorComite) {
       faltan.push(`revisión de comité (riesgo ${riesgoTotal(a)} ≥ ${UMBRAL_RIESGO_COMITE})`);
     }

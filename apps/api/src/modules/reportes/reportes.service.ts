@@ -1,4 +1,5 @@
-import { BadRequestException, Inject, Injectable } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Inject, Injectable } from "@nestjs/common";
+import { accesoActual } from "../../common/acceso/contexto";
 import { and, asc, count, eq, inArray, isNotNull, ne, sql, type SQL } from "drizzle-orm";
 import {
   CAMPOS_INFORME_AFILIADOS,
@@ -397,8 +398,17 @@ export class ReportesService {
     ]);
   }
 
+  // Los listados de RUT con datos personales exigen además ver afiliados.
+  private asegurarVerAfiliados() {
+    const acceso = accesoActual();
+    if (acceso && !acceso.permisos.has("afiliados.ver")) {
+      throw new ForbiddenException("Este informe incluye datos de afiliados: requiere el permiso de ver afiliados");
+    }
+  }
+
   // Relaciones RUT–Plan vigentes algún día del período (Anexo §XII B, §XIII A–C), por canal y plan.
   async relacionesEnPeriodo(p: Periodo, f: FiltroRelaciones = {}) {
+    this.asegurarVerAfiliados();
     const filas = await this.db
       .select({
         rut: afiliados.rut,

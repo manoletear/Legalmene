@@ -72,7 +72,7 @@ async function bootstrap() {
             usuarioId,
             severidad: "critical",
             titulo: "Error de funcionamiento",
-            detalle: `${limpia}: ${detalle.slice(0, 300)}`,
+            detalle: `${limpia} (${detalle}). El detalle está en el log del servidor.`,
             accionUrl: "/auditoria",
             metadata: { errorServidor: clave },
           },
@@ -83,7 +83,7 @@ async function bootstrap() {
       }
       // Correo a los administradores solo la primera vez de esa ruta en el día.
       if (nuevos) {
-        await correos.aUsuarios(admins, plantillaAviso({ titulo: "Error de funcionamiento en NEXUS", detalle: `${limpia}: ${detalle.slice(0, 300)}`, url: correos.url("/auditoria") }), {
+        await correos.aUsuarios(admins, plantillaAviso({ titulo: "Error de funcionamiento en NEXUS", detalle: `${limpia} (${detalle}). El detalle está en el log del servidor.`, url: correos.url("/auditoria") }), {
           plantilla: "sistema.error",
         });
       }

@@ -105,11 +105,11 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 ## Fase 7 — Producción (~2–3 semanas, en paralelo desde fase 2)
 
 - [ ] Login con Microsoft (Entra ID / MSAL) en la web. (§I l.21) — *conectado en la web (botón "Ingresar con Microsoft"); falta el registro de la aplicación en el Entra ID de LegalChile (clientId, ámbito de la API) para activarlo y probarlo.*
-- [ ] Despliegue en AWS con la infraestructura CDK (Aurora Multi-AZ, ECS, S3, WAF), sin `AUTH_DISABLED`. (§I l.51) — *imagen, stack y runbook listos y verificados sin credenciales; falta la cuenta AWS, el dominio y SSL hacia Aurora.*
+- [ ] Despliegue en AWS con la infraestructura CDK (Aurora Multi-AZ, ECS, S3, WAF), sin `AUTH_DISABLED`. (§I l.51) — *imagen, stack y runbook listos y verificados sin credenciales; TLS hacia Aurora y archivo de auditoría con Object Lock listos; falta la cuenta AWS y el dominio.*
 - [ ] Migración SQL Server 2008 → Aurora: scripts, ensayo y validación. (§I l.58)
 - [x] Herramientas del administrador para reabrir o retroceder flujos. (§II l.156)
 - [ ] Manuales de usuario y de administrador; capacitación. (§I l.70) — *manuales en `docs/manual-usuario.md` y `docs/manual-administrador.md`; falta la capacitación.*
-- [ ] Revalidar con una auditoría completa las unidades de run-1 cuyo código cambió, y las 3 áreas diferidas de run-2 (edición de atención vs comité, decisión de comité vs votos, comprobantes de otra atención).
+- [x] Revalidar con una auditoría completa las unidades de run-1 cuyo código cambió, y las 3 áreas diferidas de run-2 (edición de atención vs comité, decisión de comité vs votos, comprobantes de otra atención). — *revisión de seguridad run-3 (2026-11-24): corregidos votación y cierre de comités, edición de atenciones cerradas o en comité, rendición en curso, comprobantes de otra atención, alcance del panorama de correcciones, permisos de informes y agenda, topes concurrentes de citas, aviso de errores, TLS a la base, archivo de auditoría inmutable y SES acotado.*
 
 ---
 
@@ -154,3 +154,4 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 | 2026-11-24 | 7 | Preparación del despliegue: Dockerfile corregido (lockfile, `pnpm deploy`, Node 22) y probado (migra y responde /health); la API arma la URL de la base con las variables que entrega ECS; el stack Compute pasa secreto de sesión, Entra ID, origen web, SES y casillas; el archivo de auditoría va a S3 y no borra filas si no pudo guardarlas; CI con síntesis estricta (dev y prod) y job que construye y prueba la imagen | 3d6041b |
 | 2026-11-24 | 7 | "Ingresar con Microsoft" en la web con MSAL (ventana emergente; token de la API con vencimiento; se oculta sin `entra.clientId`) | d2c266e |
 | 2026-11-24 | 7 | Manual de usuario (por perfil y flujo) y manual del administrador | ver commit |
+| 2026-11-24 | 7 | Revisión de seguridad run-3: votación y cierre de comités, ediciones bloqueadas, rendición congela fondos, TLS a Aurora, archivo de auditoría con Object Lock, SES acotado | ver commit siguiente |

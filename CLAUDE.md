@@ -147,7 +147,8 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   devuelto al cliente. El abogado solo registra gastos y rinde; el saldo no gastado lo registra el contador como
   reingreso (`provisiones.registrar_pago`, estado Reingresado). Rendición al cliente (`rendiciones_cliente`): el
   abogado la solicita, Finanzas registra el cheque por el saldo total (sin fondos por rendir/reingresar ni entregas
-  en curso) y el abogado marca "rendido a cliente" (provisiones → RendidaCliente). Comprobantes PDF con
+  en curso) y el abogado marca "rendido a cliente" (provisiones → RendidaCliente). Con una rendición en curso
+  (Solicitada/ChequeEmitido) no se solicitan, envían ni entregan provisiones. Comprobantes PDF con
   `dibujarComprobante()` (`modules/exports/comprobantes-pdf.service.ts`).
 - **Login con enlace de acceso**: `POST /auth/enlace` siempre responde 202 (no revela si el correo
   existe); solo usuarios activos, no bloqueados y del dominio permitido reciben enlace (máx. 3 cada
@@ -196,7 +197,9 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
 - **Comité como bitácora**: `compromisos_comite` (descripción, responsable, plazo). Los registra un participante o quien
   convoca, solo con el comité abierto; se validan (Cumplido/NoCumplido) en un comité posterior de la misma atención
   (`comites.convocar`), nunca en el mismo, y un comité no se cierra con compromisos anteriores sin validar. Los vencidos se
-  avisan cada día hábil.
+  avisan cada día hábil. Votación: solo votan participantes con el comité abierto; cierra quien convocó o el presidente,
+  cuando todos votaron; "Aprobado" exige más votos a favor que en contra y "Rechazado" no procede si ganan los a favor.
+  "Diferido" no marca la atención como revisada por comité.
 - **Correos (`modules/correos`)**: todo correo de negocio sale por `CorreosService` (plantillas en `plantillas.ts`, datos con
   `escaparHtml()`), que registra cada envío en `correos_enviados` (sin el cuerpo; "Omitido" si SES está desactivado). Los avisos
   de flujo usan `avisar(notif, destinatarios, aviso, actor, { servicio: this.correos, casillas, atencionId })`
@@ -242,7 +245,14 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   responde 409 si otro la resolvió antes; un comité solo se cierra una vez y una gestión solo se completa
   desde Pendiente/Vencida (`ESTADOS_GESTION_ABIERTA`). Afiliados: `Eliminado` solo
   lo fija `DELETE` y solo lo revierte `POST /afiliados/:id/restaurar` (ambos `afiliados.eliminar`);
-  editar un afiliado eliminado responde 409.
+  editar un afiliado eliminado responde 409. Una atención Terminada/Abandonada/Derivada no se edita (409; se reabre en
+  Correcciones) y con un comité abierto no cambian materia, competencia, abogado ni riesgo, ni se abandona. Cambiar la
+  materia reinicia la autorización de cobertura. Los comprobantes (gastos, pago de arancel) deben ser documentos de la
+  misma atención.
+- **Infraestructura (auditoría run-3)**: con `DB_SSL_CA` la conexión a la base es TLS con verificación del certificado
+  (`configPool()` en `db/url.ts`; la imagen trae el bundle de RDS). El archivo de auditoría va a un bucket con Object Lock
+  (`AUDIT_ARCHIVE_BUCKET`, solo `PutObject`) y se borran exactamente las filas archivadas. SES solo envía desde `SES_FROM`.
+  El aviso de errores a administradores lleva método, patrón de ruta y tipo de error, nunca el mensaje ni datos del request.
 - **Días hábiles y feriados**: todo plazo en días hábiles usa `sumarDiasHabiles()`/`diasHabilesEntre()`
   (`common/utils/dias-habiles.ts`), que saltan fines de semana y la tabla `feriados`. Los legales los calcula
   `feriadosLegales()` (`feriados-chile.ts`) y `FeriadosService` los carga para el año en curso y el siguiente;

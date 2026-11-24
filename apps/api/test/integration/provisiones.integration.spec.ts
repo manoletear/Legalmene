@@ -183,6 +183,8 @@ const RUN = !!process.env.DATABASE_URL;
     const cheque = await service.registrarChequeDevolucion(atencionId, jefe, "CH-001");
     expect(cheque).toMatchObject({ estado: "ChequeEmitido", monto: 150_000, numeroCheque: "CH-001" });
     expect((await service.resumenAtencion(atencionId)).saldoCuenta).toBe(0);
+    // Con la rendición en curso la cuenta queda congelada: no se piden ni entregan fondos.
+    await expect(service.solicitar(atencionId, abogado, { monto: 1_000, motivo: "Durante la rendición" })).rejects.toThrow(/rendición al cliente en curso/);
     const rendicion = await comprobantesSrv.rendicionCliente(atencionId);
     expect(rendicion.copias).toHaveLength(3);
     expect(rendicion.secciones.find((x) => x.titulo === "Resumen")!.filas).toEqual(

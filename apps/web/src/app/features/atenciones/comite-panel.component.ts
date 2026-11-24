@@ -6,7 +6,7 @@ import { TagModule } from "primeng/tag";
 import { SelectModule } from "primeng/select";
 import { InputTextModule } from "primeng/inputtext";
 import { MessageService } from "primeng/api";
-import type { BitacoraComite, Comite, CompromisoComite } from "@legalmene/shared";
+import type { BitacoraComite, ComiteConParticipantes as Comite, CompromisoComite } from "@legalmene/shared";
 import { ComitesApiService } from "../../core/services/comites.service";
 import { UsuariosAdminService, type UsuarioOpcion } from "../../core/services/usuarios-admin.service";
 import { MeService } from "../../core/services/me.service";
@@ -45,6 +45,17 @@ const ABIERTO = ["Convocado", "EnSesion"];
         </ng-container>
       </div>
       <p class="lm-small" style="margin:8px 0;">{{ c.motivo }}</p>
+      <div class="lm-votos" data-testid="votos">
+        <span *ngFor="let p of c.participantes" class="lm-small">
+          {{ p.nombre }}<span class="lm-muted"> ({{ p.rol }})</span>: <strong>{{ etiquetaVoto(p.voto) }}</strong>
+        </span>
+      </div>
+      <div *ngIf="abierto(c) && miVoto(c) !== null" class="lm-row" style="gap:4px; margin-bottom:8px; flex-wrap:wrap;">
+        <span class="lm-small lm-muted">Su voto:</span>
+        <button pButton size="small" [text]="miVoto(c) !== 'AFavor'" label="A favor" (click)="votar(c, 'AFavor')"></button>
+        <button pButton size="small" [text]="miVoto(c) !== 'EnContra'" severity="danger" label="En contra" (click)="votar(c, 'EnContra')"></button>
+        <button pButton size="small" [text]="miVoto(c) !== 'Abstencion'" severity="secondary" label="Abstención" (click)="votar(c, 'Abstencion')"></button>
+      </div>
       <p *ngIf="c.acta" class="lm-small lm-muted" style="margin:0 0 8px;">Acta: {{ c.acta }}</p>
 
       <ng-container *ngIf="bitacoras()[c.id] as b">
@@ -92,6 +103,7 @@ const ABIERTO = ["Convocado", "EnSesion"];
       .lm-bloque h4 { margin: 12px 0 6px; font-size: 0.875rem; }
       .lm-compromiso { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--p-content-border-color, #f1f5f9); flex-wrap: wrap; }
       .lm-acciones { display: flex; gap: 4px; }
+      .lm-votos { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
       .lm-nuevo { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
     `,
   ],
@@ -127,6 +139,20 @@ export class ComitePanelComponent implements OnChanges {
 
   nuevo(id: string): NuevoCompromiso {
     return (this.nuevos[id] ??= { descripcion: "", responsableId: this.me.user()?.id ?? null, fechaCompromiso: "" });
+  }
+
+  // Voto del usuario actual en el comité; null si no participa.
+  miVoto(c: Comite): string | null {
+    const yo = this.me.user()?.id;
+    return c.participantes.find((p) => p.usuarioId === yo)?.voto ?? null;
+  }
+
+  etiquetaVoto(v: string) {
+    return v === "AFavor" ? "a favor" : v === "EnContra" ? "en contra" : v === "Abstencion" ? "abstención" : "sin votar";
+  }
+
+  votar(c: Comite, voto: "AFavor" | "EnContra" | "Abstencion") {
+    this.api.votar(c.id, { voto }).subscribe({ next: () => this.recargar(), error: (e) => this.error(e) });
   }
 
   etiqueta(k: CompromisoComite) {

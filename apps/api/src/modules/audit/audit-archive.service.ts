@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
 import { ConfigService } from "@nestjs/config";
-import { lt, sql } from "drizzle-orm";
+import { inArray, lt } from "drizzle-orm";
 import { gzipSync } from "zlib";
 import { mkdirSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
@@ -11,7 +11,7 @@ import { auditoria } from "../../db/schema/auditoria";
 
 // Ley 19.628: trazabilidad mínima de 5 años, pero el log activo crece sin freno y degrada
 // las consultas. Política: lo de más de 1 año se archiva en gzip y se borra de la tabla.
-// Destino: S3 (bucket de documentos, prefijo audit-archive/, que pasa a Glacier al año) en
+// Destino: S3 (AUDIT_ARCHIVE_BUCKET, bucket con Object Lock, prefijo audit-archive/) en
 // producción; una carpeta local solo con AUDIT_ARCHIVE_DIR o STORAGE_BACKEND=local (desarrollo).
 // Las filas se borran solo después de que el archivo quedó guardado: en Fargate el disco es
 // efímero y un archivo local se perdería con el contenedor.
@@ -50,7 +50,13 @@ export class AuditArchiveService {
     const cuerpo = gzipSync(Buffer.from(rows.map((r) => JSON.stringify(r)).join("\n") + "\n", "utf-8"));
     // Si guardar falla, se lanza el error y no se borra nada.
     const archivo = await this.guardar(nombre, cuerpo);
-    await this.db.execute(sql`DELETE FROM auditoria WHERE timestamp < ${cutoff}`);
+    // Se borran exactamente las filas archivadas (no las que llegaron después del SELECT), todas o ninguna.
+    const ids = rows.map((r) => r.id);
+    await this.db.transaction(async (tx) => {
+      for (let i = 0; i < ids.length; i += 5000) {
+        await tx.delete(auditoria).where(inArray(auditoria.id, ids.slice(i, i + 5000)));
+      }
+    });
     this.logger.log(`audit-archive: ${rows.length} filas → ${archivo}`);
     return { archivadas: rows.length, archivo };
   }

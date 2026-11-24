@@ -1,3 +1,4 @@
+import { asegurarAtencionVisible } from "../../common/acceso/alcance";
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -38,6 +39,7 @@ export class CorreccionesService {
       .from(atenciones)
       .where(eq(atenciones.correlativo, correlativo.trim().toUpperCase()));
     if (!a) throw new NotFoundException(`No existe la atención ${correlativo}`);
+    await asegurarAtencionVisible(this.db, a.id);
     const [ar] = await this.db.select({ estado: arancelesAtencion.estado }).from(arancelesAtencion).where(eq(arancelesAtencion.atencionId, a.id));
     const provs = await this.db
       .select({ id: provisiones.id, monto: provisiones.monto, motivo: provisiones.motivo, estado: provisiones.estado })

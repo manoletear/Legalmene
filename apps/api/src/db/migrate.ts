@@ -1,12 +1,11 @@
 import "dotenv/config";
-import { urlBaseDatos } from "./url";
+import { configPool } from "./url";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 
 async function main() {
-  const url = urlBaseDatos();
-  const pool = new Pool({ connectionString: url });
+  const pool = new Pool(configPool());
   const db = drizzle(pool);
   console.info("Aplicando migraciones...");
   await migrate(db, { migrationsFolder: "./drizzle/migrations" });

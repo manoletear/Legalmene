@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { urlBaseDatos } from "./url";
+import { mkdtempSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
+import { configPool, urlBaseDatos } from "./url";
 
 const de = (env: Record<string, string>) => (k: string) => env[k];
 
@@ -22,5 +25,15 @@ describe("urlBaseDatos", () => {
 
   it("sin datos falla con un mensaje claro", () => {
     expect(() => urlBaseDatos(de({ DB_HOST: "h" }))).toThrow(/DATABASE_URL no configurada/);
+  });
+
+  it("con DB_SSL_CA activa TLS verificando el certificado", () => {
+    const ca = join(mkdtempSync(join(tmpdir(), "ca-")), "rds.pem");
+    writeFileSync(ca, "-----CERT-----");
+    expect(configPool(de({ DATABASE_URL: "postgresql://a@b/c", DB_SSL_CA: ca }))).toEqual({
+      connectionString: "postgresql://a@b/c",
+      ssl: { ca: "-----CERT-----", rejectUnauthorized: true },
+    });
+    expect(configPool(de({ DATABASE_URL: "postgresql://a@b/c" }))).toEqual({ connectionString: "postgresql://a@b/c" });
   });
 });

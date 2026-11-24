@@ -27,11 +27,29 @@ export class ComitesService {
 
   async listarPorAtencion(atencionId: string) {
     await this.planDeAtencion(atencionId);
-    return this.db.select().from(comites).where(eq(comites.atencionId, atencionId));
+    const lista = await this.db.select().from(comites).where(eq(comites.atencionId, atencionId));
+    if (!lista.length) return [];
+    const parts = await this.db
+      .select({ comiteId: participantesComite.comiteId, usuarioId: participantesComite.usuarioId, nombre: usuarios.nombre, rol: participantesComite.rol, voto: participantesComite.voto })
+      .from(participantesComite)
+      .innerJoin(usuarios, eq(usuarios.id, participantesComite.usuarioId))
+      .where(inArray(participantesComite.comiteId, lista.map((c) => c.id)));
+    return lista.map((c) => ({ ...c, participantes: parts.filter((p) => p.comiteId === c.id).map(({ comiteId: _c, ...p }) => p) }));
   }
 
   async convocar(convocadoPor: string, input: ConvocarComite) {
     const codPlan = await this.planDeAtencion(input.atencionId);
+    const [a] = await this.db.select({ estado: atenciones.estado }).from(atenciones).where(eq(atenciones.id, input.atencionId));
+    if (["Terminada", "Abandonada", "Derivada"].includes(a.estado)) {
+      throw new BadRequestException(`La atención está ${a.estado.toLowerCase()}; no se convoca comité`);
+    }
+    const ids = [...new Set(input.participantesIds)];
+    const activos = await this.db
+      .select({ id: usuarios.id })
+      .from(usuarios)
+      .where(and(inArray(usuarios.id, ids), eq(usuarios.activo, true), eq(usuarios.bloqueado, false)));
+    if (activos.length !== ids.length) throw new BadRequestException("Todos los participantes deben ser usuarios activos");
+    input = { ...input, participantesIds: ids };
 
     return this.db.transaction(async (tx) => {
       const [comite] = await tx
@@ -88,6 +106,8 @@ export class ComitesService {
     if (comite.estado === "Cerrado" || comite.estado === "Cancelado") {
       throw new BadRequestException(`Comité ya está ${comite.estado}, no admite votos`);
     }
+    await this.planDeAtencion(comite.atencionId);
+    // Condicional a que el comité siga abierto: un voto no entra después del cierre.
     const [updated] = await this.db
       .update(participantesComite)
       .set({ voto, comentario: comentario ?? null })
@@ -95,6 +115,7 @@ export class ComitesService {
         and(
           eq(participantesComite.comiteId, comiteId),
           eq(participantesComite.usuarioId, usuarioId),
+          sql`exists (select 1 from comites c where c.id = ${comiteId} and c.estado in ('Convocado', 'EnSesion'))`,
         ),
       )
       .returning();
@@ -104,14 +125,34 @@ export class ComitesService {
     return updated;
   }
 
+  // Cierre del comité (Anexo §VIII l.1142): lo cierra quien lo convocó o lo preside, con todos los
+  // participantes habiendo votado y una decisión coherente con los votos (Aprobado exige mayoría a
+  // favor; Rechazado, que no la haya). Diferido no exige mayoría.
   async cerrar(
     comiteId: string,
     decision: "Aprobado" | "Rechazado" | "Diferido",
     acta: string,
+    actorId?: string,
   ) {
     const [comite] = await this.db.select().from(comites).where(eq(comites.id, comiteId));
     if (!comite) throw new NotFoundException(`Comité ${comiteId} no existe`);
     await this.planDeAtencion(comite.atencionId);
+    if (!(ABIERTO as readonly string[]).includes(comite.estado)) {
+      throw new ConflictException(`El comité ya está ${comite.estado.toLowerCase()}; su decisión no se puede cambiar`);
+    }
+    const participantes = await this.db.select().from(participantesComite).where(eq(participantesComite.comiteId, comiteId));
+    if (actorId) {
+      const preside = participantes.some((p) => p.usuarioId === actorId && p.rol === "Presidente");
+      if (comite.convocadoPor !== actorId && !preside) {
+        throw new ForbiddenException("Solo quien convocó o preside el comité puede cerrarlo");
+      }
+    }
+    const sinVoto = participantes.filter((p) => p.voto === "Pendiente").length;
+    if (sinVoto > 0) throw new BadRequestException(`Faltan ${sinVoto} voto(s) de los participantes`);
+    const aFavor = participantes.filter((p) => p.voto === "AFavor").length;
+    const enContra = participantes.filter((p) => p.voto === "EnContra").length;
+    if (decision === "Aprobado" && aFavor <= enContra) throw new BadRequestException("La decisión Aprobado requiere mayoría de votos a favor");
+    if (decision === "Rechazado" && aFavor > enContra) throw new BadRequestException("Hay mayoría a favor: la decisión no puede ser Rechazado");
     // Los compromisos de comités anteriores se validan en esta sesión (Anexo §VIII l.1142).
     const [pendiente] = await this.db
       .select({ id: compromisosComite.id })
@@ -133,12 +174,14 @@ export class ComitesService {
       .where(and(eq(comites.id, comiteId), inArray(comites.estado, ["Convocado", "EnSesion"])))
       .returning();
     if (!updated) throw new ConflictException(`El comité ya está ${comite.estado.toLowerCase()}; su decisión no se puede cambiar`);
-    // Cerrar el comité deja la atención "Revisada por comité" (Anexo §VIII l.1196) y la saca de
-    // EnComite si estaba ahí.
-    await this.db
-      .update(atenciones)
-      .set({ revisadoPorComite: true, updatedAt: new Date() })
-      .where(eq(atenciones.id, comite.atencionId));
+    // Una decisión (aprobada o rechazada) deja la atención "Revisada por comité" (Anexo §VIII
+    // l.1196); diferir no. En ambos casos sale de EnComite si estaba ahí.
+    if (decision !== "Diferido") {
+      await this.db
+        .update(atenciones)
+        .set({ revisadoPorComite: true, updatedAt: new Date() })
+        .where(eq(atenciones.id, comite.atencionId));
+    }
     await this.db
       .update(atenciones)
       .set({ estado: "EnGestion", updatedAt: new Date() })

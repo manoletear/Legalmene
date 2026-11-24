@@ -67,6 +67,9 @@ test.describe("Comité como bitácora", () => {
     await primero.getByRole("button", { name: "Agregar" }).click();
     await expect(primero.getByTestId("compromiso")).toContainText("Presentar escrito");
 
+    // Cerrar exige el voto de todos los participantes.
+    await primero.getByRole("button", { name: "A favor" }).click();
+    await expect(primero.getByTestId("votos")).toContainText("a favor");
     await primero.locator("p-select").first().click();
     await page.getByRole("option", { name: "Aprobado" }).click();
     await primero.getByRole("button", { name: "Cerrar comité" }).click();

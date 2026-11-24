@@ -42,6 +42,11 @@ export const ParticipanteComiteSchema = z.object({
 });
 export type ParticipanteComite = z.infer<typeof ParticipanteComiteSchema>;
 
+// Comité con sus participantes y votos (listado de la atención).
+export type ComiteConParticipantes = Comite & {
+  participantes: { usuarioId: string; nombre: string; rol: ParticipanteComite["rol"]; voto: ParticipanteComite["voto"] }[];
+};
+
 export const ConvocarComiteSchema = ComiteSchema.pick({
   atencionId: true,
   motivo: true,
@@ -50,6 +55,19 @@ export const ConvocarComiteSchema = ComiteSchema.pick({
   participantesIds: z.array(z.string().uuid()).min(1),
 });
 export type ConvocarComite = z.infer<typeof ConvocarComiteSchema>;
+
+// Cuerpo de POST /atenciones/:id/comites (el atencionId viene en la ruta).
+export const ConvocarComiteBodySchema = ConvocarComiteSchema.omit({ atencionId: true });
+export const VotarComiteSchema = z.object({
+  voto: z.enum(["AFavor", "EnContra", "Abstencion"]),
+  comentario: z.string().max(2000).optional(),
+});
+export type VotarComite = z.infer<typeof VotarComiteSchema>;
+export const CerrarComiteSchema = z.object({
+  decision: z.enum(["Aprobado", "Rechazado", "Diferido"]),
+  acta: z.string().trim().min(1).max(10000),
+});
+export type CerrarComite = z.infer<typeof CerrarComiteSchema>;
 
 // Bitácora del comité (Anexo §VII l.951, §VIII l.1142): compromisos con responsable y fecha,
 // que se validan (cumplido o no) en el comité siguiente de la misma atención.

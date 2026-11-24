@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { alias } from "drizzle-orm/pg-core";
 import { and, asc, eq, gt, inArray, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import {
@@ -22,6 +22,8 @@ import { asegurarAtencionVisible } from "../../common/acceso/alcance";
 import { instanteChile } from "../../common/utils/dias-habiles";
 import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
 import { libroXlsx } from "../exports/xlsx";
+
+type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
 const responsable = alias(usuarios, "responsable");
 const autor = alias(usuarios, "autor");
@@ -88,26 +90,33 @@ export class AgendaService {
       if (afiliadoId && afiliadoId !== a.afiliadoId) throw new BadRequestException("El afiliado no corresponde a la atención");
       afiliadoId = a.afiliadoId;
     } else if (afiliadoId) {
+      // Sin atención, la cita muestra el RUT y nombre del afiliado: exige poder ver afiliados.
+      const acceso = accesoActual();
+      if (acceso && !acceso.permisos.has("afiliados.ver")) throw new ForbiddenException("Requiere el permiso de ver afiliados");
       const [af] = await this.db.select({ id: afiliados.id }).from(afiliados).where(eq(afiliados.id, afiliadoId));
       if (!af) throw new BadRequestException("El afiliado no existe");
     }
     await this.validarResponsable(input.responsableId, abogadoDeAtencion);
-    await this.sinTopes(input.responsableId, new Date(input.inicio), new Date(input.fin));
-    const [row] = await this.db
-      .insert(citas)
-      .values({
-        tipo: input.tipo,
-        titulo: input.titulo,
-        inicio: new Date(input.inicio),
-        fin: new Date(input.fin),
-        lugar: input.lugar ?? null,
-        notas: input.notas ?? null,
-        responsableId: input.responsableId,
-        atencionId: input.atencionId ?? null,
-        afiliadoId,
-        creadoPorId: actorId,
-      })
-      .returning();
+    const row = await this.db.transaction(async (tx) => {
+      await this.bloquearResponsable(tx, input.responsableId);
+      await this.sinTopes(input.responsableId, new Date(input.inicio), new Date(input.fin), undefined, tx);
+      const [r] = await tx
+        .insert(citas)
+        .values({
+          tipo: input.tipo,
+          titulo: input.titulo,
+          inicio: new Date(input.inicio),
+          fin: new Date(input.fin),
+          lugar: input.lugar ?? null,
+          notas: input.notas ?? null,
+          responsableId: input.responsableId,
+          atencionId: input.atencionId ?? null,
+          afiliadoId,
+          creadoPorId: actorId,
+        })
+        .returning();
+      return r;
+    });
     const cita = await this.obtenerSinAlcance(row.id);
     await this.avisar(cita, codPlan, actorId, "agendada");
     return cita;
@@ -128,21 +137,24 @@ export class AgendaService {
       }
       await this.validarResponsable(input.responsableId, abogado);
     }
-    await this.sinTopes(responsableId, inicio, fin, id);
-    const [row] = await this.db
-      .update(citas)
-      .set({
-        ...(input.tipo ? { tipo: input.tipo } : {}),
-        ...(input.titulo ? { titulo: input.titulo } : {}),
-        ...(input.lugar !== undefined ? { lugar: input.lugar } : {}),
-        ...(input.notas !== undefined ? { notas: input.notas } : {}),
-        inicio,
-        fin,
-        responsableId,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(citas.id, id), eq(citas.estado, "Programada")))
-      .returning({ id: citas.id });
+    const [row] = await this.db.transaction(async (tx) => {
+      await this.bloquearResponsable(tx, responsableId);
+      await this.sinTopes(responsableId, inicio, fin, id, tx);
+      return tx
+        .update(citas)
+        .set({
+          ...(input.tipo ? { tipo: input.tipo } : {}),
+          ...(input.titulo ? { titulo: input.titulo } : {}),
+          ...(input.lugar !== undefined ? { lugar: input.lugar } : {}),
+          ...(input.notas !== undefined ? { notas: input.notas } : {}),
+          inicio,
+          fin,
+          responsableId,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(citas.id, id), eq(citas.estado, "Programada")))
+        .returning({ id: citas.id });
+    });
     if (!row) throw new ConflictException("La cita cambió de estado; recargue");
     const cita = await this.obtenerSinAlcance(id);
     if (cita.inicio !== actual.inicio || cita.responsableId !== actual.responsableId) {
@@ -203,9 +215,15 @@ export class AgendaService {
     throw new BadRequestException("Solo puede agendar para usted, su equipo o el abogado de la atención");
   }
 
+  // Serializa las citas de un mismo responsable: bloquea su fila de usuario hasta el fin de la
+  // transacción, para que dos altas simultáneas no se crucen.
+  private async bloquearResponsable(tx: Tx, responsableId: string) {
+    await tx.select({ id: usuarios.id }).from(usuarios).where(eq(usuarios.id, responsableId)).for("update");
+  }
+
   // Un responsable no tiene dos citas programadas que se crucen.
-  private async sinTopes(responsableId: string, inicio: Date, fin: Date, excepto?: string) {
-    const [tope] = await this.db
+  private async sinTopes(responsableId: string, inicio: Date, fin: Date, excepto?: string, tx: Tx | Database = this.db) {
+    const [tope] = await tx
       .select({ titulo: citas.titulo, inicio: citas.inicio })
       .from(citas)
       .where(

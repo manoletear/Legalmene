@@ -21,6 +21,8 @@ FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build --chown=node:node /out ./
+# Certificados de RDS/Aurora para verificar el TLS de la base (DB_SSL_CA, ver src/db/url.ts).
+ADD --chmod=644 https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem /app/certs/rds-global-bundle.pem
 EXPOSE 3001
 USER node
 CMD ["node", "dist/apps/api/src/main.js"]

@@ -158,7 +158,9 @@ const como = (u: UsuarioPrueba): Acceso => ({ usuarioId: u.id, permisos: new Set
     ).rejects.toBeInstanceOf(NotFoundException);
     // No se valida en el mismo comité.
     await expect(comitesSrv.validarCompromiso(c1.id, comp.id, jefe.id, { estado: "Cumplido" })).rejects.toBeInstanceOf(BadRequestException);
-    await comitesSrv.cerrar(c1.id, "Aprobado", "Acta 1");
+    await comitesSrv.votar(c1.id, jefe.id, "AFavor");
+    await comitesSrv.votar(c1.id, abogado.id, "AFavor");
+    await comitesSrv.cerrar(c1.id, "Aprobado", "Acta 1", jefe.id);
     // Cerrar el comité deja la atención "Revisada por comité".
     const [revisada] = await drizzle(pool).select({ r: atenciones.revisadoPorComite }).from(atenciones).where(eq(atenciones.id, atencionId));
     expect(revisada.r).toBe(true);
@@ -168,13 +170,14 @@ const como = (u: UsuarioPrueba): Acceso => ({ usuarioId: u.id, permisos: new Set
     await db.update(comites).set({ fechaConvocatoria: new Date(Date.now() + 1000) }).where(eq(comites.id, c2.id));
     const bitacora = await comitesSrv.bitacora(c2.id);
     expect(bitacora.anterioresPorValidar.map((x) => x.id)).toEqual([comp.id]);
-    await expect(comitesSrv.cerrar(c2.id, "Aprobado", "Acta 2")).rejects.toBeInstanceOf(BadRequestException);
+    await comitesSrv.votar(c2.id, jefe.id, "AFavor");
+    await expect(comitesSrv.cerrar(c2.id, "Aprobado", "Acta 2", jefe.id)).rejects.toThrow(/compromisos pendientes/);
 
     const validado = await comitesSrv.validarCompromiso(c2.id, comp.id, jefe.id, { estado: "Cumplido", observacion: "Presentado" });
     expect(validado).toMatchObject({ estado: "Cumplido", validadoEnComiteId: c2.id, vencido: false });
     await expect(comitesSrv.validarCompromiso(c2.id, comp.id, jefe.id, { estado: "NoCumplido" })).rejects.toBeInstanceOf(ConflictException);
     expect((await comitesSrv.bitacora(c2.id)).anterioresPorValidar[0].estado).toBe("Cumplido");
-    await comitesSrv.cerrar(c2.id, "Aprobado", "Acta 2");
+    await comitesSrv.cerrar(c2.id, "Aprobado", "Acta 2", jefe.id);
 
     await expect(
       comitesSrv.agregarCompromiso(c2.id, { id: jefe.id, permisos: jefe.permisos }, { descripcion: "Tarde", responsableId: jefe.id, fechaCompromiso: "2030-01-01" }),

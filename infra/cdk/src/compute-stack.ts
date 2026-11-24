@@ -51,13 +51,6 @@ export class ComputeStack extends cdk.Stack {
         props.stage === "prod" ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
-    const taskRole = new iam.Role(this, "ApiTaskRole", {
-      assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
-    });
-    props.documentsBucket.grantReadWrite(taskRole);
-    // Correos de los flujos (modules/correos) por Amazon SES.
-    taskRole.addToPolicy(new iam.PolicyStatement({ actions: ["ses:SendEmail", "ses:SendRawEmail"], resources: ["*"] }));
-
     // Configuración por ambiente vía contexto (cdk deploy -c webOrigin=https://… -c entraTenantId=…).
     // Lo que falte queda como advertencia de la síntesis: la API no arranca sin lo obligatorio.
     const ctx = (clave: string, porDefecto = ""): string => {
@@ -65,6 +58,46 @@ export class ComputeStack extends cdk.Stack {
       if (!v) cdk.Annotations.of(this).addWarning(`Falta el contexto "${clave}" (ver infra/cdk/README.md)`);
       return v;
     };
+
+    const taskRole = new iam.Role(this, "ApiTaskRole", {
+      assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+    });
+    props.documentsBucket.grantReadWrite(taskRole);
+
+    // Archivo de auditoría (Ley 19.628): bucket propio con Object Lock. La API solo puede
+    // escribir objetos nuevos; nadie (ni la propia cuenta en COMPLIANCE) los borra antes de 5 años.
+    const prod = props.stage === "prod";
+    const auditBucket = new s3.Bucket(this, "AuditArchiveBucket", {
+      bucketName: `legalmene-${props.stage}-audit-archive-${this.account}`,
+      versioned: true,
+      objectLockEnabled: true,
+      objectLockDefaultRetention: prod
+        ? s3.ObjectLockRetention.compliance(cdk.Duration.days(1827))
+        : s3.ObjectLockRetention.governance(cdk.Duration.days(7)),
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      enforceSSL: true,
+      lifecycleRules: [
+        { id: "audit-glacier", transitions: [{ storageClass: s3.StorageClass.GLACIER, transitionAfter: cdk.Duration.days(30) }] },
+      ],
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+    auditBucket.grantPut(taskRole, "audit-archive/*");
+
+    // Correos de los flujos (modules/correos) por Amazon SES, solo desde la identidad del remitente.
+    const sesFrom = ctx("sesFrom", "no-reply@legalchile.cl");
+    const sesDominio = sesFrom.split("@")[1] ?? sesFrom;
+    taskRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["ses:SendEmail"],
+        resources: [
+          `arn:${cdk.Aws.PARTITION}:ses:${this.region}:${this.account}:identity/${sesDominio}`,
+          `arn:${cdk.Aws.PARTITION}:ses:${this.region}:${this.account}:identity/${sesFrom}`,
+        ],
+        conditions: { StringEquals: { "ses:FromAddress": sesFrom } },
+      }),
+    );
+
     const entraTenant = ctx("entraTenantId");
 
     // Secreto de las sesiones propias (login con enlace): generado y guardado en Secrets Manager.
@@ -102,6 +135,9 @@ export class ComputeStack extends cdk.Stack {
           PORT: "3001",
           DB_HOST: props.databaseEndpoint,
           DB_PORT: props.databasePort,
+          // TLS hacia Aurora verificando el certificado (bundle incluido en la imagen).
+          DB_SSL_CA: "/app/certs/rds-global-bundle.pem",
+          AUDIT_ARCHIVE_BUCKET: auditBucket.bucketName,
           S3_DOCUMENTS_BUCKET: props.documentsBucket.bucketName,
           STORAGE_BACKEND: "s3",
           // Detrás del ALB hay un salto de proxy: la IP real sale de X-Forwarded-For.
@@ -114,7 +150,7 @@ export class ComputeStack extends cdk.Stack {
           ENTRA_ISSUER: entraTenant ? `https://login.microsoftonline.com/${entraTenant}/v2.0` : "",
           ENTRA_JWKS_URI: entraTenant ? `https://login.microsoftonline.com/${entraTenant}/discovery/v2.0/keys` : "",
           SES_ENABLED: ctx("sesEnabled", "false"),
-          SES_FROM: ctx("sesFrom", "no-reply@legalchile.cl"),
+          SES_FROM: sesFrom,
           CORREO_APRUEBA_ARANCEL: ctx("correoApruebaArancel"),
           CORREO_SOLICITUD_FONDOS: ctx("correoSolicitudFondos"),
           CORREO_AUTORIZA_PROVISION: ctx("correoAutorizaProvision"),

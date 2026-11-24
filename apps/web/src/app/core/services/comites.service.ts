@@ -2,15 +2,15 @@ import { Injectable, inject } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { Observable } from "rxjs";
 import { environment } from "../../../environments/environment";
-import type { BitacoraComite, Comite, CompromisoComite, ConvocarComite, CrearCompromiso, ValidarCompromiso } from "@legalmene/shared";
+import type { BitacoraComite, Comite, ComiteConParticipantes, CompromisoComite, ConvocarComite, CrearCompromiso, ValidarCompromiso } from "@legalmene/shared";
 
 @Injectable({ providedIn: "root" })
 export class ComitesApiService {
   private http = inject(HttpClient);
   private base = environment.apiBaseUrl;
 
-  listar(atencionId: string): Observable<Comite[]> {
-    return this.http.get<Comite[]>(`${this.base}/atenciones/${atencionId}/comites`);
+  listar(atencionId: string): Observable<ComiteConParticipantes[]> {
+    return this.http.get<ComiteConParticipantes[]>(`${this.base}/atenciones/${atencionId}/comites`);
   }
 
   convocar(atencionId: string, payload: Omit<ConvocarComite, "atencionId">): Observable<Comite> {

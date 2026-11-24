@@ -23,6 +23,7 @@ import { CoberturasService } from "../../src/modules/coberturas/coberturas.servi
 import { ArancelesService } from "../../src/modules/aranceles/aranceles.service";
 import { DerivacionesService } from "../../src/modules/atenciones/derivaciones.service";
 import { gestiones, gestionesPlantilla } from "../../src/db/schema/gestiones";
+import { comites } from "../../src/db/schema/comites";
 import { causasTermino, tribunales } from "../../src/db/schema/maestros";
 import { materias } from "../../src/db/schema/maestros";
 import { eq } from "drizzle-orm";
@@ -401,5 +402,18 @@ const avisos: { titulo: string; metadata?: Record<string, unknown> }[] = [];
     const res = await atenciones.buscar({ page: 1, pageSize: 200, codPlan: TEST_PLAN });
     expect(res.total).toBeGreaterThan(0);
     expect(res.data.every((a) => a.codPlan === TEST_PLAN)).toBe(true);
+  });
+
+  it("edición: no en atenciones cerradas; con comité abierto no cambian materia ni riesgo, ni se abandona", async () => {
+    const db = drizzle(pool);
+    const a = await atenciones.crear({ ...base(), tipo: "Asesoria", ...cm, asunto: "Guardas" });
+    await db.insert(comites).values({ atencionId: a.id, convocadoPor: jefe.id, motivo: "Revisión de riesgo" });
+    await expect(atenciones.actualizar(a.id, { riesgoMateria: 1 }, jefe)).rejects.toThrow(/comité abierto/);
+    // Lo que el comité no revisa se puede seguir editando.
+    expect((await atenciones.actualizar(a.id, { asunto: "Guardas (editado)" }, jefe)).asunto).toBe("Guardas (editado)");
+    await expect(atenciones.cambiarEstado(a.id, { estado: "Abandonada", causaTerminoId: causaId })).rejects.toThrow(/comité abierto/);
+
+    await db.update(atencionesTabla).set({ estado: "Abandonada" }).where(eq(atencionesTabla.id, a.id));
+    await expect(atenciones.actualizar(a.id, { asunto: "Otra" }, jefe)).rejects.toBeInstanceOf(ConflictException);
   });
 });

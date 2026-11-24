@@ -38,7 +38,8 @@ export class CargasMasivasController {
   async resumen(@Body() body: ResumenDto, @Res() res: Response) {
     const archivo = await this.service.resumenXlsx(body);
     res.setHeader("Content-Type", MIME_XLSX);
-    res.setHeader("Content-Disposition", `attachment; filename="carga-${body.entidad}-${body.codPlan}.xlsx"`);
+    const seguro = (v: string) => v.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 40);
+    res.setHeader("Content-Disposition", `attachment; filename="carga-${seguro(body.entidad)}-${seguro(body.codPlan)}.xlsx"`);
     res.send(archivo);
   }
 

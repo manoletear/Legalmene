@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { urlBaseDatos } from "./url";
+import { configPool } from "./url";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema";
@@ -26,8 +26,7 @@ async function ufDelDia(): Promise<{ fecha: string; valorCentavos: number } | nu
 }
 
 async function main() {
-  const url = urlBaseDatos();
-  const pool = new Pool({ connectionString: url });
+  const pool = new Pool(configPool());
   const db = drizzle(pool, { schema });
 
   console.info("Insertando datos demo...");

@@ -118,7 +118,12 @@ export class I18nExceptionFilter implements ExceptionFilter {
     const detail = exception instanceof Error ? exception.message : String(exception);
     this.logger.error(`Error no controlado en ${path}: ${detail}`, exception instanceof Error ? exception.stack : undefined);
     if (this.alAvisar) {
-      this.alAvisar(path, detail).catch((e) => this.logger.warn(`No se pudo avisar el error a los administradores: ${e}`));
+      // Patrón de la ruta (p. ej. /afiliados/rut/:rut), no la URL concreta: no lleva datos del
+      // request y agrupa los errores de un mismo endpoint. El mensaje queda solo en el log.
+      const r = req as Request & { route?: { path?: string }; baseUrl?: string };
+      const patron = r.route?.path ? `${r.baseUrl ?? ""}${r.route.path}` : "(ruta no reconocida)";
+      const tipo = exception instanceof Error ? exception.name : "Error";
+      this.alAvisar(`${req.method} ${patron}`, tipo).catch((e) => this.logger.warn(`No se pudo avisar el error a los administradores: ${e}`));
     }
     res.status(500).json({
       statusCode: 500,

@@ -1,6 +1,6 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { ConfigModule } from "@nestjs/config";
-import { ConflictException, ForbiddenException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException } from "@nestjs/common";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -206,8 +206,17 @@ const actor = (u: UsuarioPrueba) => ({ id: u.id, permisos: u.permisos as Permiso
   it("comités: un comité cerrado no se vuelve a cerrar ni cambia su decisión", async () => {
     const at = await juicio();
     const c = await comitesSrv.convocar(jefeA.id, { atencionId: at, motivo: "Revisión", participantesIds: [jefeB.id] } as never);
-    expect((await comitesSrv.cerrar(c.id, "Rechazado", "acta original")).decision).toBe("Rechazado");
-    await expect(comitesSrv.cerrar(c.id, "Aprobado", "acta reescrita")).rejects.toBeInstanceOf(ConflictException);
+    // Sin votos no se cierra; con mayoría en contra no se aprueba; solo cierra quien convocó o preside.
+    await expect(comitesSrv.cerrar(c.id, "Rechazado", "sin votos", jefeA.id)).rejects.toBeInstanceOf(BadRequestException);
+    await comitesSrv.votar(c.id, jefeB.id, "EnContra");
+    await expect(comitesSrv.cerrar(c.id, "Aprobado", "contra los votos", jefeA.id)).rejects.toBeInstanceOf(BadRequestException);
+    const ajeno = await usuarioDePrueba(drizzle(pool), "JEFATURA_JUDICIAL");
+    await expect(comitesSrv.cerrar(c.id, "Rechazado", "ajeno", ajeno.id)).rejects.toBeInstanceOf(ForbiddenException);
+    await drizzle(pool).execute(sql`DELETE FROM usuarios WHERE id = ${ajeno.id}`);
+    expect((await comitesSrv.cerrar(c.id, "Rechazado", "acta original", jefeA.id)).decision).toBe("Rechazado");
+    await expect(comitesSrv.cerrar(c.id, "Aprobado", "acta reescrita", jefeA.id)).rejects.toBeInstanceOf(ConflictException);
+    // Un voto después del cierre no entra.
+    await expect(comitesSrv.votar(c.id, jefeB.id, "AFavor")).rejects.toThrow();
     const db = drizzle(pool);
     const [row] = (await db.execute<{ decision: string; acta: string }>(sql`SELECT decision, acta FROM comites WHERE id = ${c.id}`)).rows;
     expect(row).toEqual({ decision: "Rechazado", acta: "acta original" });

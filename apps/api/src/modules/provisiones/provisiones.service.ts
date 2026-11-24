@@ -201,12 +201,24 @@ export class ProvisionesService {
     }
   }
 
+  // Con una rendición al cliente en curso (solicitada o con cheque emitido) la cuenta queda
+  // congelada: no se piden ni entregan fondos, o el mismo saldo iría al cliente y al abogado.
+  private async asegurarSinRendicionEnCurso(atencionId: string, tx: Tx | Database = this.db) {
+    const [r] = await tx
+      .select({ id: rendicionesCliente.id })
+      .from(rendicionesCliente)
+      .where(and(eq(rendicionesCliente.atencionId, atencionId), inArray(rendicionesCliente.estado, ["Solicitada", "ChequeEmitido"])))
+      .limit(1);
+    if (r) throw new ConflictException("Hay una rendición al cliente en curso: no se piden ni entregan fondos hasta terminarla");
+  }
+
   async solicitar(atencionId: string, usuarioId: string, input: SolicitarProvision): Promise<Provision> {
     const atencion = await this.assertAtencion(atencionId);
     if (ESTADOS_ATENCION_CERRADA.includes(atencion.estado)) {
       throw new BadRequestException(`No se pueden solicitar provisiones en un caso ${atencion.estado}`);
     }
     await this.assertSinRendicionPendiente(atencionId);
+    await this.asegurarSinRendicionEnCurso(atencionId);
     return this.db.transaction(async (tx) => {
       const [row] = await tx
         .insert(provisiones)
@@ -259,6 +271,7 @@ export class ProvisionesService {
   async solicitarEntrega(id: string, usuarioId: string) {
     const p = await this.obtener(id);
     await this.assertSinRendicionPendiente(p.atencionId);
+    await this.asegurarSinRendicionEnCurso(p.atencionId);
     return this.transicionar(id, "EnAprobacion", usuarioId);
   }
 
@@ -308,6 +321,7 @@ export class ProvisionesService {
 
   entregar(id: string, usuarioId: string, montoEntregado?: number) {
     return this.transicionar(id, "Entregada", usuarioId, {}, null, async (p, tx) => {
+      await this.asegurarSinRendicionEnCurso(p.atencionId, tx);
       const desde = entregaPermitidaDesde(p.fechaResolucion);
       if (desde && Date.now() < desde.getTime()) {
         throw new BadRequestException(
@@ -531,6 +545,17 @@ export class ProvisionesService {
         .where(and(eq(rendicionesCliente.id, actual.id), eq(rendicionesCliente.estado, "ChequeEmitido")))
         .returning();
       if (!row) throw new ConflictException("La rendición ya fue marcada como entregada");
+      // Nada debió moverse desde el cheque: sin entregas en curso ni fondos en manos del abogado.
+      const [enCurso] = await tx
+        .select({ n: count() })
+        .from(provisiones)
+        .where(
+          and(
+            eq(provisiones.atencionId, atencionId),
+            or(inArray(provisiones.estado, ["EnAprobacion", "Autorizada", "Disponible", "Entregada"]), condicionFondosPendientes()),
+          ),
+        );
+      if (Number(enCurso?.n ?? 0) > 0) throw new ConflictException("Hay fondos en curso desde que se emitió el cheque; regularícelos antes");
       const provs = await tx
         .select({ id: provisiones.id, estado: provisiones.estado })
         .from(provisiones)
