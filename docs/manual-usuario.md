@@ -164,3 +164,14 @@ En **Reportes**, elija el período y presione *Generar*; todo se descarga en Exc
 - **Informe de atenciones:** una hoja por tipo con los campos elegidos y hoja resumen.
 - **Informe de afiliados:** campos elegidos y hoja resumen por plan (RUT vigentes, altas, términos).
 - **Controller de usuarios:** carga de trabajo por abogado.
+
+### Novedades en la ficha (24-11-2026)
+
+- **Documentos:** al subir un PDF elija su tipo (escrito presentado al tribunal, resolución, acta de acuerdo,
+  constancia de apercibimiento, antecedente, comprobante).
+- **Notas:** pestaña *Notas* para dejar indicaciones al abogado asignado; le llega un aviso.
+- **Informe final al cliente (PDF):** en *Acciones rápidas*; resume resultado, gestiones, documentos y
+  rendición de gastos.
+- **Consultas:** *Enviar respuesta al cliente* manda por correo la respuesta guardada; junto a *Derivar* se
+  ve el beneficio del plan para asesoría y juicio.
+- **Reportes → Compromisos de comité:** seguimiento de compromisos pendientes o vencidos, con Excel.

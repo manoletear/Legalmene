@@ -205,12 +205,16 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   de flujo usan `avisar(notif, destinatarios, aviso, actor, { servicio: this.correos, casillas, atencionId })`
   (`notif-inbox/destinatarios.ts`): mismo aviso en la aplicación y por correo, nunca a quien hizo la acción. Las casillas
   institucionales (`aprueba.arancel@`, `solicitud.fondos@`, `autoriza.provision@`, `operaciones@`) vienen de `CORREO_*`.
-  Al cliente solo van la presentación del abogado, la solicitud de antecedentes, el inicio/término de gestiones con
-  `informarCliente` y el término de la atención.
+  Al cliente solo van la presentación del abogado, la solicitud de antecedentes, la respuesta de la consulta
+  (`enviarRespuestaConsulta()`, máx. 3 cada 24 h), el enlace de pago WebPay, el inicio/término de gestiones con
+  `informarCliente`, el término de la atención y el aviso de cambio de correo a la dirección anterior.
 - **Correcciones (`modules/correcciones`)**: única vía para escribir estados fuera de los flujos (reabrir atenciones, reiniciar
   derivaciones, retroceder arancel o provisión un paso con `RETROCESO_ARANCEL`/`RETROCESO_PROVISION`). Exige
   `flujos.corregir` (solo ADMIN por defecto) y un motivo, que queda en los eventos del flujo y en `metadata.correcciones` de
   la atención; escrituras condicionales al estado leído.
+- **Documentos y notas**: todo documento lleva `tipo` (`TipoDocumentoEnum`: presentado al tribunal, resolución, acta de acuerdo,
+  constancia de apercibimiento, antecedente, comprobante, informe al cliente). Las notas internas (`notas_atencion`,
+  `gestiones.registrar`) avisan al abogado asignado y no se editan. El informe final al cliente es `informeFinal()`.
 - **Posesión efectiva**: es un tipo de atención (`PosesionEfectiva`, prefijo POSE); causante y
   herederos se manejan solo vía `PosesionesService`. La ficha PDF es un resumen interno, nunca el
   formulario oficial del Registro Civil.
@@ -241,7 +245,9 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   (`AuditInterceptor`, global). El interceptor redacta credenciales (`token`, `secret`, `headers`,
   `password`…) con `redactar()` y no audita `/auth/*` ni health; las exenciones se comparan por ruta
   exacta, nunca con `includes()` sobre la URL (la query string no debe poder activarlas). Lo mismo
-  vale para `MaintenanceInterceptor`.
+  vale para `MaintenanceInterceptor`. `/auth/*` audita por su cuenta: canje de enlace, INGRESO con Entra ID (una vez por
+  token) y LOGOUT. Todo proceso programado nuevo lleva `@AuditarProceso("nombre")` debajo de `@Cron` (PROCESO /
+  PROCESO_ERROR) y cada error 500 queda como ERROR.
 - **Seguridad transversal (auditoría run-1)**: el límite de tasa y las métricas nunca usan cabeceras
   que elige el cliente (`X-Cod-Plan`, primera entrada de `X-Forwarded-For`); la IP sale de `req.ip`
   con `trust proxy = TRUSTED_PROXY_HOPS`. Los secretos (webhooks) se devuelven solo al crear/rotar.
