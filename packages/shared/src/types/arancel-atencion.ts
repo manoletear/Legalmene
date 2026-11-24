@@ -73,6 +73,8 @@ export interface ArancelAtencion {
   comprobanteDocumentoId: string | null;
   caminoPago: CaminoPagoArancel | null;
   webpayOrdenCompra: string | null;
+  // Último cambio de estado (fecha de movimiento en las búsquedas, Anexo §XI l.1967).
+  updatedAt?: string;
 }
 
 export interface ArancelAtencionRow extends ArancelAtencion {

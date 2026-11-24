@@ -83,18 +83,19 @@ const ESTADOS_FINANZAS: EstadoProvision[] = ["Solicitada", "Autorizada", "Dispon
       </div>
       <p-table *ngIf="criterios()" [value]="resultados()" [loading]="buscando()" styleClass="p-datatable-sm" [style]="{ 'margin-top': '16px' }">
         <ng-template pTemplate="header">
-          <tr><th>Caso</th><th>Plan</th><th>Estado</th><th style="text-align:right;">Copago</th></tr>
+          <tr><th>Caso</th><th>Plan</th><th>Estado</th><th>Último movimiento</th><th style="text-align:right;">Copago</th></tr>
         </ng-template>
         <ng-template pTemplate="body" let-a>
           <tr>
             <td><a [routerLink]="['/atenciones', a.atencionId]" class="lm-mono">{{ a.correlativo }}</a><div class="lm-small lm-muted">{{ a.asunto }}</div></td>
             <td>{{ a.codPlan }}</td>
-            <td>{{ etiqueta(a.estado) }}</td>
+            <td>{{ etiqueta(a.estado) }}<div *ngIf="a.fechaPago" class="lm-small lm-muted">Pagado {{ a.fechaPago + 'T12:00:00Z' | date: 'dd-MM-yyyy' : 'UTC' }}</div></td>
+            <td class="lm-small">{{ a.updatedAt ? (a.updatedAt | date: 'dd-MM-yyyy HH:mm') : '—' }}</td>
             <td style="text-align:right;">{{ (a.copagoUfCentesimas ?? 0) / 100 | number: '1.0-2' }} UF</td>
           </tr>
         </ng-template>
         <ng-template pTemplate="emptymessage">
-          <tr><td colspan="4" style="text-align:center; padding:24px;" class="lm-muted">Sin resultados para estos criterios.</td></tr>
+          <tr><td colspan="5" style="text-align:center; padding:24px;" class="lm-muted">Sin resultados para estos criterios.</td></tr>
         </ng-template>
       </p-table>
     </p-card>

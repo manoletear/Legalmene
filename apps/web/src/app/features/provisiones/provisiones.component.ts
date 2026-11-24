@@ -67,7 +67,7 @@ import { Observable } from "rxjs";
         <ng-template pTemplate="header">
           <tr>
             <th>Caso</th><th>Motivo</th><th style="text-align:right;">Monto</th><th>Estado</th>
-            <th>Solicitada por</th><th>Fecha</th><th></th>
+            <th>Solicitada por</th><th>Fechas</th><th></th>
           </tr>
         </ng-template>
         <ng-template pTemplate="body" let-p>
@@ -81,7 +81,12 @@ import { Observable } from "rxjs";
             <td><p-tag [value]="etiqueta(p.estado)" [severity]="severidad(p.estado)"></p-tag>
               <div *ngIf="p.numeroCheque" class="lm-small lm-muted">Cheque {{ p.numeroCheque }}</div></td>
             <td class="lm-small">{{ p.solicitadaPorEmail }}</td>
-            <td class="lm-small">{{ p.fechaSolicitud | date: 'dd/MM/yyyy' }}</td>
+            <td class="lm-small" style="white-space:nowrap;">
+              <div>Solicitada {{ p.fechaSolicitud | date: 'dd/MM/yyyy' }}</div>
+              <div *ngIf="p.fechaPagoCliente" class="lm-muted">Pagada {{ p.fechaPagoCliente | date: 'dd/MM/yyyy' }}</div>
+              <div *ngIf="p.fechaEntrega" class="lm-muted">Entregada {{ p.fechaEntrega | date: 'dd/MM/yyyy' }}</div>
+              <div *ngIf="p.fechaRendicion" class="lm-muted">Rendida {{ p.fechaRendicion | date: 'dd/MM/yyyy' }}</div>
+            </td>
             <td style="text-align:right; white-space:nowrap;">
               <button *ngIf="['Reingresado', 'RendidaCliente', 'Cerrada'].includes(p.estado) && p.fechaEntrega" pButton type="button" class="p-button-sm p-button-text" icon="pi pi-print"
                 label="Reingreso" title="Comprobante de reingreso del saldo no gastado (2 copias)" (click)="comprobanteReingreso(p)"></button>
