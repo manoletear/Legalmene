@@ -56,7 +56,8 @@ de Gerencia de Servicios.
 
 En la ficha de la consulta: tipo de consulta, código de grabación, respuesta, *Nuevo correlativo*
 (otra consulta en la misma llamada) y *Derivar a asesoría / juicio*. Si faltan documentos del cliente,
-pásela a **En espera de antecedentes**.
+pásela a **En espera de antecedentes**. Desde ese momento hay **1 día hábil** para pedirlos al cliente
+con *Solicitar antecedentes al cliente* (máximo 3 envíos por atención cada 24 horas).
 
 ### 5.3 Asesorías y juicios
 
@@ -123,15 +124,24 @@ sus fechas.
 
 Quien envía el arancel no puede aprobarlo. Cada paso avisa a quien sigue.
 
+**Pago en línea:** si el cliente prefiere pagar por WebPay, use **Notificar pago (WebPay)**: le llega un
+correo con el enlace por el copago (UF de hoy). El camino se puede cambiar en cualquier momento salvo con
+el arancel pagado. Cuando el cliente paga, el arancel queda verde solo y se avisa al abogado y a su jefatura.
+
 ### 7.2 Provisiones de fondos
 
+0. En la ficha registre la **decisión del cliente**: acepta provisionar, no acepta, o paga directamente
+   los gastos (no en juicios). Si no acepta o paga directo, no se solicitan provisiones; registrar que
+   acepta reinicia el flujo.
 1. El abogado **solicita** la provisión (monto y motivo); el contador recibe el aviso.
 2. El contador registra el **pago del cliente** (comprobante en 2 copias).
 3. El abogado **pide la entrega**; su jefatura la **autoriza** o la rechaza.
 4. Finanzas la deja **disponible** y la **entrega** (desde las 15:00 del día hábil siguiente a la
    autorización); comprobante de entrega en 2 copias. Si no se retira en 2 días hábiles, vuelve a
    *Pagada* (el último día llega un recordatorio).
-5. El abogado registra cada **gasto con su comprobante** (se adjunta en el mismo diálogo) y **rinde**.
+5. El abogado registra cada **gasto con su comprobante** (se adjunta en el mismo diálogo) y **rinde**
+   dentro de 8 días hábiles; vencido el plazo, se avisa al abogado y a su jefatura por la aplicación y
+   por correo.
 6. El saldo no gastado lo registra el contador como **reingreso**.
 7. **Rendición al cliente:** el abogado la solicita, Finanzas emite el cheque por el saldo total y el
    abogado marca *Rendido a cliente* (comprobante en 3 copias).

@@ -24,6 +24,7 @@ class ControllerDto extends createZodDto(
     hasta: fecha.optional(),
     perfilId: z.string().uuid().optional(),
     jefeId: z.string().uuid().optional(),
+    cargo: z.string().trim().min(1).max(100).optional(),
     codPlan: z.string().optional(),
     canalId: z.string().uuid().optional(),
   }),

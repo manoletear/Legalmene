@@ -1,4 +1,7 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
+import { CorreosService } from "../correos/correos.service";
+import { plantillaAviso } from "../correos/plantillas";
+import { jefeDe } from "../notif-inbox/destinatarios";
 import { Cron } from "@nestjs/schedule";
 import { and, eq, inArray, isNull, min, notInArray, sql } from "drizzle-orm";
 import {
@@ -93,6 +96,7 @@ export class PlazosService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     @Inject(NotifInboxService) private readonly notif: NotifInboxService,
+    @Optional() @Inject(CorreosService) private readonly correos?: CorreosService,
   ) {}
 
   async deAtencion(atencionId: string): Promise<PlazoAtencion[]> {
@@ -210,10 +214,37 @@ export class PlazosService {
             clave,
           );
           if (creada) avisos++;
+          // Anexo §X l.1727: fondos por rendir vencidos también a la jefatura y por correo a ambos.
+          if (creada && p.tipo === "RendicionFondos") await this.avisarRendicionVencida(atencion, p, clave);
         }
       }
     }
     if (avisos) this.logger.log(`Avisos de plazos vencidos: ${avisos}`);
     return avisos;
+  }
+
+  private async avisarRendicionVencida(
+    atencion: { id: string; codPlan: string; correlativo: string; responsableId: string | null },
+    p: PlazoAtencion,
+    clave: string,
+  ) {
+    const jefe = await jefeDe(this.db, atencion.responsableId);
+    const titulo = `Fondos por rendir vencidos (${atencion.correlativo})`;
+    const detalle = `Venció el ${new Date(p.limite).toLocaleDateString("es-CL", { timeZone: "America/Santiago" })}`;
+    if (jefe && jefe !== atencion.responsableId) {
+      await this.notif.crearSiNoExisteUnseen(
+        { codPlan: atencion.codPlan, usuarioId: jefe, severidad: "warn", titulo, detalle, accionUrl: `/atenciones/${atencion.id}`, metadata: { plazoVencido: `${clave}:jefe` } },
+        "plazoVencido",
+        `${clave}:jefe`,
+      );
+    }
+    if (this.correos) {
+      await this.correos
+        .aUsuarios([atencion.responsableId, jefe], plantillaAviso({ titulo, detalle, url: this.correos.url(`/atenciones/${atencion.id}`) }), {
+          plantilla: "provision.rendicion_vencida",
+          atencionId: atencion.id,
+        })
+        .catch((e) => this.logger.warn(`No se pudo enviar el correo de rendición vencida: ${e}`));
+    }
   }
 }

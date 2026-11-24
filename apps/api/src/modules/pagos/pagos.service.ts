@@ -1,5 +1,6 @@
 import { ConflictException, Inject, Injectable, Logger, NotFoundException, Optional, forwardRef } from "@nestjs/common";
-import { and, count, desc, eq, ilike, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, getTableColumns, ilike, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import { afiliados } from "../../db/schema/afiliados";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { pagos, Pago } from "../../db/schema/pagos";
 import type { CriteriosBusqueda, IniciarPago, TipoPago } from "@legalmene/shared";
@@ -60,9 +61,18 @@ export class PagosService {
     const pageSize = Math.min(opts.pageSize ?? 50, 200);
     const where = condicionPagos(opts);
     const [rows, [{ value: total }]] = await Promise.all([
+      // Columnas del Anexo §XI l.1996: orden, fecha, nombre, RUT, monto, tipo, código, correo, región, comuna.
       this.db
-        .select()
+        .select({
+          ...getTableColumns(pagos),
+          rut: afiliados.rut,
+          nombre: sql<string>`${afiliados.nombres} || ' ' || ${afiliados.apellidoPaterno}`,
+          email: afiliados.email,
+          region: afiliados.region,
+          comuna: afiliados.comuna,
+        })
         .from(pagos)
+        .leftJoin(afiliados, eq(afiliados.id, pagos.afiliadoId))
         .where(where)
         .orderBy(desc(pagos.fechaIniciado))
         .limit(pageSize)

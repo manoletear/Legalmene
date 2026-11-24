@@ -49,6 +49,12 @@ de consulta, causas de término, calidades procesales, **canales**, **regiones**
 - **Feriados:** los legales se calculan solos para el año en curso y el siguiente; agregue los de
   decreto o elecciones. Afectan todos los plazos en días hábiles.
 
+- **Campos adicionales** (**Administración → Campos adicionales**): campos que la ficha pide para una
+  materia o un procedimiento (y, si quiere, solo para un tipo de atención): texto, número, fecha, lista de
+  opciones o sí/no, obligatorios o no. Desactivar un campo lo oculta sin borrar lo ya registrado.
+- **Formatos de exportación** (**Administración → Formatos de exportación**): elija las columnas y su orden
+  para cada planilla de búsqueda. "Volver a todas las columnas" quita el formato.
+
 ## 4. Planes, aranceles y coberturas
 
 - **Planes:** productos contratables, con canal y término de vigencia. Un plan vencido o desactivado no

@@ -14,7 +14,7 @@ import { descargarArchivo } from "../../shared/descarga";
 import { PagosApiService } from "../../core/services/pagos.service";
 import { AfiliadosApiService } from "../../core/services/afiliados.service";
 import { MeService } from "../../core/services/me.service";
-import type { AfiliadoConPlanes, Pago } from "@legalmene/shared";
+import type { AfiliadoConPlanes, PagoListado } from "@legalmene/shared";
 
 type Severity = "success" | "info" | "warn" | "danger" | "secondary" | "contrast";
 
@@ -112,23 +112,31 @@ import type { TableLazyLoadEvent } from "primeng/table";
         <ng-template pTemplate="header">
           <tr>
             <th>Orden</th>
-            <th>Monto</th>
-            <th>Estado</th>
-            <th>Proveedor</th>
             <th>Iniciado</th>
+            <th>Afiliado</th>
+            <th>Monto</th>
+            <th>Tipo</th>
+            <th>Estado</th>
+            <th>Código</th>
+            <th>Correo</th>
+            <th>Región / comuna</th>
           </tr>
         </ng-template>
         <ng-template pTemplate="body" let-p>
           <tr>
-            <td>{{ p.ordenCompra }}</td>
+            <td class="lm-mono">{{ p.ordenCompra }}</td>
+            <td>{{ p.fechaIniciado | date: 'dd-MM-yyyy HH:mm' }}</td>
+            <td>{{ p.nombre ?? '—' }}<div class="lm-small lm-muted lm-mono">{{ p.rut }}</div></td>
             <td>{{ p.monto | currency: p.moneda : 'symbol-narrow' : '1.0-0' }}</td>
+            <td>{{ p.atencionId ? 'Arancel' : 'Plan' }}</td>
             <td><p-tag [value]="p.estado" [severity]="estadoSeverity(p.estado)"></p-tag></td>
-            <td>{{ p.proveedor }}</td>
-            <td>{{ p.fechaIniciado | date: 'short' }}</td>
+            <td class="lm-mono">{{ p.authCode ?? '—' }}</td>
+            <td class="lm-small">{{ p.email ?? '—' }}</td>
+            <td class="lm-small">{{ p.region ?? '—' }}{{ p.comuna ? ' / ' + p.comuna : '' }}</td>
           </tr>
         </ng-template>
         <ng-template pTemplate="emptymessage">
-          <tr><td colspan="5" style="text-align:center; padding:24px;" class="lm-muted">Sin pagos.</td></tr>
+          <tr><td colspan="9" style="text-align:center; padding:24px;" class="lm-muted">Sin pagos.</td></tr>
         </ng-template>
       </p-table>
     </p-card>
@@ -140,7 +148,7 @@ export class PagosComponent implements OnInit {
   private afiliadosApi = inject(AfiliadosApiService);
   private msg = inject(MessageService);
 
-  protected data = signal<Pago[]>([]);
+  protected data = signal<PagoListado[]>([]);
   protected afiliados = signal<AfiliadoConPlanes[]>([]);
   protected planOpts = signal<{ label: string; value: string }[]>([]);
   protected total = signal(0);

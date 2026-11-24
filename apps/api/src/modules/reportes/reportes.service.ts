@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable } from "@nestjs/common";
 import { accesoActual } from "../../common/acceso/contexto";
-import { and, asc, count, eq, inArray, isNotNull, ne, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, eq, ilike, inArray, isNotNull, ne, sql, type SQL } from "drizzle-orm";
 import {
   CAMPOS_INFORME_AFILIADOS,
   CAMPOS_INFORME_ATENCIONES,
@@ -73,6 +73,7 @@ export interface FiltroController {
   hasta?: string;
   perfilId?: string;
   jefeId?: string;
+  cargo?: string;
   codPlan?: string;
   canalId?: string;
 }
@@ -338,7 +339,7 @@ export class ReportesService {
     for (const r of porComites) ids.add(r.usuarioId);
     if (ids.size === 0) return [];
     const usuariosRows = await this.db
-      .select({ id: usuarios.id, nombre: usuarios.nombre, email: usuarios.email, perfil: perfiles.nombre })
+      .select({ id: usuarios.id, nombre: usuarios.nombre, email: usuarios.email, perfil: perfiles.nombre, cargo: usuarios.cargo })
       .from(usuarios)
       .innerJoin(perfiles, eq(perfiles.id, usuarios.perfilId))
       .where(
@@ -346,6 +347,7 @@ export class ReportesService {
           inArray(usuarios.id, [...ids]),
           f.perfilId ? eq(usuarios.perfilId, f.perfilId) : undefined,
           f.jefeId ? eq(usuarios.jefeId, f.jefeId) : undefined,
+          f.cargo ? ilike(usuarios.cargo, `%${f.cargo}%`) : undefined,
         ),
       );
     const terminales = new Set<string>(ESTADOS_TERMINALES);
@@ -361,6 +363,7 @@ export class ReportesService {
           nombre: u.nombre,
           email: u.email,
           perfil: u.perfil,
+          cargo: u.cargo,
           asignadas,
           pendientes: estados.filter((e) => !terminales.has(e.estado)).reduce((a, e) => a + Number(e.n), 0),
           terminadas: porEstadoMap["Terminada"] ?? 0,
@@ -382,6 +385,7 @@ export class ReportesService {
           { titulo: "Usuario", valor: (r: FilaController) => r.nombre, ancho: 26 },
           { titulo: "Correo", valor: (r: FilaController) => r.email, ancho: 28 },
           { titulo: "Perfil", valor: (r: FilaController) => r.perfil, ancho: 22 },
+          { titulo: "Cargo", valor: (r: FilaController) => r.cargo ?? "", ancho: 22 },
           { titulo: "Asignadas", valor: (r: FilaController) => r.asignadas },
           { titulo: "Pendientes", valor: (r: FilaController) => r.pendientes },
           { titulo: "Terminadas", valor: (r: FilaController) => r.terminadas },

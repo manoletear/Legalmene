@@ -64,6 +64,10 @@ function hoyChile(): string {
           <label class="lm-small">Plan</label>
           <p-select [(ngModel)]="codPlan" [options]="planOpts()" optionLabel="label" optionValue="value" placeholder="Todos" [showClear]="true" [filter]="true" appendTo="body"></p-select>
         </div>
+        <div class="lm-col" style="gap:4px;" *ngIf="vista() === 'controller'">
+          <label class="lm-small">Cargo</label>
+          <input pInputText name="cargo" [(ngModel)]="cargo" placeholder="Todos" />
+        </div>
         <div class="lm-col" style="gap:4px;" *ngIf="vista() !== 'plan'">
           <label class="lm-small">Canal</label>
           <p-select [(ngModel)]="canalId" [options]="canalOpts()" optionLabel="label" optionValue="value" placeholder="Todos" [showClear]="true" appendTo="body"></p-select>
@@ -183,12 +187,12 @@ function hoyChile(): string {
             <ng-container *ngTemplateOutlet="acciones; context: { v: 'controller' }"></ng-container>
             <p-table *ngIf="controller() as filas; else vacio" [value]="filas" styleClass="p-datatable-sm">
               <ng-template pTemplate="header">
-                <tr><th>Usuario</th><th>Perfil</th><th class="lm-num">Asignadas</th><th class="lm-num">Pendientes</th><th class="lm-num">Terminadas</th><th class="lm-num">Gestiones pendientes</th><th class="lm-num">Gestiones vencidas</th><th class="lm-num">Comités abiertos</th></tr>
+                <tr><th>Usuario</th><th>Perfil / cargo</th><th class="lm-num">Asignadas</th><th class="lm-num">Pendientes</th><th class="lm-num">Terminadas</th><th class="lm-num">Gestiones pendientes</th><th class="lm-num">Gestiones vencidas</th><th class="lm-num">Comités abiertos</th></tr>
               </ng-template>
               <ng-template pTemplate="body" let-f>
                 <tr>
                   <td><strong>{{ f.nombre }}</strong><div class="lm-small lm-muted">{{ f.email }}</div></td>
-                  <td>{{ f.perfil }}</td>
+                  <td>{{ f.perfil }}<div *ngIf="f.cargo" class="lm-small lm-muted">{{ f.cargo }}</div></td>
                   <td class="lm-num">{{ f.asignadas | number }}</td>
                   <td class="lm-num">{{ f.pendientes | number }}</td>
                   <td class="lm-num">{{ f.terminadas | number }}</td>
@@ -294,6 +298,7 @@ export class ReportesComponent implements OnInit {
   protected hasta = hoyChile();
   protected codPlan: string | undefined;
   protected canalId: string | undefined;
+  protected cargo = "";
   protected tipos: TipoAtencion[] = ["Consulta", "Asesoria", "Juicio"];
   protected campos: CampoInformeAtencion[] = ["correlativo", "tipo", "estado", "rut", "afiliado", "plan", "materia", "fechaApertura"];
 
@@ -352,6 +357,7 @@ export class ReportesComponent implements OnInit {
     if (v === "controller-tipo") return { ...base, tipo: this.tipoController, codPlan: this.codPlan, campos: this.camposController.join(",") || undefined };
     if (v !== "canal") base["codPlan"] = this.codPlan;
     if (v !== "plan") base["canalId"] = this.canalId;
+    if (v === "controller" && this.cargo.trim()) base["cargo"] = this.cargo.trim();
     return base;
   }
 

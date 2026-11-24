@@ -217,7 +217,19 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
 - **Exportaciones y reportes**: XLSX con `libroXlsx()` (`modules/exports/xlsx.ts`, exceljs), nunca CSV;
   tope `MAX_FILAS_EXPORTACION`; las descargas del frontend pasan por `descargarArchivo()`. Las
   fórmulas de reportes viven en `modules/reportes` (`calculo.ts` + `reportes.service.ts`); la tasa de
-  uso está pendiente de validar con LegalChile.
+  uso está pendiente de validar con LegalChile. Las búsquedas exportables pasan por `ExportsService.busqueda()`, que aplica
+  el formato del administrador (`formatos_exportacion`, permiso `exportar.formatos`); toda consulta de un exportador nuevo
+  debe envolver su `where` en `this.acotar()` (modo catálogo de columnas). El controller por tipo
+  (`controllerAtenciones()`) parte de la nómina del plan, cruza materias cubiertas y vigencia RUT–plan.
+- **Campos adicionales (`modules/campos-adicionales`)**: el administrador (`maestros.administrar`) los define por materia o
+  procedimiento (y tipo opcional); los valores van en `atenciones.campos_adicionales` por id de campo, validados con
+  `validarValor()`. No se cambia el tipo de dato ni el alcance de un campo existente; desactivar no borra valores.
+- **Arancel por WebPay**: "Notificar pago" (`notificarPago()`) crea la orden con `crearOrdenWebPay()` por el copago con la
+  UF de hoy y envía el enlace al cliente; el camino (`caminoPago`) cambia en cualquier estado salvo Pagado. Un pago WebPay
+  confirmado de una orden de arancel lo deja Pagado vía `pagoWebPay()`, sin registro manual.
+- **Decisión de provisión**: `atenciones.decision_provision` (Acepta / NoAcepta / PagaDirecto, esta última no en juicios);
+  sin aceptación `ProvisionesService.solicitar()` responde 409. Plazo de antecedentes: entrar a EnEsperaAntecedentes fija
+  `antecedentes_faltantes_desde`; `solicitarAntecedentes()` (máx. 3 por atención cada 24 h) cumple el plazo de 1 día hábil.
 - **Sin datos de mockup en el código**: si un valor no existe en la API, mostrar vacío o
   "sin datos", nunca una cifra inventada.
 - **RUTs**: siempre normalizar con `formatearRut()` antes de comparar/insertar.

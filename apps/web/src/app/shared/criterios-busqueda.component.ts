@@ -167,7 +167,12 @@ export class CriteriosBusquedaComponent implements OnInit {
     this.valores = { ...this.iniciales() };
     this.competenciaSel.set(this.valores.competenciaId);
     const c = this.campos();
-    if (c.includes("plan")) this.planesApi.listar().subscribe((ps) => this.planOpts.set(ps.map((p) => ({ label: `${p.codPlan} — ${p.nombre}`, value: p.codPlan }))));
+    // Anexo §I l.121: un plan no vigente queda fuera de las búsquedas.
+    const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(new Date());
+    if (c.includes("plan"))
+      this.planesApi.listar().subscribe((ps) =>
+        this.planOpts.set(ps.filter((p) => p.vigente && (!p.fechaTermino || p.fechaTermino >= hoy)).map((p) => ({ label: `${p.codPlan} — ${p.nombre}`, value: p.codPlan }))),
+      );
     if (c.includes("canal")) this.planesApi.canales().subscribe((cs) => this.canalOpts.set(cs.map((x) => ({ label: x.nombre, value: x.id }))));
     if (c.includes("abogado")) this.usuariosApi.opciones().subscribe((us) => this.abogadoOpts.set(us.map((u) => ({ label: u.nombre, value: u.id }))));
     if (c.includes("competencia")) this.maestrosApi.listar("competencias").subscribe((cs) => this.competenciaOpts.set(cs.map((x) => ({ label: x.nombre, value: x.id }))));

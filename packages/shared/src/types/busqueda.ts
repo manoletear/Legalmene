@@ -91,6 +91,7 @@ export interface FilaController {
   nombre: string;
   email: string;
   perfil: string;
+  cargo: string | null;
   asignadas: number;
   pendientes: number;
   terminadas: number;

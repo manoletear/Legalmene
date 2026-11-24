@@ -27,6 +27,8 @@ export const PagoSchema = z.object({
   fechaResolucion: z.string().datetime().optional().nullable(),
 });
 export type Pago = z.infer<typeof PagoSchema>;
+// Fila del listado de pagos con los datos del afiliado (Anexo §XI l.1996).
+export type PagoListado = Pago & { rut?: string | null; nombre?: string | null; email?: string | null; region?: string | null; comuna?: string | null };
 
 export const IniciarPagoSchema = z.object({
   afiliadoId: z.string().uuid(),
