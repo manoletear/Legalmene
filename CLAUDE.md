@@ -26,10 +26,10 @@ ejemplo y nunca deben quedar fijas en el código.
 | Cargas masivas FLUJO/STOCK | ✅ Implementado |
 | Frontend Angular 19 | ✅ Shell + Dashboard + Afiliados + Atenciones + Aranceles + Provisiones + Derivaciones + Finanzas |
 | Alineación con Anexo PSL | ✅ Fase 1 del plan de cumplimiento (operable desde la web). ✅ Pasos 1–5 (5a búsquedas sin precarga, XLSX, reportes, controller; 5b cargas, bienes, posesión efectiva). Pendientes en `docs/requerimientos-anexo-psl.md` §5 |
-| Infraestructura AWS (CDK) | 🟡 Escrita en `infra/cdk` (Aurora, ECS, S3, WAF); no desplegada |
+| Infraestructura AWS (CDK) | 🟡 Escrita y sintetizada en CI (`infra/cdk`: Aurora con TLS, ECS, S3, bucket de auditoría con Object Lock, WAF); imagen Docker verificada en CI; no desplegada (falta cuenta AWS) |
 | Migración SQL Server → Postgres | ⏳ Pendiente |
 | WebPay producción | ⏳ Stub (esperar SDK Transbank) |
-| Auditoría / S3 / OpenSearch | ⏳ Esquema definido, lógica pendiente |
+| Auditoría / S3 / OpenSearch | ✅ Auditoría global y archivo anual a S3 con Object Lock; documentos en S3 con URLs firmadas. ⏳ OpenSearch sin implementar |
 
 ## Stack
 
@@ -285,6 +285,6 @@ y el detalle requisito por requisito en `docs/cumplimiento-anexo-detalle.md`. El
 
 1. Integración real Transbank WebPay (reemplazar stub en `pagos.service.ts`).
 2. Correos en producción: activar SES (`SES_ENABLED`, `SES_FROM`) y las casillas `CORREO_*`; formularios oficiales al cliente (antecedentes, cuestionario de divorcio) e informe final en PDF.
-3. AWS CDK en `infra/` para Aurora + ECS + ALB + S3 (corregir `apps/api/Dockerfile`, que no copia `pnpm-lock.yaml`).
+3. Desplegar la infraestructura CDK (`infra/cdk`, ver `docs/runbook.md`): requiere la cuenta AWS, el dominio y el registro de la aplicación en Entra ID.
 4. Migración SQL Server 2008 → Aurora (AWS DMS + SCT) — ver plan en `docs/`.
 5. Formularios oficiales de posesión efectiva (discovery).
