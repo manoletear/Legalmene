@@ -18,3 +18,4 @@ export * from "./agenda";
 export * from "./correos";
 export * from "./exportaciones";
 export * from "./campos-adicionales";
+export * from "./notas";

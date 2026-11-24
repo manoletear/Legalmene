@@ -23,3 +23,4 @@ export * from "./types/webhook";
 export * from "./types/documento";
 export * from "./types/plazos";
 export * from "./types/campos-adicionales";
+export * from "./types/notas";

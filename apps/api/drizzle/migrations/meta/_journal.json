@@ -274,6 +274,13 @@
       "when": 1795546021040,
       "tag": "0038_tipo_documento",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1795546627713,
+      "tag": "0039_notas_atencion",
+      "breakpoints": true
     }
   ]
 }

@@ -24,6 +24,7 @@ import { AtencionesApiService, type CorreoEnviado } from "../../core/services/at
 import { GestionesApiService } from "../../core/services/gestiones.service";
 import { ComitePanelComponent } from "./comite-panel.component";
 import { CitasAtencionComponent } from "./citas-atencion.component";
+import { NotasAtencionComponent } from "./notas-atencion.component";
 import { CamposAdicionalesAtencionComponent } from "./campos-adicionales-atencion.component";
 import { DocumentosApiService, DocumentoMeta } from "../../core/services/documentos.service";
 import { ProvisionesApiService } from "../../core/services/provisiones.service";
@@ -98,6 +99,7 @@ interface PipelineStep {
     PermisoDirective,
     ComitePanelComponent,
     CitasAtencionComponent,
+    NotasAtencionComponent,
     CamposAdicionalesAtencionComponent,
     CardModule,
     TagModule,
@@ -336,6 +338,7 @@ interface PipelineStep {
                 <p-tab value="gestiones">Gestiones</p-tab>
                 <p-tab value="documentos">Documentos</p-tab>
                 <p-tab value="comite">Comité</p-tab>
+                <p-tab value="notas">Notas</p-tab>
                 <p-tab value="agenda" *lmPermiso="'agenda.ver'">Agenda</p-tab>
                 <p-tab value="historial">Historial</p-tab>
               </p-tablist>
@@ -403,6 +406,10 @@ interface PipelineStep {
 
                 <p-tabpanel value="comite">
                   <lm-comite-panel [atencionId]="a.id"></lm-comite-panel>
+                </p-tabpanel>
+
+                <p-tabpanel value="notas">
+                  <lm-notas-atencion [atencionId]="a.id"></lm-notas-atencion>
                 </p-tabpanel>
 
                 <p-tabpanel value="agenda">
