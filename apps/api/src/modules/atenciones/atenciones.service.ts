@@ -1,3 +1,4 @@
+import { avisar, jefeDe } from "../notif-inbox/destinatarios";
 import {
   Inject,
   Injectable,
@@ -333,6 +334,22 @@ export class AtencionesService {
         accionUrl: `/atenciones/${row.id}`,
         metadata: { atencionId: row.id, tipo: row.tipo },
       });
+    }
+    // La jefatura de consultas queda informada de las consultas de su equipo (Anexo §VI l.667).
+    if (row.tipo === "Consulta") {
+      const jefe = await jefeDe(this.db, row.abogadoAsignadoId ?? row.creadoPorId);
+      await avisar(
+        this.notif,
+        [jefe],
+        {
+          codPlan,
+          titulo: `Consulta registrada: ${row.correlativo}`,
+          detalle: row.asunto,
+          accionUrl: `/atenciones/${row.id}`,
+          metadata: { atencionId: row.id, tipo: row.tipo, aviso: "jefatura" },
+        },
+        actor?.id,
+      );
     }
     return row;
   }

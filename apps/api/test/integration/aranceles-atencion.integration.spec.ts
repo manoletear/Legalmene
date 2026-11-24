@@ -49,6 +49,8 @@ const FECHA_PAGO = "2001-03-15";
   let jefe: { id: string; permisos: readonly string[] };
   let causaId: string;
 
+  const avisos: { usuarioId: string; titulo: string }[] = [];
+
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true }), DatabaseModule],
@@ -63,7 +65,17 @@ const FECHA_PAGO = "2001-03-15";
         GestionesService,
         ComprobantesPdfService,
         { provide: WebhooksService, useValue: { emitir: async () => undefined } },
-        { provide: NotifInboxService, useValue: { crear: async () => null, crearSiNoExisteUnseen: async () => null, crearBulk: async () => [] } },
+        {
+          provide: NotifInboxService,
+          useValue: {
+            crear: async () => null,
+            crearSiNoExisteUnseen: async () => null,
+            crearBulk: async (items: { usuarioId: string; titulo: string }[]) => {
+              avisos.push(...items);
+              return [];
+            },
+          },
+        },
       ],
     }).compile();
     atencionesSrv = moduleRef.get(AtencionesService);
@@ -83,8 +95,8 @@ const FECHA_PAGO = "2001-03-15";
     const afi = await afiliadosSrv.crear({ rut: rutAleatorio(), nombres: "Test", apellidoPaterno: "Arancel" });
     afiliadoId = afi.id;
     await afiliadosSrv.asignarPlan(afiliadoId, { codPlan: PLAN, fechaInicio: "2024-01-01" });
-    const ua = await usuarioDePrueba(db, "ABOGADO");
     const uj = await usuarioDePrueba(db, "GERENCIA_SERVICIOS");
+    const ua = await usuarioDePrueba(db, "ABOGADO", { jefeId: uj.id });
     abogado = { id: ua.id, permisos: ua.permisos };
     jefe = { id: uj.id, permisos: uj.permisos };
     const [c] = await db.insert(causasTermino).values({ nombre: `Causa ${PLAN}` }).returning();
@@ -129,8 +141,12 @@ const FECHA_PAGO = "2001-03-15";
     await expect(atencionesSrv.cambiarEstado(a.id, { estado: "Pendiente" })).rejects.toThrow(/pago del arancel/);
     expect((await atencionesSrv.cambiarEstado(a.id, { estado: "EnEsperaArancel" })).estado).toBe("EnEsperaArancel");
 
+    avisos.length = 0;
     await arancelSrv.enviarAprobacion(a.id, abogado.id);
+    // La jefatura del abogado recibe el aviso para aprobar.
+    expect(avisos.find((x) => /Arancel por aprobar/.test(x.titulo))?.usuarioId).toBe(jefe.id);
     const rech = await arancelSrv.rechazar(a.id, jefe.id, "Monto mal informado");
+    expect(avisos.find((x) => /Arancel rechazado/.test(x.titulo))?.usuarioId).toBe(abogado.id);
     expect(rech.estado).toBe("Requerido");
     expect(rech.motivoRechazo).toBe("Monto mal informado");
 
@@ -146,6 +162,8 @@ const FECHA_PAGO = "2001-03-15";
     expect(pagado.estado).toBe("Pagado");
     expect(pagado.montoClp).toBe(96_000); // 6 UF × $16.000
     expect(pagado.ufValorCentavos).toBe(1_600_000);
+    // El pago se avisa al abogado (no a quien lo registró).
+    expect(avisos.filter((x) => /Arancel pagado/.test(x.titulo)).map((x) => x.usuarioId)).toEqual([abogado.id]);
 
     // Anexo §IX 5.4: comprobante en dos copias con el monto en pesos y la forma de pago.
     const recibo = await comprobantes.reciboArancel(a.id);

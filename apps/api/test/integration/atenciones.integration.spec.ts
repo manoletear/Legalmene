@@ -78,6 +78,7 @@ const avisos: { titulo: string; metadata?: Record<string, unknown> }[] = [];
           provide: NotifInboxService,
           useValue: {
             crear: async () => null,
+            crearBulk: async () => [],
             crearSiNoExisteUnseen: async (input: { titulo: string; metadata?: Record<string, unknown> }) => {
               avisos.push(input);
               return null;

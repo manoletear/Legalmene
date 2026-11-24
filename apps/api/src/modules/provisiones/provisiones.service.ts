@@ -1,4 +1,5 @@
 import type { CriteriosBusqueda } from "@legalmene/shared";
+import { avisar, jefeDe, usuariosConPermiso as conPermiso } from "../notif-inbox/destinatarios";
 import { condicionAtencion } from "../../common/busqueda/criterios";
 import {
   BadRequestException,
@@ -208,6 +209,9 @@ export class ProvisionesService {
         .returning();
       await this.evento(tx, row.id, null, "Solicitada", usuarioId, null);
       return row;
+    }).then(async (row) => {
+      await this.notificar(row, "Solicitada", null, usuarioId);
+      return row;
     });
   }
 
@@ -234,7 +238,7 @@ export class ProvisionesService {
       await this.evento(tx, id, p.estado, hasta, usuarioId, observacion);
       return u;
     });
-    await this.notificar(row, hasta, observacion);
+    await this.notificar(row, hasta, observacion, usuarioId);
     return row;
   }
 
@@ -527,13 +531,32 @@ export class ProvisionesService {
     });
   }
 
-  private async usuariosConPermiso(permisosBuscados: string[]): Promise<string[]> {
-    const filas = await this.db
-      .selectDistinct({ id: usuarios.id })
-      .from(usuarios)
-      .innerJoin(perfilPermisos, eq(perfilPermisos.perfilId, usuarios.perfilId))
-      .where(and(inArray(perfilPermisos.permiso, permisosBuscados), eq(usuarios.activo, true), eq(usuarios.bloqueado, false)));
-    return filas.map((f) => f.id);
+  private usuariosConPermiso(permisosBuscados: string[]): Promise<string[]> {
+    return conPermiso(this.db, permisosBuscados);
+  }
+
+  private async recordarRetiro(p: Provision) {
+    const [a] = await this.db
+      .select({ codPlan: atenciones.codPlan, correlativo: atenciones.correlativo })
+      .from(atenciones)
+      .where(eq(atenciones.id, p.atencionId));
+    if (!a) return;
+    const jefe = await jefeDe(this.db, p.solicitadaPorId);
+    for (const usuarioId of new Set([p.solicitadaPorId, jefe].filter((x): x is string => !!x))) {
+      await this.notif.crearSiNoExisteUnseen(
+        {
+          codPlan: a.codPlan,
+          usuarioId,
+          severidad: "warn",
+          titulo: `Retire hoy los fondos de ${a.correlativo}`,
+          detalle: `${clp(p.monto)}: si no se retiran hoy, mañana vuelven a la compañía`,
+          accionUrl: `/atenciones/${p.atencionId}`,
+          metadata: { recordatorioRetiro: p.id },
+        },
+        "recordatorioRetiro",
+        p.id,
+      );
+    }
   }
 
   // Disponibles no retirados en 2 días hábiles vuelven a Pagada (Anexo §X 11.1).
@@ -542,7 +565,10 @@ export class ProvisionesService {
     let n = 0;
     for (const p of disponibles) {
       if (!p.fechaDisponible) continue;
-      if (diasHabilesEntre(hoyChileISO(p.fechaDisponible), hoy) <= DIAS_HABILES_RETIRO) continue;
+      const transcurridos = diasHabilesEntre(hoyChileISO(p.fechaDisponible), hoy);
+      // Último día hábil del plazo: recordatorio al abogado y su jefatura (Anexo §X 11.1).
+      if (transcurridos === DIAS_HABILES_RETIRO) await this.recordarRetiro(p);
+      if (transcurridos <= DIAS_HABILES_RETIRO) continue;
       // Solo si sigue Disponible con la misma fecha: una entrega hecha mientras corre el job gana.
       const revertida = await this.db.transaction(async (tx) => {
         const [u] = await tx
@@ -555,7 +581,7 @@ export class ProvisionesService {
         return true;
       });
       if (!revertida) continue;
-      await this.notificar({ ...p, estado: "Pagada" }, "Pagada", "Fondos no retirados en el plazo de 2 días hábiles", true);
+      await this.notificar({ ...p, estado: "Pagada" }, "Pagada", "Fondos no retirados en el plazo de 2 días hábiles", null, true);
       n++;
     }
     return n;
@@ -638,26 +664,51 @@ export class ProvisionesService {
     await tx.insert(provisionesEventos).values({ provisionId, estadoDesde: desde, estadoHasta: hasta, usuarioId, observacion });
   }
 
-  // Avisa al abogado que solicitó la provisión (y al jefe que la autorizó, si aplica).
-  private async notificar(p: Provision, estado: EstadoProvision, observacion: string | null, incluirJefe = false) {
+  // Avisos del flujo de provisiones (Anexo §X), según la etapa: al contador al solicitar y al
+  // rendir; al abogado y su jefatura al pagarse y quedar disponible; a la jefatura al pedir la
+  // entrega; a Finanzas (EF/GAF) al autorizarse y si los fondos vuelven por no retirarse. Nunca a
+  // quien hizo la acción.
+  private async notificar(p: Provision, estado: EstadoProvision, observacion: string | null, actorId: string | null, reversion = false) {
     const [a] = await this.db
       .select({ codPlan: atenciones.codPlan, correlativo: atenciones.correlativo })
       .from(atenciones)
       .where(eq(atenciones.id, p.atencionId));
     if (!a) return;
-    const destinatarios = new Set([p.solicitadaPorId]);
-    if (incluirJefe && p.resueltaPorId) destinatarios.add(p.resueltaPorId);
-    for (const usuarioId of destinatarios) {
-      await this.notif.crear({
+    const abogado = p.solicitadaPorId;
+    const jefe = await jefeDe(this.db, abogado);
+    const destinatarios: (string | null)[] = [];
+    if (reversion) {
+      destinatarios.push(abogado, jefe, p.resueltaPorId, ...(await this.usuariosConPermiso(["provisiones.disponer_entregar"])));
+    } else if (estado === "Solicitada" || estado === "Rendida") {
+      destinatarios.push(...(await this.usuariosConPermiso(["provisiones.registrar_pago"])));
+    } else if (estado === "EnAprobacion") {
+      destinatarios.push(...(jefe ? [jefe] : await this.usuariosConPermiso(["provisiones.autorizar"])));
+    } else if (estado === "Autorizada") {
+      destinatarios.push(abogado, ...(await this.usuariosConPermiso(["provisiones.disponer_entregar"])));
+    } else if (estado === "Pagada" || estado === "Disponible") {
+      destinatarios.push(abogado, jefe);
+    } else {
+      destinatarios.push(abogado);
+    }
+    const titulo =
+      estado === "Solicitada"
+        ? `Provisión solicitada en ${a.correlativo}: registrar el pago del cliente`
+        : estado === "EnAprobacion"
+          ? `Entrega de provisión por autorizar: ${a.correlativo}`
+          : `Provisión ${a.correlativo}: ${ESTADO_PROVISION_LABEL[estado]}`;
+    await avisar(
+      this.notif,
+      destinatarios,
+      {
         codPlan: a.codPlan,
-        usuarioId,
-        severidad: estado === "Disponible" ? "warn" : "info",
-        titulo: `Provisión ${a.correlativo}: ${ESTADO_PROVISION_LABEL[estado]}`,
+        severidad: estado === "Disponible" || estado === "EnAprobacion" || reversion ? "warn" : "info",
+        titulo,
         detalle: observacion ?? `${clp(p.monto)} — ${p.motivo}`,
         accionUrl: `/atenciones/${p.atencionId}`,
         metadata: { provisionId: p.id, estado },
-      });
-    }
+      },
+      actorId,
+    );
   }
 
   // 404 si la provisión no existe o pertenece a una atención que el usuario no ve.

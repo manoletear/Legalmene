@@ -17,6 +17,8 @@ import { valoresUf } from "../../db/schema/aranceles";
 import { arancelesAtencion, arancelesAtencionEventos, ArancelAtencionRow } from "../../db/schema/finanzas";
 import { usuarios } from "../../db/schema/usuarios";
 import { CoberturasService } from "./coberturas.service";
+import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
+import { avisar, equipoDeAtencion, usuariosConPermiso } from "../notif-inbox/destinatarios";
 import { ufCentesimasAClp } from "./copago";
 
 type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -29,6 +31,7 @@ export class ArancelesAtencionService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     @Inject(CoberturasService) private readonly coberturas: CoberturasService,
+    @Inject(NotifInboxService) private readonly notif: NotifInboxService,
   ) {}
 
   private async snapshot(atencionId: string) {
@@ -122,8 +125,29 @@ export class ArancelesAtencionService {
     });
   }
 
-  enviarAprobacion(atencionId: string, usuarioId: string) {
-    return this.transicionar(atencionId, "EnAprobacion", usuarioId);
+  async enviarAprobacion(atencionId: string, usuarioId: string) {
+    const row = await this.transicionar(atencionId, "EnAprobacion", usuarioId);
+    await this.avisar(atencionId, "EnAprobacion", usuarioId);
+    return row;
+  }
+
+  // Avisos del flujo de arancel (Anexo §IX): a la jefatura al enviarlo, al abogado al rechazarlo,
+  // a Finanzas al aprobarlo y al abogado y su jefatura al registrar el pago.
+  private async avisar(atencionId: string, etapa: "EnAprobacion" | "Rechazado" | "Aprobado" | "Pagado", actorId: string, detalle?: string) {
+    const equipo = await equipoDeAtencion(this.db, atencionId);
+    if (!equipo) return;
+    const base = { codPlan: equipo.codPlan, accionUrl: `/atenciones/${atencionId}`, metadata: { atencionId, arancel: etapa } };
+    if (etapa === "EnAprobacion") {
+      const aprobadores = equipo.jefeId ? [equipo.jefeId] : await usuariosConPermiso(this.db, ["aranceles_atencion.aprobar"]);
+      await avisar(this.notif, aprobadores, { ...base, severidad: "warn", titulo: `Arancel por aprobar: ${equipo.correlativo}` }, actorId);
+    } else if (etapa === "Rechazado") {
+      await avisar(this.notif, [equipo.abogadoId], { ...base, severidad: "warn", titulo: `Arancel rechazado: ${equipo.correlativo}`, detalle }, actorId);
+    } else if (etapa === "Aprobado") {
+      const finanzas = await usuariosConPermiso(this.db, ["aranceles_atencion.registrar_pago"]);
+      await avisar(this.notif, [...finanzas, equipo.abogadoId], { ...base, titulo: `Arancel aprobado, pendiente de pago: ${equipo.correlativo}` }, actorId);
+    } else {
+      await avisar(this.notif, [equipo.abogadoId, equipo.jefeId], { ...base, titulo: `Arancel pagado: ${equipo.correlativo}`, detalle }, actorId);
+    }
   }
 
   // Cuatro ojos: quien envió el arancel a aprobación no lo aprueba ni lo rechaza.
@@ -143,13 +167,17 @@ export class ArancelesAtencionService {
 
   async aprobar(atencionId: string, usuarioId: string, observacion?: string) {
     await this.asegurarOtroAprobador(atencionId, usuarioId);
-    return this.transicionar(atencionId, "Aprobado", usuarioId, { motivoRechazo: null }, observacion ?? null);
+    const row = await this.transicionar(atencionId, "Aprobado", usuarioId, { motivoRechazo: null }, observacion ?? null);
+    await this.avisar(atencionId, "Aprobado", usuarioId);
+    return row;
   }
 
   // El rechazo devuelve el arancel a Requerido (rojo) con el motivo para corregirlo.
   async rechazar(atencionId: string, usuarioId: string, motivo: string) {
     await this.asegurarOtroAprobador(atencionId, usuarioId);
-    return this.transicionar(atencionId, "Requerido", usuarioId, { motivoRechazo: motivo }, motivo, "Rechazado");
+    const row = await this.transicionar(atencionId, "Requerido", usuarioId, { motivoRechazo: motivo }, motivo, "Rechazado");
+    await this.avisar(atencionId, "Rechazado", usuarioId, motivo);
+    return row;
   }
 
   // El monto en pesos se calcula con la UF del día del pago (Anexo §IX 5.4).
@@ -161,7 +189,7 @@ export class ArancelesAtencionService {
       throw new BadRequestException(`No hay valor UF cargado para el ${fechaCl(input.fechaPago)}; cárguelo antes de registrar el pago`);
     }
     const montoClp = ufCentesimasAClp(actual.copagoUfCentesimas ?? 0, uf.valorCentavos);
-    return this.transicionar(atencionId, "Pagado", usuarioId, {
+    const row = await this.transicionar(atencionId, "Pagado", usuarioId, {
       fechaPago: input.fechaPago,
       medioPago: input.medio,
       cuotasPago: input.cuotas ?? null,
@@ -171,6 +199,8 @@ export class ArancelesAtencionService {
       comprobanteDocumentoId: input.comprobanteDocumentoId ?? null,
       registradoPorId: usuarioId,
     });
+    await this.avisar(atencionId, "Pagado", usuarioId, `${(montoClp ?? 0).toLocaleString("es-CL")} pesos (${input.medio})`);
+    return row;
   }
 
   async listar(f: CriteriosBusqueda & { estado?: EstadoArancelAtencion } = {}) {

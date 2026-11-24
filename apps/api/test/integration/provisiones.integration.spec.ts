@@ -76,7 +76,11 @@ const RUN = !!process.env.DATABASE_URL;
         ComprobantesPdfService,
         {
           provide: NotifInboxService,
-          useValue: { crear: async (n: { usuarioId: string; titulo: string }) => notifs.push(n) },
+          useValue: {
+            crear: async (n: { usuarioId: string; titulo: string }) => notifs.push(n),
+            crearBulk: async (items: { usuarioId: string; titulo: string }[]) => notifs.push(...items),
+            crearSiNoExisteUnseen: async (n: { usuarioId: string; titulo: string }) => notifs.push(n),
+          },
         },
       ],
     }).compile();
@@ -230,6 +234,8 @@ const RUN = !!process.env.DATABASE_URL;
 
     notifs.length = 0;
     expect(await service.revertirDisponiblesVencidas("2026-11-04")).toBe(0); // 2 días hábiles: aún en plazo
+    // Último día del plazo: recordatorio al abogado (y a su jefatura, si tiene).
+    expect(notifs.filter((x) => /Retire hoy/.test(x.titulo)).map((x) => x.usuarioId)).toContain(abogado);
     expect(await service.revertirDisponiblesVencidas("2026-11-05")).toBeGreaterThanOrEqual(1);
     const [actual] = await db.select().from(provisiones).where(eq(provisiones.id, p.id));
     expect(actual.estado).toBe("Pagada");
