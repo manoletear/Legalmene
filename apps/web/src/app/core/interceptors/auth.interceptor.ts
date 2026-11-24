@@ -3,10 +3,11 @@ import { inject } from "@angular/core";
 import { Router } from "@angular/router";
 import { catchError, throwError } from "rxjs";
 import { tokenSesion } from "../services/sesion.service";
+import { tokenEntra } from "../services/entra.service";
 
 function tokenActual(): string | null {
   try {
-    return tokenSesion() ?? localStorage.getItem("entra_token");
+    return tokenSesion() ?? tokenEntra();
   } catch {
     return null;
   }

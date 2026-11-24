@@ -1,3 +1,4 @@
+import { EntraService } from "../../core/services/entra.service";
 import { Component, OnInit, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
@@ -33,6 +34,11 @@ type Paso = "correo" | "enviado" | "verificando" | "error";
       <section class="lm-login-card" [ngSwitch]="paso()">
         <form *ngSwitchCase="'correo'" (ngSubmit)="enviar()" novalidate>
           <h2>Iniciar sesión</h2>
+          <ng-container *ngIf="entra.configurado">
+            <button pButton type="button" label="Ingresar con Microsoft" icon="pi pi-microsoft" [outlined]="true"
+              [loading]="conMicrosoft()" (click)="ingresarMicrosoft()" data-testid="login-microsoft"></button>
+            <p class="lm-small lm-login-separador">o con un enlace a tu correo</p>
+          </ng-container>
           <label for="lm-login-email">Correo electrónico</label>
           <input
             id="lm-login-email"
@@ -78,6 +84,7 @@ type Paso = "correo" | "enviado" | "verificando" | "error";
 })
 export class LoginComponent implements OnInit {
   private sesion = inject(SesionService);
+  protected entra = inject(EntraService);
   private me = inject(MeService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
@@ -94,6 +101,24 @@ export class LoginComponent implements OnInit {
     if (this.route.snapshot.url.some((s) => s.path === "verificar")) {
       if (token) this.verificar(token);
       else this.fallar("El enlace está incompleto. Solicite uno nuevo.");
+    }
+  }
+
+  protected conMicrosoft = signal(false);
+
+  // Ingreso con la cuenta Microsoft de LegalChile (Entra ID).
+  protected async ingresarMicrosoft() {
+    this.mensaje.set("");
+    this.conMicrosoft.set(true);
+    try {
+      if (!(await this.entra.ingresar())) return;
+      this.me.reiniciar();
+      this.me.load();
+      void this.router.navigateByUrl("/dashboard", { replaceUrl: true });
+    } catch {
+      this.mensaje.set("No pudimos ingresar con Microsoft. Inténtalo de nuevo o usa el enlace por correo.");
+    } finally {
+      this.conMicrosoft.set(false);
     }
   }
 

@@ -4,6 +4,8 @@ import { Observable, catchError, finalize, map, of, tap } from "rxjs";
 import type { SesionIniciada, SolicitudEnlaceResultado } from "@legalmene/shared";
 import { environment } from "../../../environments/environment";
 
+import { tokenEntra } from "./entra.service";
+
 const CLAVE_SESION = "lm.sesion";
 
 // Token de sesión del login con enlace de acceso. Si vence, la API responde 401 y el
@@ -29,7 +31,7 @@ export class SesionService {
   private base = `${environment.apiBaseUrl}/auth`;
 
   get activa(): boolean {
-    return !!tokenSesion();
+    return !!tokenSesion() || !!tokenEntra();
   }
 
   solicitarEnlace(email: string): Observable<SolicitudEnlaceResultado> {

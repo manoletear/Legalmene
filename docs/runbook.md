@@ -107,6 +107,12 @@ npx cdk deploy --all -c stage=prod -c webOrigin=https://… -c entraTenantId=…
   -c sesEnabled=true -c sesFrom=no-reply@legalchile.cl -c correoOperaciones=operaciones@legalchile.cl
 ```
 
+**Web y Entra ID.** Para ofrecer "Ingresar con Microsoft", registrar en el Entra ID de LegalChile una aplicación
+SPA (redirect URI = origen de la web) y una API con un ámbito expuesto; en
+`apps/web/src/environments/environment*.ts` poner `entra.clientId` (la SPA), `entra.authority`
+(`https://login.microsoftonline.com/<tenant>`) y `entra.scopes` (`["api://<id-api>/<ámbito>"]`), y en la API
+`entraTenantId` / `entraAudience` (= id de la API). Sin `clientId` la web solo ofrece el enlace por correo.
+
 **2. Imagen de la API** (desde la raíz del repo; el repositorio ECR lo crea el stack Compute):
 
 ```bash

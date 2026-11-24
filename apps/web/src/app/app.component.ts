@@ -1,3 +1,4 @@
+import { EntraService } from "./core/services/entra.service";
 import { Component, OnInit, ViewChild, inject, signal, computed } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
@@ -277,6 +278,7 @@ export class AppComponent implements OnInit {
   private router = inject(Router);
   private breakpoints = inject(BreakpointObserver);
   private sesion = inject(SesionService);
+  private entra = inject(EntraService);
 
   // La pantalla de login se muestra sin el menú ni el header.
   protected enLogin = signal(esRutaLogin(location.pathname));
@@ -387,6 +389,7 @@ export class AppComponent implements OnInit {
   protected cerrarSesion() {
     this.userPopover?.hide();
     this.sesion.cerrarEnServidor().subscribe(() => {
+      void this.entra.cerrar();
       this.sesionActiva.set(false);
       this.me.reiniciar();
       void this.router.navigate(["/login"]);

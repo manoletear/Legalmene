@@ -28,4 +28,10 @@ test.describe("Login con enlace de acceso", () => {
     await page.getByRole("link", { name: "Solicitar un enlace nuevo" }).click();
     await expect(page.getByLabel("Correo electrónico")).toBeVisible();
   });
+
+  test("sin clientId de Entra ID no se ofrece ingresar con Microsoft", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByRole("button", { name: "Enviar enlace de acceso" })).toBeVisible();
+    await expect(page.getByTestId("login-microsoft")).toHaveCount(0);
+  });
 });
