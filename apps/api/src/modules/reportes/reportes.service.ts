@@ -22,7 +22,7 @@ import {
 } from "@legalmene/shared";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { filtroAtenciones } from "../../common/acceso/alcance";
-import { fechaChile, rangoFechas } from "../../common/busqueda/criterios";
+import { fechaChile, rangoFechas, rutComparable } from "../../common/busqueda/criterios";
 import { atenciones } from "../../db/schema/atenciones";
 import { afiliados, planesAfiliado } from "../../db/schema/afiliados";
 import { formatearRut } from "../../common/utils/rut";
@@ -257,6 +257,12 @@ export class ReportesService {
       body.codPlan ? eq(atenciones.codPlan, body.codPlan) : undefined,
       body.canalId ? sql`${atenciones.codPlan} in (select p.cod_plan from planes p where p.canal_id = ${body.canalId})` : undefined,
       body.abogadoId ? eq(atenciones.abogadoAsignadoId, body.abogadoId) : undefined,
+      body.estado ? eq(atenciones.estado, body.estado) : undefined,
+      body.materiaId ? eq(atenciones.materiaId, body.materiaId) : undefined,
+      body.tema ? ilike(atenciones.asunto, `%${body.tema}%`) : undefined,
+      body.rut
+        ? sql`${atenciones.afiliadoId} in (select a.id from afiliados a where upper(regexp_replace(a.rut, '[^0-9kK]', '', 'g')) like ${`%${rutComparable(body.rut)}%`})`
+        : undefined,
     );
     const filas = await filasAtencionDetalle(this.db, where);
     const valorCampo = (r: FilaAtencionDetalle, c: CampoInformeAtencion): string | number => {

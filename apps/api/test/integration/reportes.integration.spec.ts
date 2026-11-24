@@ -174,6 +174,14 @@ const PERIODO = { desde: "2025-07-01", hasta: "2025-12-31" };
     expect(wb.getWorksheet("Consultas")!.rowCount).toBe(3);
     expect(wb.getWorksheet("Juicios")!.rowCount).toBe(2);
     expect(encabezados(wb.getWorksheet("Resumen")!)).toEqual(["Plan", "Consultas", "Juicios", "Total"]);
+    // Filtros por tema (asunto) y materia.
+    const filtrado = await leerLibro(
+      await ejecutarComo(como(gerencia), () =>
+        reportes.informeXlsx({ ...PERIODO, tipos: ["Consulta", "Juicio"], campos: ["correlativo"], codPlan: PLAN, tema: "2025-09", materiaId: cm.materiaId }),
+      ),
+    );
+    expect(filtrado.getWorksheet("Consultas")!.rowCount).toBe(2);
+    expect(filtrado.getWorksheet("Juicios")!.rowCount).toBe(1);
   });
 
   it("exportación de búsqueda: XLSX con las columnas del Anexo y el alcance del usuario", async () => {

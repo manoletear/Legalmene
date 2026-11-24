@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { TipoAtencionEnum } from "./atencion";
+import { EstadoAtencionEnum } from "./estados-atencion";
 
 const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha en formato AAAA-MM-DD");
 
@@ -131,6 +132,11 @@ export const InformeAtencionesSchema = z.object({
   codPlan: z.string().optional(),
   canalId: z.string().uuid().optional(),
   abogadoId: z.string().uuid().optional(),
+  // Anexo §XIII l.2156: también por cliente, estado, materia y tema.
+  rut: z.string().trim().min(1).max(20).optional(),
+  estado: EstadoAtencionEnum.optional(),
+  materiaId: z.string().uuid().optional(),
+  tema: z.string().trim().min(1).max(120).optional(),
 });
 export type InformeAtenciones = z.infer<typeof InformeAtencionesSchema>;
 

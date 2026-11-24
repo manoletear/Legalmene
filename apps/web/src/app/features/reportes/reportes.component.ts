@@ -12,6 +12,7 @@ import { TabsModule } from "primeng/tabs";
 import { MessageService } from "primeng/api";
 import {
   CAMPOS_CONTROLLER_ATENCIONES,
+  ESTADO_LABEL,
   CAMPOS_INFORME_AFILIADOS,
   type CampoControllerAtenciones,
   type FilaControllerAtencion,
@@ -27,6 +28,8 @@ import {
 import { ReportesApiService, type ParamsReporte } from "../../core/services/reportes.service";
 import { PlanesApiService } from "../../core/services/planes.service";
 import { MeService } from "../../core/services/me.service";
+import { UsuariosAdminService } from "../../core/services/usuarios-admin.service";
+import { MaestrosApiService } from "../../core/services/maestros.service";
 import { descargarArchivo } from "../../shared/descarga";
 
 type Vista = "plan" | "canal" | "afiliados" | "informe" | "informe-afiliados" | "controller" | "controller-tipo";
@@ -152,6 +155,26 @@ function hoyChile(): string {
                 <label class="lm-small">Tipos de atención (una hoja por tipo)</label>
                 <p-multiselect [(ngModel)]="tipos" [options]="tipoOpts" optionLabel="label" optionValue="value" placeholder="Elija tipos" appendTo="body" display="chip"></p-multiselect>
               </div>
+              <div class="lm-col" style="gap:4px;">
+                <label class="lm-small">Abogado</label>
+                <p-select [(ngModel)]="filtroInforme.abogadoId" [options]="abogadoOpts()" optionLabel="label" optionValue="value" placeholder="Todos" [showClear]="true" [filter]="true" appendTo="body" ariaLabel="Abogado"></p-select>
+              </div>
+              <div class="lm-col" style="gap:4px;">
+                <label class="lm-small">Estado</label>
+                <p-select [(ngModel)]="filtroInforme.estado" [options]="estadoOpts" optionLabel="label" optionValue="value" placeholder="Todos" [showClear]="true" appendTo="body" ariaLabel="Estado"></p-select>
+              </div>
+              <div class="lm-col" style="gap:4px;">
+                <label class="lm-small">Materia</label>
+                <p-select [(ngModel)]="filtroInforme.materiaId" [options]="materiaOpts()" optionLabel="label" optionValue="value" placeholder="Todas" [showClear]="true" [filter]="true" appendTo="body" ariaLabel="Materia"></p-select>
+              </div>
+              <div class="lm-col" style="gap:4px;">
+                <label class="lm-small">RUT del cliente</label>
+                <input pInputText name="rutInformeAt" [(ngModel)]="filtroInforme.rut" placeholder="Todos" />
+              </div>
+              <div class="lm-col" style="gap:4px;">
+                <label class="lm-small">Tema (asunto contiene)</label>
+                <input pInputText name="temaInforme" [(ngModel)]="filtroInforme.tema" placeholder="Todos" />
+              </div>
               <div class="lm-col" style="gap:4px; grid-column: span 2;">
                 <label class="lm-small">Campos</label>
                 <p-multiselect [(ngModel)]="campos" [options]="campoOpts" optionLabel="label" optionValue="value" placeholder="Elija campos" appendTo="body" display="chip"></p-multiselect>
@@ -269,6 +292,8 @@ export class ReportesComponent implements OnInit {
   private api = inject(ReportesApiService);
   private planesApi = inject(PlanesApiService);
   private me = inject(MeService);
+  private usuariosApi = inject(UsuariosAdminService);
+  private maestrosApi = inject(MaestrosApiService);
   private route = inject(ActivatedRoute);
   private msg = inject(MessageService);
 
@@ -299,6 +324,10 @@ export class ReportesComponent implements OnInit {
   protected codPlan: string | undefined;
   protected canalId: string | undefined;
   protected cargo = "";
+  protected filtroInforme = { abogadoId: "", estado: "", materiaId: "", rut: "", tema: "" };
+  protected abogadoOpts = signal<Opcion[]>([]);
+  protected materiaOpts = signal<Opcion[]>([]);
+  protected estadoOpts = (Object.entries(ESTADO_LABEL) as [string, string][]).map(([value, label]) => ({ label, value }));
   protected tipos: TipoAtencion[] = ["Consulta", "Asesoria", "Juicio"];
   protected campos: CampoInformeAtencion[] = ["correlativo", "tipo", "estado", "rut", "afiliado", "plan", "materia", "fechaApertura"];
 
@@ -326,6 +355,8 @@ export class ReportesComponent implements OnInit {
     if (v && ["plan", "canal", "afiliados", "informe", "informe-afiliados", "controller", "controller-tipo"].includes(v)) this.vista.set(v);
     this.planesApi.listar().subscribe((ps) => this.planOpts.set(ps.map((p) => ({ label: `${p.codPlan} — ${p.nombre}`, value: p.codPlan }))));
     this.planesApi.canales().subscribe((cs) => this.canalOpts.set(cs.map((c) => ({ label: c.nombre, value: c.id }))));
+    this.usuariosApi.opciones().subscribe((us) => this.abogadoOpts.set(us.map((u) => ({ label: u.nombre, value: u.id }))));
+    this.maestrosApi.listar("materias").subscribe((ms) => this.materiaOpts.set(ms.map((m) => ({ label: m.nombre, value: m.id }))));
   }
 
   cambiarVista(v: string | number | undefined) {
@@ -398,7 +429,20 @@ export class ReportesComponent implements OnInit {
       this.msg.add({ severity: "warn", summary: "Faltan datos", detail: "Elija al menos un tipo y un campo", life: 3000 });
       return;
     }
-    const body = { desde: this.desde, hasta: this.hasta, tipos: this.tipos, campos: this.campos, codPlan: this.codPlan, canalId: this.canalId };
+    const f = this.filtroInforme;
+    const body = {
+      desde: this.desde,
+      hasta: this.hasta,
+      tipos: this.tipos,
+      campos: this.campos,
+      codPlan: this.codPlan,
+      canalId: this.canalId,
+      abogadoId: f.abogadoId || undefined,
+      estado: f.estado || undefined,
+      materiaId: f.materiaId || undefined,
+      rut: f.rut.replace(/[.\s]/g, "").toUpperCase() || undefined,
+      tema: f.tema.trim() || undefined,
+    };
     await this.bajar("/reportes/informe.xlsx", "informe-atenciones", { body });
   }
 
