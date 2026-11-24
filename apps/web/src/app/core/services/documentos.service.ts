@@ -7,6 +7,7 @@ export interface DocumentoMeta {
   id: string;
   atencionId: string | null;
   nombre: string;
+  tipo?: string;
   mimeType: string;
   tamanoBytes: number;
   s3Bucket: string;
@@ -42,7 +43,7 @@ export class DocumentosApiService {
   // 2) PUT uploadUrl con el archivo (browser -> S3 directo, o -> API en dev local)
   // 3) Calcular SHA-256 del archivo
   // 4) POST /documentos con metadata
-  upload(atencionId: string | undefined, file: File): Observable<DocumentoMeta> {
+  upload(atencionId: string | undefined, file: File, tipo: string = "General"): Observable<DocumentoMeta> {
     const meta = {
       atencionId,
       nombre: file.name,
@@ -66,7 +67,7 @@ export class DocumentosApiService {
         ),
       ),
       switchMap(({ s3Key, sha256 }) =>
-        this.http.post<DocumentoMeta>(`${this.base}/documentos`, { ...meta, s3Key, sha256 }),
+        this.http.post<DocumentoMeta>(`${this.base}/documentos`, { ...meta, tipo, s3Key, sha256 }),
       ),
     );
   }

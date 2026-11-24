@@ -35,6 +35,7 @@ export interface UploadUrlResponse {
 export interface RegisterDocRequest {
   atencionId?: string;
   nombre: string;
+  tipo?: string;
   mimeType: string;
   tamanoBytes: number;
   s3Key: string;
@@ -88,6 +89,7 @@ export class DocumentosService {
     const payload: NuevoDocumento = {
       atencionId: input.atencionId ?? null,
       nombre: input.nombre,
+      tipo: input.tipo ?? "General",
       mimeType: input.mimeType,
       tamanoBytes: input.tamanoBytes,
       s3Bucket: this.storage.bucketName,

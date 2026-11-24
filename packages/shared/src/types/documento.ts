@@ -17,7 +17,32 @@ export const SolicitarSubidaSchema = z.object({
 });
 export type SolicitarSubida = z.infer<typeof SolicitarSubidaSchema>;
 
+// Tipo de documento (Anexo §VIII l.1009 acta de acuerdo, l.1039 constancia de apercibimiento,
+// l.1109 documentos recibidos por tribunal).
+export const TipoDocumentoEnum = z.enum([
+  "General",
+  "PresentadoTribunal",
+  "ResolucionTribunal",
+  "ActaAcuerdo",
+  "ConstanciaApercibimiento",
+  "Antecedente",
+  "Comprobante",
+  "InformeCliente",
+]);
+export type TipoDocumento = z.infer<typeof TipoDocumentoEnum>;
+export const TIPO_DOCUMENTO_LABEL: Record<TipoDocumento, string> = {
+  General: "General",
+  PresentadoTribunal: "Escrito presentado / recibido por tribunal",
+  ResolucionTribunal: "Resolución del tribunal",
+  ActaAcuerdo: "Acta de acuerdo con el cliente",
+  ConstanciaApercibimiento: "Constancia de apercibimiento al cliente",
+  Antecedente: "Antecedente del cliente",
+  Comprobante: "Comprobante",
+  InformeCliente: "Informe al cliente",
+};
+
 export const RegistrarDocumentoSchema = SolicitarSubidaSchema.extend({
+  tipo: TipoDocumentoEnum.default("General"),
   s3Key: z.string().min(1).max(500),
   sha256: z.string().regex(/^[0-9a-f]{64}$/, "Hash SHA-256 inválido"),
 });

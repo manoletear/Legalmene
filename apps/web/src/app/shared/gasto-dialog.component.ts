@@ -69,7 +69,7 @@ export class GastoDialogComponent implements OnInit {
     this.guardando.set(true);
     this.error.set(null);
     try {
-      const doc = await firstValueFrom(this.documentos.upload(this.data.atencionId, this.archivo));
+      const doc = await firstValueFrom(this.documentos.upload(this.data.atencionId, this.archivo, "Comprobante"));
       await firstValueFrom(
         this.provisiones.registrarMovimiento(this.data.provisionId, { tipo: "Gasto", monto: this.monto!, glosa: this.glosa.trim(), documentoId: doc.id }),
       );

@@ -45,6 +45,8 @@ import {
   ESTADO_ARANCEL_COLOR,
   ESTADO_ARANCEL_LABEL,
   CAMINO_PAGO_LABEL,
+  TIPO_DOCUMENTO_LABEL,
+  type TipoDocumento,
   DECISION_PROVISION_LABEL,
   type DecisionProvision,
   type CaminoPagoArancel,
@@ -393,7 +395,7 @@ interface PipelineStep {
                     <i class="pi pi-file"></i>
                     <div style="flex:1;">
                       <div>{{ d.nombre }}</div>
-                      <small class="lm-muted">{{ formatBytes(d.tamanoBytes) }} · {{ d.fechaSubida | date: 'short' }}</small>
+                      <small class="lm-muted"><span data-testid="tipo-documento">{{ tipoDocumento(d.tipo) }}</span> · {{ formatBytes(d.tamanoBytes) }} · {{ d.fechaSubida | date: 'short' }}</small>
                     </div>
                     <button pButton icon="pi pi-download" [text]="true" severity="secondary" (click)="descargar(d)"></button>
                   </div>
@@ -476,6 +478,8 @@ interface PipelineStep {
             <div class="lm-col" style="gap:8px;">
               <ng-container *lmPermiso="'documentos.subir'">
                 <input #archivoPdf type="file" accept="application/pdf,.pdf" hidden (change)="subirDocumento(a.id, archivoPdf)" />
+                <p-select [options]="tiposDocumento" optionLabel="label" optionValue="value" [(ngModel)]="tipoDocumentoNuevo"
+                  ariaLabel="Tipo de documento" appendTo="body" [style]="{ width: '100%' }" data-testid="tipo-documento-nuevo"></p-select>
                 <button
                   pButton
                   icon="pi pi-upload"
@@ -813,6 +817,12 @@ export class AtencionDetailComponent implements OnInit {
     return `${(b / (1024 * 1024)).toFixed(1)} MB`;
   }
 
+  protected tiposDocumento = (Object.entries(TIPO_DOCUMENTO_LABEL) as [TipoDocumento, string][]).map(([value, label]) => ({ label, value }));
+  protected tipoDocumentoNuevo: TipoDocumento = "General";
+  protected tipoDocumento(t?: string): string {
+    return TIPO_DOCUMENTO_LABEL[(t ?? "General") as TipoDocumento] ?? t ?? "General";
+  }
+
   // Anexo: los documentos de la atención se archivan en PDF (la API también lo exige).
   subirDocumento(atencionId: string, input: HTMLInputElement) {
     const archivo = input.files?.[0];
@@ -829,7 +839,7 @@ export class AtencionDetailComponent implements OnInit {
     }
     const pdf = archivo.type === "application/pdf" ? archivo : new File([archivo], archivo.name, { type: "application/pdf" });
     this.uploading.set(true);
-    this.documentosApi.upload(atencionId, pdf).subscribe({
+    this.documentosApi.upload(atencionId, pdf, this.tipoDocumentoNuevo).subscribe({
       next: (doc) => {
         this.uploading.set(false);
         this.documentos.update((l) => [doc, ...l]);

@@ -17,6 +17,8 @@ export const documentos = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     atencionId: uuid("atencion_id").references(() => atenciones.id, { onDelete: "set null" }),
     nombre: varchar("nombre", { length: 250 }).notNull(),
+    // TipoDocumentoEnum (shared): acta, constancia de apercibimiento, presentado al tribunal, etc.
+    tipo: varchar("tipo", { length: 30 }).notNull().default("General"),
     mimeType: varchar("mime_type", { length: 120 }).notNull(),
     tamanoBytes: integer("tamano_bytes").notNull(),
     s3Bucket: varchar("s3_bucket", { length: 120 }).notNull(),

@@ -14,9 +14,13 @@ test.describe("Documentos de la atención", () => {
     const atencion = lista.data[0];
     await page.goto(`/atenciones/${atencion.id}`);
     const nombre = `escrito-e2e-${Date.now()}.pdf`;
+    // Anexo §VIII l.1109: el escrito queda tipificado como presentado/recibido por el tribunal.
+    await page.getByTestId("tipo-documento-nuevo").click();
+    await page.getByRole("option", { name: "Escrito presentado / recibido por tribunal" }).click();
     await page.locator('input[type="file"][accept*="pdf"]').setInputFiles({ name: nombre, mimeType: "application/pdf", buffer: PDF });
     await expect(page.getByText("Documento subido").first()).toBeVisible();
     await expect(page.getByText(nombre).first()).toBeVisible();
+    await expect(page.getByTestId("tipo-documento").first()).toHaveText("Escrito presentado / recibido por tribunal");
   });
 
   test("la API rechaza archivos que no son PDF", async ({ request }) => {

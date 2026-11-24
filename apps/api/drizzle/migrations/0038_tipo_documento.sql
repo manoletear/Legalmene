@@ -1,0 +1,1 @@
+ALTER TABLE "documentos" ADD COLUMN "tipo" varchar(30) DEFAULT 'General' NOT NULL;
