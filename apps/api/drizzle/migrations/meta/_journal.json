@@ -253,6 +253,13 @@
       "when": 1795528596695,
       "tag": "0035_decision_provision",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1795528984238,
+      "tag": "0036_formatos_exportacion",
+      "breakpoints": true
     }
   ]
 }

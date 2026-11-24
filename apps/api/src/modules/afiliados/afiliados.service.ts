@@ -4,7 +4,10 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
+import { CorreosService } from "../correos/correos.service";
+import { plantillaCambioCorreo } from "../correos/plantillas";
 import { and, eq, exists, ilike, or, sql, count, desc } from "drizzle-orm";
 import type { AsignarPlan, BienAfiliado, CargaAfiliado } from "@legalmene/shared";
 import { DRIZZLE, Database } from "../../db/database.module";
@@ -25,7 +28,10 @@ import type { CreateAfiliadoDto, UpdateAfiliadoDto, FiltroAfiliadosDto } from ".
 
 @Injectable()
 export class AfiliadosService {
-  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: Database,
+    @Optional() @Inject(CorreosService) private readonly correos?: CorreosService,
+  ) {}
 
   async buscar(filtro: FiltroAfiliadosDto) {
     // q: si parece RUT/email/término corto usa ILIKE (más predecible para
@@ -189,7 +195,7 @@ export class AfiliadosService {
     return row;
   }
 
-  async actualizar(id: string, patch: UpdateAfiliadoDto): Promise<Afiliado> {
+  async actualizar(id: string, patch: UpdateAfiliadoDto, actorId?: string): Promise<Afiliado> {
     const actual = await this.obtener(id);
     if (actual.vigencia === "Eliminado") {
       throw new ConflictException("El afiliado está eliminado; restáurelo antes de editarlo");
@@ -206,6 +212,15 @@ export class AfiliadosService {
       })
       .where(eq(afiliados.id, id))
       .returning();
+    // Los correos al cliente van a esta dirección: si cambia, se avisa a la anterior para que un
+    // cambio indebido no pase inadvertido (revisión de seguridad run-3).
+    const antes = actual.email?.trim().toLowerCase();
+    const ahora = row.email?.trim().toLowerCase();
+    if (this.correos && antes && antes !== ahora) {
+      await this.correos
+        .enviar([antes], plantillaCambioCorreo({ cliente: row.nombres }), { plantilla: "cliente.cambio_correo", enviadoPorId: actorId ?? null })
+        .catch(() => null);
+    }
     return row;
   }
 

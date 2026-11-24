@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { createZodDto } from "nestjs-zod";
 import { z } from "zod";
 import type { Response } from "express";
-import { InformeAfiliadosSchema, InformeAtencionesSchema, PeriodoSchema } from "@legalmene/shared";
+import { ControllerAtencionesSchema, InformeAfiliadosSchema, InformeAtencionesSchema, PeriodoSchema } from "@legalmene/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Permiso } from "../../common/decorators/permiso.decorator";
 import { PermisosGuard } from "../../common/guards/permisos.guard";
@@ -28,6 +28,8 @@ class ControllerDto extends createZodDto(
     canalId: z.string().uuid().optional(),
   }),
 ) {}
+
+class ControllerAtencionesDto extends createZodDto(ControllerAtencionesSchema) {}
 
 function enviarXlsx(res: Response, nombre: string, archivo: Buffer) {
   res.setHeader("Content-Type", MIME_XLSX);
@@ -88,6 +90,18 @@ export class ReportesController {
   @Permiso("reportes.ver")
   async informeAfiliados(@Body() body: InformeAfiliadosDto, @Res() res: Response) {
     enviarXlsx(res, "informe-afiliados", await this.service.informeAfiliadosXlsx(body));
+  }
+
+  @Get("controller/atenciones")
+  @Permiso("controller.ver")
+  controllerAtenciones(@Query() q: ControllerAtencionesDto) {
+    return this.service.controllerAtenciones(q);
+  }
+
+  @Get("controller/atenciones.xlsx")
+  @Permiso("controller.ver")
+  async controllerAtencionesXlsx(@Query() q: ControllerAtencionesDto, @Res() res: Response) {
+    enviarXlsx(res, `controller-${q.tipo.toLowerCase()}-${q.codPlan}`.replace(/[^A-Za-z0-9_-]/g, "_"), await this.service.controllerAtencionesXlsx(q));
   }
 
   @Get("controller")

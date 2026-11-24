@@ -7,6 +7,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { sql } from "drizzle-orm";
 import ExcelJS from "exceljs";
 import type { Permiso } from "@legalmene/shared";
+import { coberturas } from "../../src/db/schema/aranceles";
 import { DatabaseModule, PG_POOL } from "../../src/db/database.module";
 import { canales, planes } from "../../src/db/schema/planes";
 import { AfiliadosService } from "../../src/modules/afiliados/afiliados.service";
@@ -182,6 +183,50 @@ const PERIODO = { desde: "2025-07-01", hasta: "2025-12-31" };
     expect(encabezados(wb.worksheets[0]).slice(0, 3)).toEqual(["Correlativo", "RUT afiliado", "Nombre afiliado"]);
     const propias = await ejecutarComo(como(abogadoB), () => exportsSrv.busqueda("consultas", { codPlan: PLAN }));
     expect(propias.filas).toBe(0);
+  });
+
+  it("controller por tipo: nómina del plan, materias cubiertas y vigencia RUT–plan; campos elegidos", async () => {
+    const db = drizzle(pool);
+    const g = como(gerencia);
+    // Consultas: sin cruce de materias; la de a2 queda fuera de su vigencia.
+    const consultas = await ejecutarComo(g, () => reportes.controllerAtenciones({ tipo: "Consulta", codPlan: PLAN }));
+    expect(consultas.map((r) => r.fechaApertura.slice(0, 10)).sort()).toEqual(["2025-09-15", "2026-01-10"]);
+    expect(consultas[0]).toMatchObject({ vigenciaInicio: "2024-01-01", vigenciaTermino: null });
+    // Juicios: el plan no cubre la materia → nada; con cobertura, aparece.
+    expect(await ejecutarComo(g, () => reportes.controllerAtenciones({ tipo: "Juicio", codPlan: PLAN }))).toEqual([]);
+    await db.insert(coberturas).values({ codPlan: PLAN, materiaId: cm.materiaId, tipo: "Juicio", modalidad: "Porcentaje", porcentaje: 50 });
+    try {
+      const juicios = await ejecutarComo(g, () => reportes.controllerAtenciones({ tipo: "Juicio", codPlan: PLAN, desde: PERIODO.desde, hasta: PERIODO.hasta }));
+      expect(juicios).toHaveLength(1);
+      const buf = await ejecutarComo(g, () => reportes.controllerAtencionesXlsx({ tipo: "Juicio", codPlan: PLAN, campos: ["correlativo", "rut"] }));
+      const wb = await leerLibro(buf);
+      expect(wb.worksheets.map((w) => w.name)).toEqual(["Resumen", "Detalle"]);
+      expect(encabezados(wb.worksheets[1])).toEqual(["Correlativo", "RUT"]);
+      expect(wb.worksheets[0].getRow(2).getCell(4).value).toBe(1);
+    } finally {
+      await db.execute(sql`DELETE FROM coberturas WHERE cod_plan = ${PLAN}`);
+    }
+    // Sin permiso de ver afiliados no se entrega (datos personales).
+    await expect(
+      ejecutarComo({ usuarioId: gerencia.id, permisos: new Set(["controller.ver"] as Permiso[]) }, () => reportes.controllerAtenciones({ tipo: "Consulta", codPlan: PLAN })),
+    ).rejects.toThrow(/ver afiliados/);
+  });
+
+  it("formato del administrador: solo las columnas elegidas, en su orden", async () => {
+    const disponibles = await exportsSrv.columnasDisponibles("derivaciones");
+    expect(disponibles.length).toBeGreaterThan(3);
+    await expect(exportsSrv.guardarFormato("derivaciones", ["No existe"], gerencia.id)).rejects.toThrow(/no existen/);
+    const elegidas = [disponibles[2], disponibles[0]];
+    try {
+      const f = await exportsSrv.guardarFormato("derivaciones", elegidas, gerencia.id);
+      expect(f.columnas).toEqual(elegidas);
+      const { archivo } = await ejecutarComo(como(gerencia), () => exportsSrv.busqueda("derivaciones", { codPlan: PLAN }));
+      expect(encabezados((await leerLibro(archivo)).worksheets[0])).toEqual(elegidas);
+    } finally {
+      await exportsSrv.quitarFormato("derivaciones");
+    }
+    const { archivo } = await ejecutarComo(como(gerencia), () => exportsSrv.busqueda("derivaciones", { codPlan: PLAN }));
+    expect(encabezados((await leerLibro(archivo)).worksheets[0])).toEqual(disponibles);
   });
 
   it("exportación de juicios: incluye la columna Bienes", async () => {

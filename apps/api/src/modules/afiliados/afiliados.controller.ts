@@ -1,3 +1,4 @@
+import { CurrentUser, AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 import {
   Body,
   Controller,
@@ -71,8 +72,8 @@ export class AfiliadosController {
 
   @Patch(":id")
   @Permiso("afiliados.editar")
-  actualizar(@Param("id") id: string, @Body() body: UpdateAfiliadoDto) {
-    return this.service.actualizar(id, body);
+  actualizar(@Param("id") id: string, @Body() body: UpdateAfiliadoDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.actualizar(id, body, user?.id);
   }
 
   @Delete(":id")

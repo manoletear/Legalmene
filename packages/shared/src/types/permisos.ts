@@ -71,6 +71,7 @@ export const MODULOS_PERMISOS = [
       "reportes.ver": "Ver reportes",
       "controller.ver": "Ver carga de trabajo por usuario (controller)",
       "exportar.datos": "Exportar datos a planilla",
+      "exportar.formatos": "Definir los formatos (columnas) de las exportaciones",
     },
   },
   {

@@ -1,7 +1,8 @@
-import { BadRequestException, Controller, Get, Header, Inject, Param, ParseUUIDPipe, Query, Res, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Header, Inject, Param, ParseUUIDPipe, Put, Query, Res, UseGuards } from "@nestjs/common";
+import { CurrentUser, AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 import { createZodDto } from "nestjs-zod";
 import { z } from "zod";
-import { BUSQUEDAS_EXPORTABLES, CriteriosBusquedaSchema, TipoPagoEnum, type BusquedaExportable } from "@legalmene/shared";
+import { BUSQUEDAS_EXPORTABLES, CriteriosBusquedaSchema, FormatoExportacionSchema, TipoPagoEnum, type BusquedaExportable } from "@legalmene/shared";
 import { MIME_XLSX } from "./xlsx";
 import { Response } from "express";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
@@ -21,6 +22,13 @@ class FiltroExportacionDto extends createZodDto(
     tipoPago: TipoPagoEnum.optional(),
   }),
 ) {}
+
+function claveExportable(tipo: string): BusquedaExportable {
+  if (!(BUSQUEDAS_EXPORTABLES as readonly string[]).includes(tipo)) throw new BadRequestException(`Búsqueda ${tipo} no exportable`);
+  return tipo as BusquedaExportable;
+}
+
+class FormatoExportacionDto extends createZodDto(FormatoExportacionSchema) {}
 
 @ApiTags("exports")
 @ApiBearerAuth("EntraID")
@@ -69,6 +77,26 @@ export class ExportsController {
   async reciboProvision(@Param("provisionId", ParseUUIDPipe) provisionId: string, @Res() res: Response) {
     const c = await this.comprobantes.reciboProvision(provisionId);
     this.enviarComprobante(c, `comprobante-provision-${c.numero}.pdf`, res);
+  }
+
+  // Formatos de exportación del administrador (Anexo §XIII l.2207).
+  @Get("formatos")
+  @Permiso("exportar.formatos")
+  formatos() {
+    return this.service.formatos();
+  }
+
+  @Put("formatos/:tipo")
+  @Permiso("exportar.formatos")
+  guardarFormato(@Param("tipo") tipo: string, @Body() body: FormatoExportacionDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.guardarFormato(claveExportable(tipo), body.columnas, user?.id ?? null);
+  }
+
+  @Delete("formatos/:tipo")
+  @Permiso("exportar.formatos")
+  async quitarFormato(@Param("tipo") tipo: string) {
+    await this.service.quitarFormato(claveExportable(tipo));
+    return { ok: true };
   }
 
   // Búsquedas del Anexo §XI en XLSX. Mismos criterios y alcance que la pantalla de búsqueda.

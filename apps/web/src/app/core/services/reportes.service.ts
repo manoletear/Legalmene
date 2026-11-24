@@ -2,7 +2,8 @@ import { Injectable, inject } from "@angular/core";
 import { HttpClient, HttpParams } from "@angular/common/http";
 import { Observable } from "rxjs";
 import { environment } from "../../../environments/environment";
-import type { FilaController, FilaReporteCanal, FilaReportePlan, SerieAfiliadosMes } from "@legalmene/shared";
+import type { FilaController,
+  FilaControllerAtencion, FilaReporteCanal, FilaReportePlan, SerieAfiliadosMes } from "@legalmene/shared";
 
 export type ParamsReporte = Record<string, string | undefined>;
 
@@ -27,6 +28,10 @@ export class ReportesApiService {
 
   afiliadosMes(p: ParamsReporte): Observable<SerieAfiliadosMes[]> {
     return this.http.get<SerieAfiliadosMes[]>(`${this.base}/afiliados-mes`, { params: params(p) });
+  }
+
+  controllerAtenciones(p: ParamsReporte): Observable<FilaControllerAtencion[]> {
+    return this.http.get<FilaControllerAtencion[]>(`${this.base}/controller/atenciones`, { params: params(p) });
   }
 
   controller(p: ParamsReporte): Observable<FilaController[]> {

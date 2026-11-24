@@ -9,6 +9,7 @@ import { DatabaseModule, PG_POOL } from "../../src/db/database.module";
 import { planes } from "../../src/db/schema/planes";
 import { AfiliadosService } from "../../src/modules/afiliados/afiliados.service";
 import { planAleatorio, rutAleatorio } from "./helpers";
+import { CorreosService } from "../../src/modules/correos/correos.service";
 
 // Integration test: requires a Postgres reachable via DATABASE_URL.
 // CI provides one as a service; locally export DATABASE_URL antes de correr.
@@ -22,11 +23,15 @@ const RUN = !!process.env.DATABASE_URL;
   const TEST_PLAN = planAleatorio();
   const rut = rutAleatorio();
   const creados: string[] = [];
+  const enviados: { para: string[]; plantilla: string }[] = [];
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true }), DatabaseModule],
-      providers: [AfiliadosService],
+      providers: [
+        AfiliadosService,
+        { provide: CorreosService, useValue: { enviar: async (para: string[], _c: unknown, op: { plantilla: string }) => (enviados.push({ para, plantilla: op.plantilla }), "Omitido") } },
+      ],
     }).compile();
     service = moduleRef.get(AfiliadosService);
     pool = moduleRef.get(PG_POOL);
@@ -97,5 +102,15 @@ const RUN = !!process.env.DATABASE_URL;
     creados.push(created.id);
     const deleted = await service.eliminar(created.id);
     expect(deleted.vigencia).toBe("Eliminado");
+  });
+
+  it("al cambiar el correo se avisa a la dirección anterior", async () => {
+    const a = await service.crear({ rut: rutAleatorio(), nombres: "Eva", apellidoPaterno: "Correo", email: "eva.antes@test.cl" });
+    creados.push(a.id);
+    enviados.length = 0;
+    await service.actualizar(a.id, { telefono: "+56911111111" });
+    expect(enviados).toEqual([]);
+    await service.actualizar(a.id, { email: "eva.nueva@test.cl" });
+    expect(enviados).toEqual([{ para: ["eva.antes@test.cl"], plantilla: "cliente.cambio_correo" }]);
   });
 });

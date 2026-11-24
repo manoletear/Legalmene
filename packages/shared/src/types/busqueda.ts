@@ -166,3 +166,67 @@ export const InformeAfiliadosSchema = z.object({
   rut: z.string().max(12).optional(),
 }).refine((p) => p.desde <= p.hasta, { message: "La fecha inicial no puede ser posterior a la final", path: ["hasta"] });
 export type InformeAfiliados = z.infer<typeof InformeAfiliadosSchema>;
+
+// Formatos de exportación definidos por el administrador (Anexo §XIII l.2207): columnas y orden
+// de cada búsqueda exportable. Sin formato guardado se exportan todas las columnas.
+export const FormatoExportacionSchema = z.object({
+  columnas: z.array(z.string().trim().min(1).max(80)).min(1).max(80),
+});
+export type FormatoExportacionInput = z.infer<typeof FormatoExportacionSchema>;
+export interface FormatoExportacion {
+  clave: BusquedaExportable;
+  disponibles: string[];
+  // null = sin formato (todas, en el orden del sistema).
+  columnas: string[] | null;
+  actualizadoEn: string | null;
+}
+
+// Controller de asesorías, juicios y consultas (Anexo §XIII l.2418–2460): nómina del plan, materias que
+// el plan cubre para ese tipo (no en consultas) y atenciones de esos RUT dentro de la vigencia RUT–plan,
+// sin importar el plan con que se registraron. Campos a mostrar elegibles.
+export const CAMPOS_CONTROLLER_ATENCIONES = {
+  rut: "RUT",
+  afiliado: "Afiliado",
+  correlativo: "Correlativo",
+  planAtencion: "Plan de la atención",
+  competencia: "Competencia",
+  materia: "Materia",
+  asunto: "Asunto",
+  estado: "Estado",
+  abogado: "Abogado",
+  fechaApertura: "Fecha atención",
+  fechaCierre: "Fecha término",
+  vigenciaInicio: "Inicio vigencia RUT–plan",
+  vigenciaTermino: "Término vigencia RUT–plan",
+} as const;
+export type CampoControllerAtenciones = keyof typeof CAMPOS_CONTROLLER_ATENCIONES;
+export const CampoControllerAtencionesEnum = z.enum(Object.keys(CAMPOS_CONTROLLER_ATENCIONES) as [CampoControllerAtenciones, ...CampoControllerAtenciones[]]);
+export const ControllerAtencionesSchema = z.object({
+  tipo: z.enum(["Consulta", "Asesoria", "Juicio"]),
+  codPlan: z.string().trim().min(1),
+  desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  // Separados por coma en la query (?campos=rut,correlativo). Sin campos, todos.
+  campos: z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .transform((v) => (v == null ? undefined : (Array.isArray(v) ? v : v.split(",")).map((x) => x.trim()).filter(Boolean)))
+    .pipe(z.array(CampoControllerAtencionesEnum).optional()),
+});
+export type ControllerAtenciones = z.infer<typeof ControllerAtencionesSchema>;
+export interface FilaControllerAtencion {
+  id: string;
+  rut: string;
+  afiliado: string;
+  correlativo: string;
+  planAtencion: string;
+  competencia: string;
+  materia: string;
+  asunto: string;
+  estado: string;
+  abogado: string | null;
+  fechaApertura: string;
+  fechaCierre: string | null;
+  vigenciaInicio: string;
+  vigenciaTermino: string | null;
+}

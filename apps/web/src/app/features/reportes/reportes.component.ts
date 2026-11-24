@@ -11,7 +11,10 @@ import { TableModule } from "primeng/table";
 import { TabsModule } from "primeng/tabs";
 import { MessageService } from "primeng/api";
 import {
+  CAMPOS_CONTROLLER_ATENCIONES,
   CAMPOS_INFORME_AFILIADOS,
+  type CampoControllerAtenciones,
+  type FilaControllerAtencion,
   CAMPOS_INFORME_ATENCIONES,
   type CampoInformeAfiliado,
   type CampoInformeAtencion,
@@ -26,7 +29,7 @@ import { PlanesApiService } from "../../core/services/planes.service";
 import { MeService } from "../../core/services/me.service";
 import { descargarArchivo } from "../../shared/descarga";
 
-type Vista = "plan" | "canal" | "afiliados" | "informe" | "informe-afiliados" | "controller";
+type Vista = "plan" | "canal" | "afiliados" | "informe" | "informe-afiliados" | "controller" | "controller-tipo";
 
 interface Opcion {
   label: string;
@@ -75,6 +78,7 @@ function hoyChile(): string {
           <p-tab value="informe">Informe de atenciones</p-tab>
           <p-tab value="informe-afiliados">Informe de afiliados</p-tab>
           <p-tab *ngIf="puedeController()" value="controller">Controller de usuarios</p-tab>
+          <p-tab *ngIf="puedeController()" value="controller-tipo">Controller por tipo</p-tab>
         </p-tablist>
         <p-tabpanels>
           <p-tabpanel value="plan">
@@ -196,6 +200,39 @@ function hoyChile(): string {
               <ng-template pTemplate="emptymessage"><tr><td colspan="8" class="lm-muted" style="text-align:center; padding:24px;">Sin usuarios con atenciones en el período.</td></tr></ng-template>
             </p-table>
           </p-tabpanel>
+          <!-- Anexo §XIII: nómina del plan, materias cubiertas y vigencia RUT–plan, sin importar el plan con que se registró. -->
+          <p-tabpanel *ngIf="puedeController()" value="controller-tipo">
+            <div class="lm-reporte-filtros" style="margin-bottom:12px;">
+              <div class="lm-col" style="gap:4px;">
+                <label class="lm-small">Tipo de atención</label>
+                <p-select [(ngModel)]="tipoController" [options]="tipoControllerOpts" optionLabel="label" optionValue="value" appendTo="body" ariaLabel="Tipo de atención"></p-select>
+              </div>
+              <div class="lm-col" style="gap:4px; grid-column: span 2;">
+                <label class="lm-small">Campos del Excel</label>
+                <p-multiSelect [(ngModel)]="camposController" [options]="campoControllerOpts" optionLabel="label" optionValue="value" display="chip" appendTo="body" ariaLabel="Campos"></p-multiSelect>
+              </div>
+            </div>
+            <p class="lm-small lm-muted" style="margin:0 0 8px;">Requiere elegir un plan arriba. Muestra las atenciones de los RUT del plan dentro de su vigencia{{ tipoController === 'Consulta' ? '' : ' y en materias que el plan cubre' }}.</p>
+            <ng-container *ngTemplateOutlet="acciones; context: { v: 'controller-tipo' }"></ng-container>
+            <p-table *ngIf="controllerTipo() as filas; else vacio" [value]="filas" styleClass="p-datatable-sm" [paginator]="filas.length > 50" [rows]="50">
+              <ng-template pTemplate="header">
+                <tr><th>RUT</th><th>Afiliado</th><th>Correlativo</th><th>Plan de la atención</th><th>Materia</th><th>Estado</th><th>Fecha</th><th>Vigencia RUT–plan</th></tr>
+              </ng-template>
+              <ng-template pTemplate="body" let-f>
+                <tr>
+                  <td class="lm-mono">{{ f.rut }}</td>
+                  <td>{{ f.afiliado }}</td>
+                  <td class="lm-mono">{{ f.correlativo }}</td>
+                  <td>{{ f.planAtencion }}</td>
+                  <td>{{ f.materia }}</td>
+                  <td>{{ f.estado }}</td>
+                  <td>{{ f.fechaApertura | date: 'dd-MM-yyyy' }}</td>
+                  <td class="lm-small">{{ f.vigenciaInicio }} → {{ f.vigenciaTermino || 'sin término' }}</td>
+                </tr>
+              </ng-template>
+              <ng-template pTemplate="emptymessage"><tr><td colspan="8" class="lm-muted" style="text-align:center; padding:24px;">Sin atenciones para el plan en el período.</td></tr></ng-template>
+            </p-table>
+          </p-tabpanel>
         </p-tabpanels>
       </p-tabs>
     </p-card>
@@ -240,6 +277,15 @@ export class ReportesComponent implements OnInit {
   protected canales = signal<FilaReporteCanal[] | null>(null);
   protected afiliadosMes = signal<SerieAfiliadosMes[] | null>(null);
   protected controller = signal<FilaController[] | null>(null);
+  protected controllerTipo = signal<FilaControllerAtencion[] | null>(null);
+  protected tipoController: "Consulta" | "Asesoria" | "Juicio" = "Asesoria";
+  protected tipoControllerOpts = [
+    { label: "Consultas", value: "Consulta" },
+    { label: "Asesorías", value: "Asesoria" },
+    { label: "Juicios", value: "Juicio" },
+  ];
+  protected camposController: CampoControllerAtenciones[] = Object.keys(CAMPOS_CONTROLLER_ATENCIONES) as CampoControllerAtenciones[];
+  protected campoControllerOpts = (Object.entries(CAMPOS_CONTROLLER_ATENCIONES) as [CampoControllerAtenciones, string][]).map(([value, label]) => ({ label, value }));
   protected planOpts = signal<Opcion[]>([]);
   protected canalOpts = signal<Opcion[]>([]);
   protected puedeController = computed(() => this.me.tiene("controller.ver"));
@@ -272,7 +318,7 @@ export class ReportesComponent implements OnInit {
 
   ngOnInit() {
     const v = this.route.snapshot.queryParamMap.get("vista") as Vista | null;
-    if (v && ["plan", "canal", "afiliados", "informe", "informe-afiliados", "controller"].includes(v)) this.vista.set(v);
+    if (v && ["plan", "canal", "afiliados", "informe", "informe-afiliados", "controller", "controller-tipo"].includes(v)) this.vista.set(v);
     this.planesApi.listar().subscribe((ps) => this.planOpts.set(ps.map((p) => ({ label: `${p.codPlan} — ${p.nombre}`, value: p.codPlan }))));
     this.planesApi.canales().subscribe((cs) => this.canalOpts.set(cs.map((c) => ({ label: c.nombre, value: c.id }))));
   }
@@ -303,13 +349,22 @@ export class ReportesComponent implements OnInit {
 
   private params(v: Vista): ParamsReporte {
     const base: ParamsReporte = { desde: this.desde, hasta: this.hasta };
+    if (v === "controller-tipo") return { ...base, tipo: this.tipoController, codPlan: this.codPlan, campos: this.camposController.join(",") || undefined };
     if (v !== "canal") base["codPlan"] = this.codPlan;
     if (v !== "plan") base["canalId"] = this.canalId;
     return base;
   }
 
+  private planElegido(v: Vista): boolean {
+    if (v === "controller-tipo" && !this.codPlan) {
+      this.msg.add({ severity: "warn", summary: "Falta el plan", detail: "El controller por tipo parte de la nómina de un plan", life: 3000 });
+      return false;
+    }
+    return true;
+  }
+
   generar(v: Vista) {
-    if (!this.periodoValido()) return;
+    if (!this.periodoValido() || !this.planElegido(v)) return;
     const p = this.params(v);
     this.cargando.set(true);
     const fin = { complete: () => this.cargando.set(false), error: (err: { error?: { message?: string }; message: string }) => this.fallo(err) };
@@ -317,6 +372,7 @@ export class ReportesComponent implements OnInit {
     else if (v === "canal") this.api.porCanal(p).subscribe({ next: (r) => this.canales.set(r), ...fin });
     else if (v === "afiliados") this.api.afiliadosMes(p).subscribe({ next: (r) => this.afiliadosMes.set(r), ...fin });
     else if (v === "controller") this.api.controller(p).subscribe({ next: (r) => this.controller.set(r), ...fin });
+    else if (v === "controller-tipo") this.api.controllerAtenciones(p).subscribe({ next: (r) => this.controllerTipo.set(r), ...fin });
   }
 
   private fallo(err: { error?: { message?: string }; message: string }) {
@@ -325,9 +381,9 @@ export class ReportesComponent implements OnInit {
   }
 
   async descargar(v: Vista) {
-    if (!this.periodoValido()) return;
-    const ruta = { plan: "plan", canal: "canal", afiliados: "afiliados-mes", controller: "controller", informe: "", "informe-afiliados": "" }[v];
-    await this.bajar(`/reportes/${ruta}.xlsx`, `reporte-${ruta}`, { params: this.params(v) });
+    if (!this.periodoValido() || !this.planElegido(v)) return;
+    const ruta = { plan: "plan", canal: "canal", afiliados: "afiliados-mes", controller: "controller", "controller-tipo": "controller/atenciones", informe: "", "informe-afiliados": "" }[v];
+    await this.bajar(`/reportes/${ruta}.xlsx`, `reporte-${ruta.replace("/", "-")}`, { params: this.params(v) });
   }
 
   async descargarInforme() {

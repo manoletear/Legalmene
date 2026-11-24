@@ -10,7 +10,8 @@ import {
   ForbiddenException,
   Optional,
 } from "@nestjs/common";
-import { and, asc, eq, count, inArray, isNull, or, sql, desc, getTableColumns } from "drizzle-orm";
+import { and, asc, eq, count, inArray, isNull, or, sql, desc, getTableColumns, gte } from "drizzle-orm";
+import { correosEnviados } from "../../db/schema/correos";
 import {
   ESTADOS_PROVISION_ABIERTOS,
   ESTADO_INICIAL,
@@ -647,6 +648,18 @@ export class AtencionesService {
       .where(eq(atenciones.id, id));
     if (!d.email) throw new BadRequestException("El afiliado no tiene correo registrado; agréguelo en su ficha");
     if (!this.correos) throw new BadRequestException("El envío de correos no está disponible");
+    // Texto libre hacia el cliente: a lo más 3 solicitudes por atención cada 24 horas.
+    const [envios] = await this.db
+      .select({ n: count() })
+      .from(correosEnviados)
+      .where(
+        and(
+          eq(correosEnviados.atencionId, id),
+          eq(correosEnviados.plantilla, "cliente.antecedentes"),
+          gte(correosEnviados.createdAt, new Date(Date.now() - 24 * 3600 * 1000)),
+        ),
+      );
+    if (Number(envios?.n ?? 0) >= 3) throw new ConflictException("Ya se enviaron 3 solicitudes de antecedentes en las últimas 24 horas");
     const [ab] = d.abogadoId ? await this.db.select({ nombre: usuarios.nombre }).from(usuarios).where(eq(usuarios.id, d.abogadoId)) : [];
     const plazo = input.plazo ? input.plazo.split("-").reverse().join("-") : null;
     const estado = await this.correos.enviar(

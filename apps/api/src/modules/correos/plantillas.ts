@@ -71,6 +71,16 @@ export function plantillaSolicitudAntecedentes(p: { cliente: string; abogado: st
   };
 }
 
+// A la dirección anterior del cliente cuando se cambia su correo de contacto.
+export function plantillaCambioCorreo(p: { cliente: string }): Contenido {
+  const lineas = [
+    `Estimado(a) ${p.cliente}:`,
+    "Le informamos que se cambió el correo de contacto registrado en LegalChile, y los avisos de sus atenciones se enviarán a la nueva dirección.",
+    "Si usted no solicitó este cambio, comuníquese con LegalChile a la brevedad.",
+  ];
+  return { asunto: textoLinea("LegalChile · Cambio de su correo de contacto"), html: marco("Cambio de correo de contacto", parrafos(lineas)), texto: lineas.join("\n\n") };
+}
+
 // Al cliente: enlace de pago en línea del arancel (Anexo §IX 3.ii, "Notificar Pago").
 export function plantillaPagoWebPay(p: { cliente: string; correlativo: string; montoClp: number; url: string }): Contenido {
   const lineas = [

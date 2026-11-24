@@ -15,6 +15,10 @@ import {
   type InformeAtenciones,
   type Periodo,
   type SerieAfiliadosMes,
+  CAMPOS_CONTROLLER_ATENCIONES,
+  type CampoControllerAtenciones,
+  type ControllerAtenciones,
+  type FilaControllerAtencion,
 } from "@legalmene/shared";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { filtroAtenciones } from "../../common/acceso/alcance";
@@ -396,6 +400,107 @@ export class ReportesService {
         filas,
       },
     ]);
+  }
+
+  // Controller de asesorías, juicios y consultas (Anexo §XIII l.2418–2460).
+  async controllerAtenciones(f: ControllerAtenciones): Promise<FilaControllerAtencion[]> {
+    this.asegurarVerAfiliados();
+    const fechaAtencion = fechaChile(atenciones.fechaApertura);
+    // Relación RUT–plan del plan elegido que contiene la fecha de la atención.
+    const enVigencia = sql`exists (select 1 from planes_afiliado pa where pa.afiliado_id = ${atenciones.afiliadoId}
+      and pa.cod_plan = ${f.codPlan} and pa.vigencia <> 'Eliminado'
+      and pa.fecha_inicio <= ${fechaAtencion} and (pa.fecha_termino is null or pa.fecha_termino >= ${fechaAtencion}))`;
+    // Materia cubierta por el plan para el tipo: la regla más específica no puede ser SinCobertura.
+    const cubierta = sql`coalesce((select c.modalidad from coberturas c where c.cod_plan = ${f.codPlan} and c.vigente
+      and (c.materia_id = ${atenciones.materiaId} or c.materia_id is null) and (c.tipo = ${atenciones.tipo} or c.tipo is null)
+      order by (c.materia_id is not null) desc, (c.tipo is not null) desc limit 1), 'SinCobertura') <> 'SinCobertura'`;
+    const where = and(
+      filtroAtenciones(),
+      eq(atenciones.tipo, f.tipo),
+      enVigencia,
+      f.tipo === "Consulta" ? undefined : cubierta,
+      rangoFechas(atenciones.fechaApertura, f.desde, f.hasta),
+    );
+    const [{ n }] = await this.db.select({ n: count() }).from(atenciones).where(where);
+    if (Number(n) > MAX_FILAS_EXPORTACION) {
+      throw new BadRequestException(`El controller tiene ${Number(n).toLocaleString("es-CL")} atenciones; acote el período`);
+    }
+    const filas = await filasAtencionDetalle(this.db, where);
+    if (!filas.length) return [];
+    const vig = await this.db
+      .select({ afiliadoId: planesAfiliado.afiliadoId, inicio: planesAfiliado.fechaInicio, termino: planesAfiliado.fechaTermino })
+      .from(planesAfiliado)
+      .where(and(eq(planesAfiliado.codPlan, f.codPlan), ne(planesAfiliado.vigencia, "Eliminado"), inArray(planesAfiliado.afiliadoId, [...new Set(filas.map((r) => r.afiliadoId))])));
+    const dia = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(d);
+    return filas
+      .map((r) => {
+        const d = dia(r.fechaApertura);
+        const v = vig.find((x) => x.afiliadoId === r.afiliadoId && x.inicio <= d && (!x.termino || x.termino >= d));
+        return {
+          id: r.id,
+          rut: r.rut,
+          afiliado: r.afiliado,
+          correlativo: r.correlativo,
+          planAtencion: r.codPlan,
+          competencia: r.competencia,
+          materia: r.materia,
+          asunto: r.asunto,
+          estado: r.estado,
+          abogado: r.abogado,
+          fechaApertura: r.fechaApertura.toISOString(),
+          fechaCierre: r.fechaCierre?.toISOString() ?? null,
+          vigenciaInicio: v?.inicio ?? "",
+          vigenciaTermino: v?.termino ?? null,
+        };
+      })
+      .sort((a, b) => a.rut.localeCompare(b.rut) || a.planAtencion.localeCompare(b.planAtencion) || a.fechaApertura.localeCompare(b.fechaApertura));
+  }
+
+  // Detalle con los campos elegidos y resumen agrupado por RUT y plan de la atención.
+  async controllerAtencionesXlsx(f: ControllerAtenciones): Promise<Buffer> {
+    const filas = await this.controllerAtenciones(f);
+    const fecha = (iso: string | null) => (iso ? new Intl.DateTimeFormat("es-CL", { timeZone: "America/Santiago" }).format(new Date(iso)) : "");
+    const valor: Record<CampoControllerAtenciones, (r: FilaControllerAtencion) => string> = {
+      rut: (r) => r.rut,
+      afiliado: (r) => r.afiliado,
+      correlativo: (r) => r.correlativo,
+      planAtencion: (r) => r.planAtencion,
+      competencia: (r) => r.competencia,
+      materia: (r) => r.materia,
+      asunto: (r) => r.asunto,
+      estado: (r) => r.estado,
+      abogado: (r) => r.abogado ?? "",
+      fechaApertura: (r) => fecha(r.fechaApertura),
+      fechaCierre: (r) => fecha(r.fechaCierre),
+      vigenciaInicio: (r) => r.vigenciaInicio,
+      vigenciaTermino: (r) => r.vigenciaTermino ?? "",
+    };
+    const campos = f.campos?.length ? f.campos : (Object.keys(CAMPOS_CONTROLLER_ATENCIONES) as CampoControllerAtenciones[]);
+    const grupos = new Map<string, { rut: string; afiliado: string; plan: string; n: number }>();
+    for (const r of filas) {
+      const k = `${r.rut}|${r.planAtencion}`;
+      const g = grupos.get(k) ?? { rut: r.rut, afiliado: r.afiliado, plan: r.planAtencion, n: 0 };
+      g.n++;
+      grupos.set(k, g);
+    }
+    type Grupo = { rut: string; afiliado: string; plan: string; n: number };
+    return libroXlsx([
+      {
+        nombre: "Resumen",
+        columnas: [
+          { titulo: "RUT", valor: (g: Grupo) => g.rut, ancho: 13 },
+          { titulo: "Afiliado", valor: (g: Grupo) => g.afiliado, ancho: 28 },
+          { titulo: "Plan de la atención", valor: (g: Grupo) => g.plan, ancho: 18 },
+          { titulo: "Atenciones", valor: (g: Grupo) => g.n },
+        ],
+        filas: [...grupos.values()],
+      },
+      {
+        nombre: "Detalle",
+        columnas: campos.map((c) => ({ titulo: CAMPOS_CONTROLLER_ATENCIONES[c], valor: valor[c] })),
+        filas,
+      },
+    ] as HojaGenerica[]);
   }
 
   // Los listados de RUT con datos personales exigen además ver afiliados.

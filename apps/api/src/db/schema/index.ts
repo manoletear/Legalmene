@@ -16,3 +16,4 @@ export * from "./finanzas";
 export * from "./posesiones";
 export * from "./agenda";
 export * from "./correos";
+export * from "./exportaciones";

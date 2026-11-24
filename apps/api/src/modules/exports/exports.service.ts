@@ -1,9 +1,13 @@
+import { AsyncLocalStorage } from "async_hooks";
+import { formatosExportacion } from "../../db/schema/exportaciones";
 import { BadRequestException, ForbiddenException, Inject, Injectable } from "@nestjs/common";
 import { and, count, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { posesionesEfectivas } from "../../db/schema/posesiones";
 import { alias } from "drizzle-orm/pg-core";
 import {
   MAX_FILAS_EXPORTACION,
+  BUSQUEDAS_EXPORTABLES,
+  type FormatoExportacion,
   type BusquedaExportable,
   type CriteriosBusqueda,
   type Permiso,
@@ -61,6 +65,7 @@ export function filasAtencionDetalle(db: Database, where: SQL | undefined) {
   return db
     .select({
       id: atenciones.id,
+      afiliadoId: atenciones.afiliadoId,
       correlativo: atenciones.correlativo,
       tipo: atenciones.tipo,
       codPlan: atenciones.codPlan,
@@ -110,6 +115,40 @@ export class ExportsService {
     if (extra && !(accesoActual()?.permisos.has(extra) ?? true)) {
       throw new ForbiddenException("Su perfil no puede exportar esta búsqueda");
     }
+    const h = await this.hoja(tipo, f);
+    // Formato del administrador: solo esas columnas, en ese orden (las que ya no existan se omiten).
+    const [formato] = await this.db.select().from(formatosExportacion).where(eq(formatosExportacion.clave, tipo));
+    const columnas = formato?.columnas.length
+      ? formato.columnas.map((t) => h.columnas.find((c) => c.titulo === t)).filter((c): c is ColumnaXlsx<never> => !!c)
+      : h.columnas;
+    return { archivo: await libroXlsx([{ ...h, columnas: columnas.length ? columnas : h.columnas }]), filas: h.filas.length };
+  }
+
+  private async asegurarTope(total: number) {
+    if (total > MAX_FILAS_EXPORTACION) {
+      throw new BadRequestException(
+        `La búsqueda tiene ${total.toLocaleString("es-CL")} filas y el máximo exportable es ${MAX_FILAS_EXPORTACION.toLocaleString("es-CL")}. Agregue criterios para acotarla.`,
+      );
+    }
+  }
+
+  private async contar(from: () => Promise<{ value: number }[]>): Promise<void> {
+    const [{ value }] = await from();
+    await this.asegurarTope(Number(value));
+  }
+
+  // Hoja sin escribir: busqueda() le aplica el formato del administrador y arma el libro.
+  private async libro<T>(nombre: string, columnas: ColumnaXlsx<T>[], filas: T[]) {
+    return { nombre, columnas: columnas as ColumnaXlsx<never>[], filas: filas as readonly unknown[] };
+  }
+
+  // En modo catálogo (columnas disponibles para el administrador) las consultas no traen filas.
+  private readonly catalogo = new AsyncLocalStorage<true>();
+  private acotar(where: SQL | undefined): SQL | undefined {
+    return this.catalogo.getStore() ? and(where, sql`false`) : where;
+  }
+
+  private async hoja(tipo: BusquedaExportable, f: FiltroExportacion) {
     const tipoAtencion = TIPO_POR_BUSQUEDA[tipo];
     if (tipoAtencion) return this.atenciones(tipoAtencion, f);
     switch (tipo) {
@@ -128,32 +167,48 @@ export class ExportsService {
     }
   }
 
-  private async asegurarTope(total: number) {
-    if (total > MAX_FILAS_EXPORTACION) {
-      throw new BadRequestException(
-        `La búsqueda tiene ${total.toLocaleString("es-CL")} filas y el máximo exportable es ${MAX_FILAS_EXPORTACION.toLocaleString("es-CL")}. Agregue criterios para acotarla.`,
-      );
+  // Columnas que el sistema exporta para la búsqueda, en su orden.
+  async columnasDisponibles(tipo: BusquedaExportable): Promise<string[]> {
+    const h = await this.catalogo.run(true, () => this.hoja(tipo, {} as FiltroExportacion));
+    return h.columnas.map((c) => c.titulo);
+  }
+
+  async formatos(): Promise<FormatoExportacion[]> {
+    const guardados = await this.db.select().from(formatosExportacion);
+    const out: FormatoExportacion[] = [];
+    for (const clave of BUSQUEDAS_EXPORTABLES) {
+      const g = guardados.find((x) => x.clave === clave);
+      out.push({ clave, disponibles: await this.columnasDisponibles(clave), columnas: g?.columnas ?? null, actualizadoEn: g?.updatedAt.toISOString() ?? null });
     }
+    return out;
   }
 
-  private async contar(from: () => Promise<{ value: number }[]>): Promise<void> {
-    const [{ value }] = await from();
-    await this.asegurarTope(Number(value));
+  async guardarFormato(clave: BusquedaExportable, columnas: string[], usuarioId: string | null): Promise<FormatoExportacion> {
+    const disponibles = await this.columnasDisponibles(clave);
+    const desconocidas = columnas.filter((c) => !disponibles.includes(c));
+    if (desconocidas.length) throw new BadRequestException(`Columnas que no existen en esta exportación: ${desconocidas.join(", ")}`);
+    const unicas = [...new Set(columnas)];
+    const [g] = await this.db
+      .insert(formatosExportacion)
+      .values({ clave, columnas: unicas, actualizadoPorId: usuarioId })
+      .onConflictDoUpdate({ target: formatosExportacion.clave, set: { columnas: unicas, actualizadoPorId: usuarioId, updatedAt: new Date() } })
+      .returning();
+    return { clave, disponibles, columnas: g.columnas, actualizadoEn: g.updatedAt.toISOString() };
   }
 
-  private async libro<T>(nombre: string, columnas: ColumnaXlsx<T>[], filas: T[]) {
-    return { archivo: await libroXlsx([{ nombre, columnas, filas }]), filas: filas.length };
+  async quitarFormato(clave: BusquedaExportable): Promise<void> {
+    await this.db.delete(formatosExportacion).where(eq(formatosExportacion.clave, clave));
   }
 
   // Anexo §XI A: listado de consultas, asesorías o juicios con sus columnas.
   private async atenciones(tipo: TipoAtencion, f: FiltroExportacion) {
-    const where = and(
+    const where = this.acotar(and(
       filtroAtenciones(),
       eq(atenciones.tipo, tipo),
       condicionAtencion(f),
       f.estado ? sql`${atenciones.estado} = ${f.estado}` : undefined,
       f.q ? sql`"atenciones"."search_vector" @@ plainto_tsquery('spanish', ${f.q})` : undefined,
-    );
+    ));
     await this.contar(() => this.db.select({ value: count() }).from(atenciones).where(where));
     const filas = await filasAtencionDetalle(this.db, where);
     type Fila = FilaAtencionDetalle;
@@ -217,7 +272,7 @@ export class ExportsService {
   // Anexo §XI B: una fila por relación RUT–Plan.
   private async afiliados(f: FiltroExportacion) {
     const rut = f.rut ? rutComparable(f.rut) : "";
-    const where = and(
+    const where = this.acotar(and(
       f.codPlan ? eq(planesAfiliado.codPlan, f.codPlan) : undefined,
       f.canalId ? eq(planes.canalId, f.canalId) : undefined,
       rut ? sql`upper(regexp_replace(${afiliados.rut}, '[^0-9kK]', '', 'g')) like ${`%${rut}%`}` : undefined,
@@ -226,7 +281,7 @@ export class ExportsService {
       f.q
         ? sql`(${afiliados.rut} ilike ${`%${f.q}%`} or ${afiliados.nombres} ilike ${`%${f.q}%`} or ${afiliados.apellidoPaterno} ilike ${`%${f.q}%`} or ${afiliados.email} ilike ${`%${f.q}%`})`
         : undefined,
-    );
+    ));
     const base = () =>
       this.db
         .select({ value: count() })
@@ -279,11 +334,11 @@ export class ExportsService {
   }
 
   private async derivaciones(f: FiltroExportacion) {
-    const where = and(
+    const where = this.acotar(and(
       filtroAtenciones(),
       condicionAtencion(f, derivaciones.createdAt),
       f.estado ? sql`${derivaciones.estado} = ${f.estado}` : undefined,
-    );
+    ));
     await this.contar(() =>
       this.db
         .select({ value: count() })
@@ -334,11 +389,11 @@ export class ExportsService {
 
   // Anexo §XI C: aranceles con su estado y fecha de movimiento.
   private async aranceles(f: FiltroExportacion) {
-    const where = and(
+    const where = this.acotar(and(
       filtroAtenciones(),
       condicionAtencion(f, arancelesAtencion.updatedAt),
       f.estado ? sql`${arancelesAtencion.estado} = ${f.estado}` : undefined,
-    );
+    ));
     await this.contar(() =>
       this.db
         .select({ value: count() })
@@ -386,11 +441,11 @@ export class ExportsService {
   }
 
   private async provisiones(f: FiltroExportacion) {
-    const where = and(
+    const where = this.acotar(and(
       filtroAtenciones(),
       condicionAtencion(f, provisiones.fechaSolicitud),
       f.estado ? sql`${provisiones.estado} = ${f.estado}` : undefined,
-    );
+    ));
     await this.contar(() =>
       this.db
         .select({ value: count() })
@@ -440,7 +495,7 @@ export class ExportsService {
 
   // Anexo §XI C WebPay: orden, fecha, contratante, RUT, monto, tipo, código, correo, región, comuna.
   private async pagos(f: FiltroExportacion) {
-    const where: SQL | undefined = condicionPagos(f as FiltroPagos);
+    const where: SQL | undefined = this.acotar(condicionPagos(f as FiltroPagos));
     await this.contar(() => this.db.select({ value: count() }).from(pagos).where(where));
     const filas = await this.db
       .select({

@@ -343,6 +343,7 @@ export class AppComponent implements OnInit {
         { label: "Perfiles", icon: "pi-key", route: "/admin/perfiles", permisos: ["perfiles.administrar"] },
         { label: "Correcciones", icon: "pi-undo", route: "/admin/correcciones", permisos: ["flujos.corregir"] },
         { label: "Maestros", icon: "pi-list", route: "/admin/maestros", permisos: ["maestros.administrar"] },
+        { label: "Formatos de exportación", icon: "pi-file-excel", route: "/admin/formatos-exportacion", permisos: ["exportar.formatos"] },
         { label: "Webhooks", icon: "pi-link", route: "/admin/webhooks", permisos: ["webhooks.ver"] },
       ],
     },
