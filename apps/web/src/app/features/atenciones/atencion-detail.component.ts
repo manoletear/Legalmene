@@ -292,6 +292,10 @@ interface PipelineStep {
                   </ng-container>
                 </div>
               </ng-container>
+              <div *ngIf="resumenProvision()?.materiaRequiereProvision && !resumenProvision()?.provisionado && !resumenProvision()?.pendientePago && !['NoAcepta', 'PagaDirecto'].includes(a.decisionProvision?.decision ?? '')"
+                class="lm-small" style="color:#b45309; margin-top:6px;" data-testid="requiere-provision">
+                <i class="pi pi-exclamation-triangle"></i> Esta materia requiere provisión de fondos: informe el monto al cliente y solicítela.
+              </div>
               <!-- Anexo §X 02: el cliente decide si provisiona; si no, o si paga directo, el flujo no opera. -->
               <div class="lm-small" data-testid="decision-provision" style="margin-top:6px;">
                 <span class="lm-muted">Cliente: </span>

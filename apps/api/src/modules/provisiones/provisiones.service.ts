@@ -29,6 +29,7 @@ import {
 import { DRIZZLE, Database } from "../../db/database.module";
 import { filtroAtenciones } from "../../common/acceso/alcance";
 import { atenciones } from "../../db/schema/atenciones";
+import { materias } from "../../db/schema/maestros";
 import { usuarios } from "../../db/schema/usuarios";
 import {
   provisiones,
@@ -170,7 +171,13 @@ export class ProvisionesService {
 
     const c = await this.cuenta(atencionId);
     const r = await this.rendicionActual(atencionId);
+    const [mat] = await this.db
+      .select({ requiere: materias.requiereProvision })
+      .from(atenciones)
+      .innerJoin(materias, eq(materias.id, atenciones.materiaId))
+      .where(eq(atenciones.id, atencionId));
     return {
+      materiaRequiereProvision: !!mat?.requiere,
       provisionado: Number(t?.provisionado ?? 0),
       entregado: Number(t?.entregado ?? 0),
       utilizado: Number(m?.gastos ?? 0),

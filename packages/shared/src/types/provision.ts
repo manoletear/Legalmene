@@ -231,6 +231,8 @@ export interface ResumenProvisionAtencion {
   rendidoCliente: number;
   // Rendición al cliente en curso o la última realizada.
   rendicion: RendicionCliente | null;
+  // La materia exige provisión de fondos (maestro de materias, Anexo §VII l.806).
+  materiaRequiereProvision?: boolean;
 }
 
 // Cuenta corriente por abogado (Anexo §X 12): saldos por entregar y montos por rendir.
