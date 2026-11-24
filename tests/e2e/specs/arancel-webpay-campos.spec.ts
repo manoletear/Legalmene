@@ -36,7 +36,9 @@ test.describe("Arancel por WebPay, decisión de provisión y campos adicionales"
   test("Notificar pago envía la orden y el pago WebPay deja el arancel pagado", async ({ page, request }) => {
     const hoy = hoyChile();
     const vigente = await request.get(`${API}/valores-uf/vigente?fecha=${hoy}`);
-    if (!vigente.ok() || (await vigente.json())?.fecha !== hoy) {
+    // Sin UF cargada la API responde sin cuerpo (null).
+    const cuerpo = vigente.ok() ? await vigente.text() : "";
+    if (!cuerpo || (JSON.parse(cuerpo) as { fecha?: string } | null)?.fecha !== hoy) {
       expect((await request.put(`${API}/valores-uf`, { data: { fecha: hoy, valorCentavos: 3_900_000 } })).ok()).toBeTruthy();
     }
     const { juicio } = await juicioDemo(request);
