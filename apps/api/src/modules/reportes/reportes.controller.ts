@@ -30,6 +30,16 @@ class ControllerDto extends createZodDto(
   }),
 ) {}
 
+class CompromisosDto extends createZodDto(
+  z.object({
+    estado: z.enum(["Pendiente", "Cumplido", "NoCumplido"]).optional(),
+    responsableId: z.string().uuid().optional(),
+    soloVencidos: z
+      .enum(["true", "false"])
+      .optional()
+      .transform((v) => v === "true"),
+  }),
+) {}
 class ControllerAtencionesDto extends createZodDto(ControllerAtencionesSchema) {}
 
 function enviarXlsx(res: Response, nombre: string, archivo: Buffer) {
@@ -91,6 +101,18 @@ export class ReportesController {
   @Permiso("reportes.ver")
   async informeAfiliados(@Body() body: InformeAfiliadosDto, @Res() res: Response) {
     enviarXlsx(res, "informe-afiliados", await this.service.informeAfiliadosXlsx(body));
+  }
+
+  @Get("compromisos")
+  @Permiso("reportes.ver")
+  compromisos(@Query() q: CompromisosDto) {
+    return this.service.compromisos(q);
+  }
+
+  @Get("compromisos.xlsx")
+  @Permiso("reportes.ver")
+  async compromisosXlsx(@Query() q: CompromisosDto, @Res() res: Response) {
+    enviarXlsx(res, "compromisos-comite", await this.service.compromisosXlsx(q));
   }
 
   @Get("controller/atenciones")

@@ -3,7 +3,7 @@ import { HttpClient, HttpParams } from "@angular/common/http";
 import { Observable } from "rxjs";
 import { environment } from "../../../environments/environment";
 import type { FilaController,
-  FilaControllerAtencion, FilaReporteCanal, FilaReportePlan, SerieAfiliadosMes } from "@legalmene/shared";
+  FilaControllerAtencion, FilaCompromisoReporte, FilaReporteCanal, FilaReportePlan, SerieAfiliadosMes } from "@legalmene/shared";
 
 export type ParamsReporte = Record<string, string | undefined>;
 
@@ -28,6 +28,10 @@ export class ReportesApiService {
 
   afiliadosMes(p: ParamsReporte): Observable<SerieAfiliadosMes[]> {
     return this.http.get<SerieAfiliadosMes[]>(`${this.base}/afiliados-mes`, { params: params(p) });
+  }
+
+  compromisos(p: ParamsReporte): Observable<FilaCompromisoReporte[]> {
+    return this.http.get<FilaCompromisoReporte[]>(`${this.base}/compromisos`, { params: params(p) });
   }
 
   controllerAtenciones(p: ParamsReporte): Observable<FilaControllerAtencion[]> {

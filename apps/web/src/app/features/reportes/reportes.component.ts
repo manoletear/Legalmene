@@ -1,7 +1,7 @@
 import { Component, OnInit, computed, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
-import { ActivatedRoute } from "@angular/router";
+import { ActivatedRoute, RouterLink } from "@angular/router";
 import { CardModule } from "primeng/card";
 import { ButtonModule } from "primeng/button";
 import { InputTextModule } from "primeng/inputtext";
@@ -16,6 +16,7 @@ import {
   CAMPOS_INFORME_AFILIADOS,
   type CampoControllerAtenciones,
   type FilaControllerAtencion,
+  type FilaCompromisoReporte,
   CAMPOS_INFORME_ATENCIONES,
   type CampoInformeAfiliado,
   type CampoInformeAtencion,
@@ -32,7 +33,7 @@ import { UsuariosAdminService } from "../../core/services/usuarios-admin.service
 import { MaestrosApiService } from "../../core/services/maestros.service";
 import { descargarArchivo } from "../../shared/descarga";
 
-type Vista = "plan" | "canal" | "afiliados" | "informe" | "informe-afiliados" | "controller" | "controller-tipo";
+type Vista = "plan" | "canal" | "afiliados" | "informe" | "informe-afiliados" | "controller" | "controller-tipo" | "compromisos";
 
 interface Opcion {
   label: string;
@@ -48,7 +49,7 @@ function hoyChile(): string {
 @Component({
   selector: "lm-reportes",
   standalone: true,
-  imports: [CommonModule, FormsModule, CardModule, ButtonModule, InputTextModule, SelectModule, MultiSelectModule, TableModule, TabsModule],
+  imports: [CommonModule, FormsModule, RouterLink, CardModule, ButtonModule, InputTextModule, SelectModule, MultiSelectModule, TableModule, TabsModule],
   template: `
     <h1 style="margin: 0 0 4px 0;">Reportes</h1>
     <p class="lm-muted" style="margin: 0 0 16px 0;">Elija el período y presione Generar. Todos los reportes se pueden descargar en Excel.</p>
@@ -86,6 +87,7 @@ function hoyChile(): string {
           <p-tab value="informe-afiliados">Informe de afiliados</p-tab>
           <p-tab *ngIf="puedeController()" value="controller">Controller de usuarios</p-tab>
           <p-tab *ngIf="puedeController()" value="controller-tipo">Controller por tipo</p-tab>
+          <p-tab value="compromisos">Compromisos de comité</p-tab>
         </p-tablist>
         <p-tabpanels>
           <p-tabpanel value="plan">
@@ -260,6 +262,30 @@ function hoyChile(): string {
               <ng-template pTemplate="emptymessage"><tr><td colspan="8" class="lm-muted" style="text-align:center; padding:24px;">Sin atenciones para el plan en el período.</td></tr></ng-template>
             </p-table>
           </p-tabpanel>
+          <!-- Anexo §XIII l.2280: seguimiento de actividades de comité pendientes. -->
+          <p-tabpanel value="compromisos">
+            <div class="lm-row" style="gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
+              <p-select [(ngModel)]="estadoCompromiso" [options]="estadoCompromisoOpts" optionLabel="label" optionValue="value" appendTo="body" ariaLabel="Estado del compromiso"></p-select>
+              <label class="lm-row lm-small" style="gap:6px; align-items:center;"><input type="checkbox" [(ngModel)]="soloVencidos" name="soloVencidos" /> Solo vencidos</label>
+            </div>
+            <ng-container *ngTemplateOutlet="acciones; context: { v: 'compromisos' }"></ng-container>
+            <p-table *ngIf="compromisos() as filas; else vacio" [value]="filas" styleClass="p-datatable-sm" [paginator]="filas.length > 50" [rows]="50">
+              <ng-template pTemplate="header">
+                <tr><th>Atención</th><th>Compromiso</th><th>Responsable</th><th>Registrado por</th><th>Plazo</th><th>Estado</th></tr>
+              </ng-template>
+              <ng-template pTemplate="body" let-f>
+                <tr>
+                  <td class="lm-mono"><a [routerLink]="['/atenciones', f.atencionId]">{{ f.correlativo }}</a></td>
+                  <td>{{ f.descripcion }}</td>
+                  <td>{{ f.responsable }}</td>
+                  <td class="lm-small">{{ f.registradoPor }}<div class="lm-muted">{{ f.registradoEn | date: 'dd-MM-yyyy' }}</div></td>
+                  <td>{{ f.plazo + 'T12:00:00Z' | date: 'dd-MM-yyyy' : 'UTC' }}</td>
+                  <td [class.lm-alerta]="f.vencido">{{ f.vencido ? 'Vencido' : f.estado }}</td>
+                </tr>
+              </ng-template>
+              <ng-template pTemplate="emptymessage"><tr><td colspan="6" class="lm-muted" style="text-align:center; padding:24px;">Sin compromisos.</td></tr></ng-template>
+            </p-table>
+          </p-tabpanel>
         </p-tabpanels>
       </p-tabs>
     </p-card>
@@ -307,6 +333,14 @@ export class ReportesComponent implements OnInit {
   protected afiliadosMes = signal<SerieAfiliadosMes[] | null>(null);
   protected controller = signal<FilaController[] | null>(null);
   protected controllerTipo = signal<FilaControllerAtencion[] | null>(null);
+  protected compromisos = signal<FilaCompromisoReporte[] | null>(null);
+  protected estadoCompromiso: "Pendiente" | "Cumplido" | "NoCumplido" = "Pendiente";
+  protected soloVencidos = false;
+  protected estadoCompromisoOpts = [
+    { label: "Pendientes", value: "Pendiente" },
+    { label: "Cumplidos", value: "Cumplido" },
+    { label: "No cumplidos", value: "NoCumplido" },
+  ];
   protected tipoController: "Consulta" | "Asesoria" | "Juicio" = "Asesoria";
   protected tipoControllerOpts = [
     { label: "Consultas", value: "Consulta" },
@@ -352,7 +386,7 @@ export class ReportesComponent implements OnInit {
 
   ngOnInit() {
     const v = this.route.snapshot.queryParamMap.get("vista") as Vista | null;
-    if (v && ["plan", "canal", "afiliados", "informe", "informe-afiliados", "controller", "controller-tipo"].includes(v)) this.vista.set(v);
+    if (v && ["plan", "canal", "afiliados", "informe", "informe-afiliados", "controller", "controller-tipo", "compromisos"].includes(v)) this.vista.set(v);
     this.planesApi.listar().subscribe((ps) => this.planOpts.set(ps.map((p) => ({ label: `${p.codPlan} — ${p.nombre}`, value: p.codPlan }))));
     this.planesApi.canales().subscribe((cs) => this.canalOpts.set(cs.map((c) => ({ label: c.nombre, value: c.id }))));
     this.usuariosApi.opciones().subscribe((us) => this.abogadoOpts.set(us.map((u) => ({ label: u.nombre, value: u.id }))));
@@ -385,6 +419,7 @@ export class ReportesComponent implements OnInit {
 
   private params(v: Vista): ParamsReporte {
     const base: ParamsReporte = { desde: this.desde, hasta: this.hasta };
+    if (v === "compromisos") return { estado: this.estadoCompromiso, soloVencidos: this.soloVencidos ? "true" : undefined };
     if (v === "controller-tipo") return { ...base, tipo: this.tipoController, codPlan: this.codPlan, campos: this.camposController.join(",") || undefined };
     if (v !== "canal") base["codPlan"] = this.codPlan;
     if (v !== "plan") base["canalId"] = this.canalId;
@@ -409,6 +444,7 @@ export class ReportesComponent implements OnInit {
     else if (v === "canal") this.api.porCanal(p).subscribe({ next: (r) => this.canales.set(r), ...fin });
     else if (v === "afiliados") this.api.afiliadosMes(p).subscribe({ next: (r) => this.afiliadosMes.set(r), ...fin });
     else if (v === "controller") this.api.controller(p).subscribe({ next: (r) => this.controller.set(r), ...fin });
+    else if (v === "compromisos") this.api.compromisos(p).subscribe({ next: (r) => this.compromisos.set(r), ...fin });
     else if (v === "controller-tipo") this.api.controllerAtenciones(p).subscribe({ next: (r) => this.controllerTipo.set(r), ...fin });
   }
 
@@ -419,7 +455,7 @@ export class ReportesComponent implements OnInit {
 
   async descargar(v: Vista) {
     if (!this.periodoValido() || !this.planElegido(v)) return;
-    const ruta = { plan: "plan", canal: "canal", afiliados: "afiliados-mes", controller: "controller", "controller-tipo": "controller/atenciones", informe: "", "informe-afiliados": "" }[v];
+    const ruta = { plan: "plan", canal: "canal", afiliados: "afiliados-mes", controller: "controller", "controller-tipo": "controller/atenciones", compromisos: "compromisos", informe: "", "informe-afiliados": "" }[v];
     await this.bajar(`/reportes/${ruta}.xlsx`, `reporte-${ruta.replace("/", "-")}`, { params: this.params(v) });
   }
 

@@ -237,3 +237,17 @@ export interface FilaControllerAtencion {
   vigenciaInicio: string;
   vigenciaTermino: string | null;
 }
+
+// Reporte de compromisos de comité (Anexo §XIII l.2280): seguimiento de actividades pendientes.
+export interface FilaCompromisoReporte {
+  id: string;
+  atencionId: string;
+  correlativo: string;
+  descripcion: string;
+  responsable: string;
+  registradoPor: string;
+  registradoEn: string;
+  plazo: string;
+  estado: string;
+  vencido: boolean;
+}

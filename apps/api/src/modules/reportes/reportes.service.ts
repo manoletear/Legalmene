@@ -19,6 +19,7 @@ import {
   type CampoControllerAtenciones,
   type ControllerAtenciones,
   type FilaControllerAtencion,
+  type FilaCompromisoReporte,
 } from "@legalmene/shared";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { filtroAtenciones } from "../../common/acceso/alcance";
@@ -29,7 +30,8 @@ import { formatearRut } from "../../common/utils/rut";
 import { planVigenteSql } from "../afiliados/vigencia";
 import { canales, planes } from "../../db/schema/planes";
 import { gestiones } from "../../db/schema/gestiones";
-import { comites, participantesComite } from "../../db/schema/comites";
+import { comites, compromisosComite, participantesComite } from "../../db/schema/comites";
+import { alias } from "drizzle-orm/pg-core";
 import { perfiles, usuarios } from "../../db/schema/usuarios";
 import { filasAtencionDetalle, type FilaAtencionDetalle } from "../exports/exports.service";
 import { libroXlsx, type ColumnaXlsx, type HojaGenerica } from "../exports/xlsx";
@@ -508,6 +510,64 @@ export class ReportesService {
       {
         nombre: "Detalle",
         columnas: campos.map((c) => ({ titulo: CAMPOS_CONTROLLER_ATENCIONES[c], valor: valor[c] })),
+        filas,
+      },
+    ] as HojaGenerica[]);
+  }
+
+  // Compromisos de comité (Anexo §XIII l.2280): por defecto los pendientes, acotados al alcance de atenciones.
+  async compromisos(f: { estado?: "Pendiente" | "Cumplido" | "NoCumplido"; responsableId?: string; soloVencidos?: boolean } = {}): Promise<FilaCompromisoReporte[]> {
+    const resp = alias(usuarios, "resp");
+    const reg = alias(usuarios, "reg");
+    const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(new Date());
+    const filas = await this.db
+      .select({
+        id: compromisosComite.id,
+        atencionId: compromisosComite.atencionId,
+        correlativo: atenciones.correlativo,
+        descripcion: compromisosComite.descripcion,
+        responsable: resp.nombre,
+        registradoPor: reg.nombre,
+        registradoEn: compromisosComite.createdAt,
+        plazo: compromisosComite.fechaCompromiso,
+        estado: compromisosComite.estado,
+      })
+      .from(compromisosComite)
+      .innerJoin(atenciones, eq(atenciones.id, compromisosComite.atencionId))
+      .innerJoin(resp, eq(resp.id, compromisosComite.responsableId))
+      .innerJoin(reg, eq(reg.id, compromisosComite.creadoPorId))
+      .where(
+        and(
+          filtroAtenciones(),
+          eq(compromisosComite.estado, f.estado ?? "Pendiente"),
+          f.responsableId ? eq(compromisosComite.responsableId, f.responsableId) : undefined,
+          f.soloVencidos ? sql`${compromisosComite.fechaCompromiso} < ${hoy}` : undefined,
+        ),
+      )
+      .orderBy(asc(compromisosComite.fechaCompromiso))
+      .limit(MAX_FILAS_EXPORTACION);
+    return filas.map((r) => ({
+      ...r,
+      registradoEn: r.registradoEn.toISOString(),
+      vencido: r.estado === "Pendiente" && r.plazo < hoy,
+    }));
+  }
+
+  async compromisosXlsx(f: Parameters<ReportesService["compromisos"]>[0]): Promise<Buffer> {
+    const filas = await this.compromisos(f);
+    type F = FilaCompromisoReporte;
+    return libroXlsx([
+      {
+        nombre: "Compromisos",
+        columnas: [
+          { titulo: "Atención", valor: (r: F) => r.correlativo, ancho: 18 },
+          { titulo: "Compromiso", valor: (r: F) => r.descripcion, ancho: 40 },
+          { titulo: "Responsable", valor: (r: F) => r.responsable, ancho: 24 },
+          { titulo: "Registrado por", valor: (r: F) => r.registradoPor, ancho: 24 },
+          { titulo: "Registrado el", valor: (r: F) => new Date(r.registradoEn).toLocaleDateString("es-CL", { timeZone: "America/Santiago" }) },
+          { titulo: "Plazo", valor: (r: F) => r.plazo },
+          { titulo: "Estado", valor: (r: F) => (r.vencido ? "Vencido" : r.estado) },
+        ],
         filas,
       },
     ] as HojaGenerica[]);

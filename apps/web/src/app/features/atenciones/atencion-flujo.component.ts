@@ -1,3 +1,5 @@
+import { CoberturasApiService } from "../../core/services/coberturas.service";
+import type { CopagoResultado } from "@legalmene/shared";
 import { PermisoDirective } from "../../core/permisos";
 import { Component, OnInit, computed, effect, inject, input, output, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
@@ -160,6 +162,11 @@ const MONEDAS: MonedaCuantia[] = ["CLP", "UF", "UTM", "USD"];
             <button pButton label="Derivar a juicio" icon="pi pi-share-alt" severity="secondary" [outlined]="true" (click)="solicitarDerivacion(a, 'Juicio')"></button>
           </ng-container>
         </div>
+        <!-- Anexo §VI l.643: la derivación se decide según los beneficios del plan. -->
+        <div *ngIf="(a.estado === 'Iniciada' || a.estado === 'Respondida') && beneficios().length" class="lm-small" data-testid="beneficio-derivacion" style="margin-top:6px;">
+          <span class="lm-muted">Beneficio del plan {{ a.codPlan }}: </span>
+          <span *ngFor="let b of beneficios(); let ultimo = last">{{ b.tipo === 'Asesoria' ? 'asesoría' : 'juicio' }} {{ b.texto }}{{ ultimo ? '' : ' · ' }}</span>
+        </div>
         <div *ngIf="derivaciones().length" style="margin-top:12px;">
           <div class="lm-small" style="font-weight:600;">Derivaciones</div>
           <div *ngFor="let d of derivaciones()" class="lm-row lm-small" style="gap:8px; padding:4px 0;">
@@ -301,6 +308,7 @@ export class AtencionFlujoComponent implements OnInit {
   private prompt = inject(PromptService);
   private router = inject(Router);
   private usuariosApi = inject(UsuariosAdminService);
+  private coberturasApi = inject(CoberturasApiService);
   protected nombres = signal(new Map<string, string>());
 
   protected canales = CANALES;
@@ -377,6 +385,7 @@ export class AtencionFlujoComponent implements OnInit {
     if (a.tipo === "Consulta") {
       this.maestros.listar("tipos-consulta", { vigente: true }).subscribe((r) => this.tiposConsulta.set(r));
       this.cargarDerivaciones(a.id);
+      this.cargarBeneficios(a.codPlan, a.materiaId);
     } else {
       this.maestros.listar("organismos", { vigente: true }).subscribe((r) => this.organismos.set(r));
       this.maestros.listar("calidades-procesales", { vigente: true }).subscribe((r) => this.calidades.set(r));
@@ -577,6 +586,26 @@ export class AtencionFlujoComponent implements OnInit {
       },
       error: (e) => this.error(e),
     });
+  }
+
+  protected beneficios = signal<{ tipo: "Asesoria" | "Juicio"; texto: string }[]>([]);
+  private cargarBeneficios(codPlan: string, materiaId: string) {
+    const uf = (c: CopagoResultado) => ((c.copagoUfCentesimas ?? 0) / 100).toLocaleString("es-CL", { minimumFractionDigits: 2 });
+    const pesos = (c: CopagoResultado) => (c.copagoClp != null ? " (aprox. $" + c.copagoClp.toLocaleString("es-CL") + ")" : "");
+    const fmt = (c: CopagoResultado) =>
+      !c.arancel
+        ? "sin arancel definido"
+        : c.modalidad === "SinCobertura" || !c.cobertura
+          ? "sin cobertura (requiere autorización)"
+          : !c.requiereCopago
+            ? "cubierta, sin copago"
+            : "con copago de " + uf(c) + " UF" + pesos(c);
+    for (const tipo of ["Asesoria", "Juicio"] as const) {
+      this.coberturasApi.copago(codPlan, materiaId, tipo).subscribe({
+        next: (c) => this.beneficios.update((l) => [...l.filter((x) => x.tipo !== tipo), { tipo, texto: fmt(c) }].sort((x, y) => x.tipo.localeCompare(y.tipo))),
+        error: () => undefined,
+      });
+    }
   }
 
   private cargarDerivaciones(id: string) {
