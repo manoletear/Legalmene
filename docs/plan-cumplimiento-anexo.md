@@ -107,7 +107,7 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 - [ ] Login con Microsoft (Entra ID / MSAL) en la web. (§I l.21)
 - [ ] Despliegue en AWS con la infraestructura CDK (Aurora Multi-AZ, ECS, S3, WAF), sin `AUTH_DISABLED`. (§I l.51)
 - [ ] Migración SQL Server 2008 → Aurora: scripts, ensayo y validación. (§I l.58)
-- [ ] Herramientas del administrador para reabrir o retroceder flujos. (§II l.156)
+- [x] Herramientas del administrador para reabrir o retroceder flujos. (§II l.156)
 - [ ] Manuales de usuario y de administrador; capacitación. (§I l.70)
 - [ ] Revalidar con una auditoría completa las unidades de run-1 cuyo código cambió, y las 3 áreas diferidas de run-2 (edición de atención vs comité, decisión de comité vs votos, comprobantes de otra atención).
 
@@ -150,3 +150,4 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 | 2026-11-24 | 6 | Agenda de citas (entrevistas, videollamadas, reuniones, audiencias y comparendos) con calendario mensual, topes, alcance por equipo, aviso de audiencias y Excel; comité como bitácora de compromisos con responsable y plazo, validados en el comité siguiente y con aviso de vencidos (migración 0029) | 15cdd91 |
 | 2026-11-24 | 2–3 | Avisos en la aplicación de los flujos de arancel y provisiones, consultas a la jefatura y errores 500 a administradores; reglas: provisión impaga detiene asesorías, procedimiento en juicios, cierre de comité marca "Revisado", espera de antecedentes en consultas, V°B° de la primera presentación y comprobante obligatorio en gastos (migración 0030). Cruce del detalle: 66 filas marcadas como cumplidas | 6da29a5, 094acd1, 90d8019 |
 | 2026-11-24 | 2 | Correos de los flujos sobre SES con plantillas en español y bitácora por atención (`correos_enviados`): arancel (con aprueba.arancel@), provisiones (solicitud.fondos@, autoriza.provision@), rendición al cliente, asignación de abogado, consultas a la jefatura, primera presentación, errores a administradores y resumen de cargas a operaciones@ con RUT nuevos y terminados. Al cliente: presentación del abogado, solicitud de antecedentes, inicio y término de gestiones marcadas y término de la atención (migraciones 0031–0032) | 27ec343 |
+| 2026-11-24 | 7 | Correcciones del administrador (`flujos.corregir`): reabrir atenciones, reiniciar derivaciones y retroceder aranceles y provisiones un paso, con motivo en la bitácora y auditoría; pantalla Administración → Correcciones | ver commit |

@@ -83,6 +83,7 @@ export const MODULOS_PERMISOS = [
       "auditoria.archivar": "Archivar auditoría",
       "webhooks.ver": "Ver webhooks y entregas",
       "webhooks.administrar": "Administrar webhooks",
+      "flujos.corregir": "Corregir registros y retroceder flujos (reabrir atenciones, reiniciar derivaciones, retroceder aranceles y provisiones)",
     },
   },
 ] as const;

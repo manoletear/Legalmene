@@ -1,3 +1,4 @@
+import { CorreccionesModule } from "./modules/correcciones/correcciones.module";
 import { CorreosModule } from "./modules/correos/correos.module";
 import { AgendaModule } from "./modules/agenda/agenda.module";
 import { Module } from "@nestjs/common";
@@ -57,6 +58,7 @@ import { PosesionesModule } from "./modules/posesiones/posesiones.module";
     ComitesModule,
     AgendaModule,
     CorreosModule,
+    CorreccionesModule,
     PagosModule,
     CargasMasivasModule,
     DocumentosModule,

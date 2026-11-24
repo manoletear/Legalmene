@@ -49,7 +49,7 @@ Dos hallazgos que corrigen lo que dice la documentación del propio repo:
 | 141 | Carga masiva de Afiliados, Atenciones, Bienes y Cargas | Cumple (fase 5) | `POST /cargas-masivas/atenciones` (solo FLUJO, `cargarAtenciones`). Antes: Afiliados, cargas y bienes: sí (`cargas-masivas.controller.ts:45-73`). **Atenciones: no.** |
 | 148-151 | Maestros: competencias, materias, gestiones por materia, tipos de consulta, causas de término, calidad procesal, procedimientos, tribunales, organismos | Cumple | `maestros.service.ts:41-70`; gestiones por materia en `plantillas.controller.ts:36-43`. |
 | 150-151 | Tipos de acciones, regiones, ciudades, comunas, canales, horarios por perfil | Parcial (fase 5) | Regiones, ciudades, comunas y canales ya son maestros (`MAESTROS` en maestros.service.ts, migración 0028); faltan tipos de acción y horarios. Antes: Tipo de gestión es un enum fijo (`packages/shared/src/types/gestion.ts:3`). Región y comuna son texto libre y **no existe el campo ciudad** (`db/schema/afiliados.ts:33-34`). Canales solo tiene `GET` (`canales.controller.ts:16`). No hay horarios. |
-| 156-158 | Herramientas del administrador para corregir registros y retroceder flujos (p. ej. reiniciar derivaciones) | No cumple | No hay ninguna herramienta de retroceso ni reapertura. |
+| 156-158 | Herramientas del administrador para corregir registros y retroceder flujos (p. ej. reiniciar derivaciones) | Cumple (fase 7) | `modules/correcciones` y pantalla Correcciones (`flujos.corregir`). Antes: No hay ninguna herramienta de retroceso ni reapertura. |
 | 158-160 | Administrar módulos y permisos de visualización por perfil o cargo | Cumple (perfil) / No cumple (cargo) | Permisos por módulo y acción (`permisos.ts:5-78`). |
 
 ### III. Carga masiva

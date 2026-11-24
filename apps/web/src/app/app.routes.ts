@@ -134,6 +134,11 @@ export const routes: Routes = [
       import("./features/admin/admin-maestros.component").then((m) => m.AdminMaestrosComponent),
   },
   {
+    path: "admin/correcciones",
+    canActivate: [permisoGuard("flujos.corregir")],
+    loadComponent: () => import("./features/admin/admin-correcciones.component").then((m) => m.AdminCorreccionesComponent),
+  },
+  {
     path: "agenda",
     canActivate: [permisoGuard("agenda.ver")],
     loadComponent: () => import("./features/agenda/agenda.component").then((m) => m.AgendaComponent),

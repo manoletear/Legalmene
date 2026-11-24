@@ -2,6 +2,7 @@ export * from "./types/afiliado";
 export * from "./types/atencion";
 export * from "./types/gestion";
 export * from "./types/comite";
+export * from "./types/correcciones";
 export * from "./types/agenda";
 export * from "./types/pago";
 export * from "./types/permisos";

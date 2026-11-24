@@ -203,6 +203,10 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   institucionales (`aprueba.arancel@`, `solicitud.fondos@`, `autoriza.provision@`, `operaciones@`) vienen de `CORREO_*`.
   Al cliente solo van la presentación del abogado, la solicitud de antecedentes, el inicio/término de gestiones con
   `informarCliente` y el término de la atención.
+- **Correcciones (`modules/correcciones`)**: única vía para escribir estados fuera de los flujos (reabrir atenciones, reiniciar
+  derivaciones, retroceder arancel o provisión un paso con `RETROCESO_ARANCEL`/`RETROCESO_PROVISION`). Exige
+  `flujos.corregir` (solo ADMIN por defecto) y un motivo, que queda en los eventos del flujo y en `metadata.correcciones` de
+  la atención; escrituras condicionales al estado leído.
 - **Posesión efectiva**: es un tipo de atención (`PosesionEfectiva`, prefijo POSE); causante y
   herederos se manejan solo vía `PosesionesService`. La ficha PDF es un resumen interno, nunca el
   formulario oficial del Registro Civil.
