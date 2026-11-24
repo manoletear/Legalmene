@@ -232,6 +232,27 @@
       "when": 1795483247043,
       "tag": "0032_gestion_informar_cliente",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1795528238965,
+      "tag": "0033_plazo_antecedentes",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1795528430105,
+      "tag": "0034_arancel_camino_pago",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1795528596695,
+      "tag": "0035_decision_provision",
+      "breakpoints": true
     }
   ]
 }

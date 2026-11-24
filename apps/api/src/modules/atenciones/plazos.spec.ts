@@ -51,4 +51,14 @@ describe("plazos de la atención", () => {
     expect(r).toHaveLength(1);
     expect(r[0]).toMatchObject({ referenciaId: "p1", estado: "Pendiente", limite: "2026-11-13T02:59:00.000Z" }); // jueves 12
   });
+
+  it("antecedentes faltantes: pedirlos al cliente en 1 día hábil; una solicitud anterior no cuenta", () => {
+    const faltan = new Date("2026-11-04T13:00:00Z"); // miércoles 4
+    const sin = calcularPlazos({ ...base, antecedentesFaltantesDesde: faltan }, new Date("2026-11-06T12:00:00Z")).find((p) => p.tipo === "SolicitudAntecedentes")!;
+    expect(sin).toMatchObject({ estado: "Vencido", limite: "2026-11-06T02:59:00.000Z" }); // jueves 5, 23:59
+    const vieja = calcularPlazos({ ...base, antecedentesFaltantesDesde: faltan, antecedentesSolicitadosEn: lunes }, new Date("2026-11-04T14:00:00Z"));
+    expect(vieja.find((p) => p.tipo === "SolicitudAntecedentes")).toMatchObject({ estado: "Pendiente", cumplidoEn: null });
+    const pedida = calcularPlazos({ ...base, antecedentesFaltantesDesde: faltan, antecedentesSolicitadosEn: new Date("2026-11-05T15:00:00Z") });
+    expect(pedida.find((p) => p.tipo === "SolicitudAntecedentes")!.estado).toBe("Cumplido");
+  });
 });

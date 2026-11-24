@@ -36,6 +36,9 @@ export const arancelesAtencion = pgTable(
     ufValorCentavos: integer("uf_valor_centavos"),
     montoClp: integer("monto_clp"),
     comprobanteDocumentoId: uuid("comprobante_documento_id").references(() => documentos.id, { onDelete: "set null" }),
+    // Camino elegido con el cliente (Aprobacion | WebPay) y la última orden WebPay notificada.
+    caminoPago: varchar("camino_pago", { length: 20 }).$type<"Aprobacion" | "WebPay">(),
+    webpayOrdenCompra: varchar("webpay_orden_compra", { length: 64 }),
     registradoPorId: uuid("registrado_por_id").references(() => usuarios.id, { onDelete: "restrict" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

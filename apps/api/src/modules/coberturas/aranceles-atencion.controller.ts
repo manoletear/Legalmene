@@ -48,6 +48,12 @@ export class ArancelesAtencionController {
     return this.service.enviarAprobacion(id, uid(user));
   }
 
+  @Post("atenciones/:id/arancel/notificar-pago")
+  @Permiso("aranceles_atencion.enviar")
+  notificarPago(@Param("id", ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.notificarPago(id, uid(user));
+  }
+
   @Post("atenciones/:id/arancel/aprobar")
   @Permiso("aranceles_atencion.aprobar")
   aprobar(@Param("id", ParseUUIDPipe) id: string, @Body() body: ObservacionDto, @CurrentUser() user: AuthenticatedUser) {

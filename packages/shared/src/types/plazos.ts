@@ -4,14 +4,16 @@ import { z } from "zod";
 export const PLAZO_CONTACTO_DIAS_HABILES = 1; // §VII l.765, §VIII l.984: contacto con el cliente ≤ 24 h hábiles
 export const PLAZO_PRIMERA_PRESENTACION_DIAS_HABILES = 5; // §VIII l.1106: desde el pago del arancel
 export const PLAZO_RENDICION_DIAS_HABILES = 8; // §X l.1722: rendir los fondos entregados
+export const PLAZO_SOLICITUD_ANTECEDENTES_DIAS_HABILES = 1; // §VII l.850: pedir lo faltante en < 24 h hábiles
 
-export const TipoPlazoEnum = z.enum(["ContactoCliente", "PrimeraPresentacion", "RendicionFondos"]);
+export const TipoPlazoEnum = z.enum(["ContactoCliente", "PrimeraPresentacion", "RendicionFondos", "SolicitudAntecedentes"]);
 export type TipoPlazo = z.infer<typeof TipoPlazoEnum>;
 
 export const TIPO_PLAZO_LABEL: Record<TipoPlazo, string> = {
   ContactoCliente: "Contacto con el cliente",
   PrimeraPresentacion: "Primera presentación del juicio",
   RendicionFondos: "Rendición de fondos entregados",
+  SolicitudAntecedentes: "Pedir al cliente los antecedentes faltantes",
 };
 
 export const EstadoPlazoEnum = z.enum(["Pendiente", "Vencido", "Cumplido", "CumplidoFueraDePlazo"]);

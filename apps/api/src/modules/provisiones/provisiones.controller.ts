@@ -26,6 +26,7 @@ import {
   RechazoDto,
   RegistrarMovimientoDto,
   SolicitarProvisionDto,
+  DecisionProvisionDto,
 } from "./dto";
 
 function usuarioId(user: AuthenticatedUser): string {
@@ -56,6 +57,16 @@ export class ProvisionesController {
   @Get("atenciones/:atencionId/provisiones")
   listarPorAtencion(@Param("atencionId", ParseUUIDPipe) atencionId: string) {
     return this.service.listarPorAtencion(atencionId);
+  }
+
+  @Post("atenciones/:atencionId/provisiones/decision-cliente")
+  @Permiso("provisiones.solicitar")
+  decision(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("atencionId", ParseUUIDPipe) atencionId: string,
+    @Body() body: DecisionProvisionDto,
+  ) {
+    return this.service.registrarDecision(atencionId, usuarioId(user), body);
   }
 
   @Post("atenciones/:atencionId/provisiones")

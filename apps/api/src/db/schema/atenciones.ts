@@ -93,10 +93,20 @@ export const atenciones = pgTable(
     fechaUltimaGestion: timestamp("fecha_ultima_gestion", { withTimezone: true }),
     // Primer contacto del abogado con el cliente (Anexo §VII l.765, §VIII l.984: ≤ 24 h hábiles).
     fechaPrimerContacto: timestamp("fecha_primer_contacto", { withTimezone: true }),
+    // Faltan antecedentes (entró a EnEsperaAntecedentes) y cuándo se pidieron al cliente: §VII l.850, < 24 h hábiles.
+    antecedentesFaltantesDesde: timestamp("antecedentes_faltantes_desde", { withTimezone: true }),
+    antecedentesSolicitadosEn: timestamp("antecedentes_solicitados_en", { withTimezone: true }),
     // Término solicitado, a la espera del V°B° de jefatura (null si no hay solicitud).
     solicitudTermino: jsonb("solicitud_termino").$type<SolicitudTermino>(),
     // V°B° de la jefatura judicial a la primera presentación del juicio (Anexo §VIII l.1092).
     vbPrimeraPresentacion: jsonb("vb_primera_presentacion").$type<{ usuarioId: string; fecha: string }>(),
+    // Decisión del cliente sobre provisionar fondos (Anexo §X 02–021); null = aún no se informa.
+    decisionProvision: jsonb("decision_provision").$type<{
+      decision: "Acepta" | "NoAcepta" | "PagaDirecto";
+      observacion?: string | null;
+      usuarioId: string;
+      fecha: string;
+    }>(),
     // Sin cobertura del plan: autorización de Gerencia de Servicios (null si el plan cubre).
     autorizacionCobertura: jsonb("autorizacion_cobertura").$type<AutorizacionCobertura>(),
     prioridad: prioridadEnum("prioridad").notNull().default("Media"),

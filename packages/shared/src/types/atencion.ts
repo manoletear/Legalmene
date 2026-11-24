@@ -41,6 +41,16 @@ export const AtencionSchema = z.object({
     })
     .optional()
     .nullable(),
+  // Decisión del cliente sobre la provisión de fondos (Anexo §X 02).
+  decisionProvision: z
+    .object({
+      decision: z.enum(["Acepta", "NoAcepta", "PagaDirecto"]),
+      observacion: z.string().optional().nullable(),
+      usuarioId: z.string().uuid(),
+      fecha: z.string().datetime(),
+    })
+    .optional()
+    .nullable(),
   // V°B° de la jefatura judicial a la primera presentación del juicio (Anexo §VIII l.1092).
   vbPrimeraPresentacion: z
     .object({ usuarioId: z.string().uuid(), fecha: z.string().datetime() })
@@ -146,6 +156,7 @@ export const CreateAtencionSchema = AtencionSchema.omit({
   fechaPrimerContacto: true,
   solicitudTermino: true,
   vbPrimeraPresentacion: true,
+  decisionProvision: true,
   autorizacionCobertura: true,
   horaInicio: true,
   horaTermino: true,

@@ -22,6 +22,11 @@ import { PassThrough } from "stream";
 import { ProvisionesService } from "../../src/modules/provisiones/provisiones.service";
 import { WebhooksService } from "../../src/modules/webhooks/webhooks.service";
 import { NotifInboxService } from "../../src/modules/notif-inbox/notif-inbox.service";
+import { CorreosService } from "../../src/modules/correos/correos.service";
+import { PagosService } from "../../src/modules/pagos/pagos.service";
+import { afiliados } from "../../src/db/schema/afiliados";
+import { eq } from "drizzle-orm";
+import { hoyChileISO } from "../../src/common/utils/dias-habiles";
 import {
   borrarAtencionesDePlan,
   borrarMateriaDePrueba,
@@ -51,6 +56,7 @@ const FECHA_PAGO = "2001-03-15";
   let causaId: string;
 
   const avisos: { usuarioId: string; titulo: string }[] = [];
+  const correos: { para: string[]; asunto: string; texto: string }[] = [];
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
@@ -66,6 +72,18 @@ const FECHA_PAGO = "2001-03-15";
         GestionesService,
         ComprobantesPdfService,
         { provide: WebhooksService, useValue: { emitir: async () => undefined } },
+        PagosService,
+        {
+          provide: CorreosService,
+          useValue: {
+            url: (r: string) => `http://web.test${r}`,
+            enviar: async (para: string[], c: { asunto: string; texto: string }) => {
+              correos.push({ para, asunto: c.asunto, texto: c.texto });
+              return "Omitido";
+            },
+            aUsuarios: async () => undefined,
+          },
+        },
         {
           provide: NotifInboxService,
           useValue: {
@@ -106,6 +124,7 @@ const FECHA_PAGO = "2001-03-15";
 
   afterAll(async () => {
     const db = drizzle(pool);
+    await db.execute(sql`DELETE FROM pagos WHERE cod_plan = ${PLAN}`);
     await borrarAtencionesDePlan(db, PLAN);
     await db.execute(sql`DELETE FROM coberturas WHERE cod_plan = ${PLAN}`);
     await db.execute(sql`DELETE FROM planes_afiliado WHERE cod_plan = ${PLAN}`);
@@ -185,6 +204,38 @@ const FECHA_PAGO = "2001-03-15";
     expect((await nueva("EscritoJudicial")).estado).toBe("Pendiente");
     const eventos = await arancelSrv.eventos(a.id);
     expect(eventos.map((e) => e.estadoHasta)).toEqual(["Requerido", "EnAprobacion", "Rechazado", "EnAprobacion", "Aprobado", "Pagado"]);
+  });
+
+  it("Notificar Pago: orden WebPay al cliente; el pago la deja Pagada sola, también desde En aprobación", async () => {
+    const db = drizzle(pool);
+    const hoy = hoyChileISO();
+    await db.insert(valoresUf).values({ fecha: hoy, valorCentavos: 1_600_000 }).onConflictDoNothing();
+    const [uf] = await db.select().from(valoresUf).where(eq(valoresUf.fecha, hoy));
+    const a = await nuevaAsesoria();
+    await expect(arancelSrv.notificarPago(a.id, abogado.id)).rejects.toThrow(/no tiene correo/);
+    await db.update(afiliados).set({ email: "cliente.arancel@example.com" }).where(eq(afiliados.id, afiliadoId));
+
+    // Primero se envía a la jefatura y luego se cambia a WebPay: el camino es modificable.
+    await arancelSrv.enviarAprobacion(a.id, abogado.id);
+    expect((await arancelSrv.obtener(a.id))?.caminoPago).toBe("Aprobacion");
+    correos.length = 0;
+    const n = await arancelSrv.notificarPago(a.id, abogado.id);
+    const esperado = Math.round((600 * uf.valorCentavos) / 10_000);
+    expect(n.montoClp).toBe(esperado);
+    expect(correos[0].para).toEqual(["cliente.arancel@example.com"]);
+    expect(correos[0].texto).toContain(`ordenCompra=${n.ordenCompra}`);
+    const ar = await arancelSrv.obtener(a.id);
+    expect(ar).toMatchObject({ estado: "EnAprobacion", caminoPago: "WebPay", webpayOrdenCompra: n.ordenCompra });
+
+    avisos.length = 0;
+    await moduleRef.get(PagosService).confirmar(n.ordenCompra, "AUTH1", true);
+    const pagado = await arancelSrv.obtener(a.id);
+    expect(pagado).toMatchObject({ estado: "Pagado", medioPago: "WebPay", montoClp: esperado, referenciaPago: n.ordenCompra, fechaPago: hoy });
+    // Aviso al abogado y a su jefatura (Anexo §IX 4.1).
+    expect(avisos.filter((x) => /Arancel pagado/.test(x.titulo)).map((x) => x.usuarioId).sort()).toEqual([abogado.id, jefe.id].sort());
+    // Pagado: ya no se notifica ni se cambia el camino.
+    await expect(arancelSrv.notificarPago(a.id, abogado.id)).rejects.toBeInstanceOf(ConflictException);
+    expect((await arancelSrv.eventos(a.id)).map((e) => e.estadoHasta)).toEqual(["Requerido", "EnAprobacion", "EnAprobacion", "Pagado"]);
   });
 
   it("sin copago el arancel queda NoRequerido y no detiene la atención", async () => {

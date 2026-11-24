@@ -11,6 +11,8 @@ import type {
   RegistrarMovimiento,
   ResumenProvisionAtencion,
   SolicitarProvision,
+  DecisionProvision,
+  DecisionProvisionRegistro,
 } from "@legalmene/shared";
 
 export interface ProvisionRow {
@@ -62,6 +64,10 @@ export class ProvisionesApiService {
 
   solicitar(atencionId: string, payload: SolicitarProvision): Observable<Provision> {
     return this.http.post<Provision>(`${this.base}/atenciones/${atencionId}/provisiones`, payload);
+  }
+
+  decisionCliente(atencionId: string, decision: DecisionProvision, observacion?: string): Observable<DecisionProvisionRegistro | null> {
+    return this.http.post<DecisionProvisionRegistro | null>(`${this.base}/atenciones/${atencionId}/provisiones/decision-cliente`, { decision, observacion });
   }
 
   private accion(id: string, accion: string, body: object = {}): Observable<Provision> {

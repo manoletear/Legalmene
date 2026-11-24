@@ -207,6 +207,10 @@ export class AtencionesApiService {
     return this.http.post<ArancelAtencion>(`${this.base}/${id}/arancel/enviar`, {});
   }
 
+  notificarPagoArancel(id: string): Observable<{ ordenCompra: string; montoClp: number; estado: string | null; para: string }> {
+    return this.http.post<{ ordenCompra: string; montoClp: number; estado: string | null; para: string }>(`${this.base}/${id}/arancel/notificar-pago`, {});
+  }
+
   aprobarArancel(id: string, observacion?: string): Observable<ArancelAtencion> {
     return this.http.post<ArancelAtencion>(`${this.base}/${id}/arancel/aprobar`, { observacion });
   }

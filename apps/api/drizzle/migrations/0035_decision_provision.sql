@@ -1,0 +1,1 @@
+ALTER TABLE "atenciones" ADD COLUMN "decision_provision" jsonb;

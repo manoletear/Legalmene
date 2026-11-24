@@ -223,6 +223,27 @@ const RUN = !!process.env.DATABASE_URL;
     ).rejects.toThrow(/supera el saldo/);
   });
 
+  it("decisión del cliente: no acepta o paga directo detiene el flujo; aceptar lo reinicia", async () => {
+    const juicio = await nuevaAtencion();
+    await expect(service.registrarDecision(juicio, abogado, { decision: "PagaDirecto" })).rejects.toThrow(/juicio/);
+    await service.registrarDecision(juicio, abogado, { decision: "NoAcepta", observacion: "Lo pensará" });
+    await expect(service.solicitar(juicio, abogado, { monto: 5_000, motivo: "Gastos" })).rejects.toThrow(/no aceptó/);
+    const d = await service.registrarDecision(juicio, abogado, { decision: "Acepta" });
+    expect(d?.decision).toBe("Acepta");
+    const p = await service.solicitar(juicio, abogado, { monto: 5_000, motivo: "Gastos" });
+    // Con una provisión en curso no se registra que el cliente deja de provisionar.
+    await expect(service.registrarDecision(juicio, abogado, { decision: "NoAcepta" })).rejects.toThrow(/en curso/);
+    expect(p.estado).toBe("Solicitada");
+
+    const db = drizzle(pool);
+    const [asesoria] = await db
+      .insert(atenciones)
+      .values({ codPlan: PLAN, correlativo: `TEST-PROV-${PLAN}-${++n}`, afiliadoId, tipo: "Asesoria", estado: "EnGestion", ...cm, asunto: "Paga directo" })
+      .returning();
+    await service.registrarDecision(asesoria.id, abogado, { decision: "PagaDirecto" });
+    await expect(service.solicitar(asesoria.id, abogado, { monto: 5_000, motivo: "Gastos" })).rejects.toThrow(/paga directamente/);
+  });
+
   it("con fondos entregados sin rendir no se pide otra provisión ni otra entrega", async () => {
     const atencionId = await nuevaAtencion();
     await hastaEntregada(atencionId, 20_000);

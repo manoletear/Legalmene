@@ -3,10 +3,11 @@ import { CorreosService } from "../correos/correos.service";
 import type { CriteriosBusqueda } from "@legalmene/shared";
 import { condicionAtencion } from "../../common/busqueda/criterios";
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import {
   ESTADO_ARANCEL_LABEL,
   ESTADOS_ARANCEL_BLOQUEANTES,
+  ESTADOS_ARANCEL_PAGABLES_WEBPAY,
   TRANSICIONES_ARANCEL,
   type EstadoArancelAtencion,
   type EventoFinanciero,
@@ -22,6 +23,11 @@ import { CoberturasService } from "./coberturas.service";
 import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
 import { avisar, equipoDeAtencion, usuariosConPermiso } from "../notif-inbox/destinatarios";
 import { ufCentesimasAClp } from "./copago";
+import { afiliados } from "../../db/schema/afiliados";
+import type { Pago } from "../../db/schema/pagos";
+import { crearOrdenWebPay } from "../pagos/orden-webpay";
+import { hoyChileISO } from "../../common/utils/dias-habiles";
+import { plantillaPagoWebPay } from "../correos/plantillas";
 
 type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
@@ -129,7 +135,7 @@ export class ArancelesAtencionService {
   }
 
   async enviarAprobacion(atencionId: string, usuarioId: string) {
-    const row = await this.transicionar(atencionId, "EnAprobacion", usuarioId);
+    const row = await this.transicionar(atencionId, "EnAprobacion", usuarioId, { caminoPago: "Aprobacion" });
     await this.avisar(atencionId, "EnAprobacion", usuarioId);
     return row;
   }
@@ -218,6 +224,94 @@ export class ArancelesAtencionService {
       registradoPorId: usuarioId,
     });
     await this.avisar(atencionId, "Pagado", usuarioId, `${(montoClp ?? 0).toLocaleString("es-CL")} pesos (${input.medio})`);
+    return row;
+  }
+
+  // "Notificar Pago" (Anexo §IX 3.ii): orden WebPay por el copago en pesos con la UF de hoy y correo al
+  // cliente con el enlace. Se puede elegir en cualquier estado salvo Pagado (o sin copago).
+  async notificarPago(atencionId: string, usuarioId: string) {
+    const actual = await this.obtener(atencionId);
+    if (!actual) throw new BadRequestException("Las consultas no tienen arancel");
+    if (!ESTADOS_ARANCEL_PAGABLES_WEBPAY.includes(actual.estado)) {
+      throw new ConflictException(`El arancel está ${ESTADO_ARANCEL_LABEL[actual.estado].toLowerCase()}: no hay pago que notificar`);
+    }
+    const hoy = hoyChileISO();
+    const [uf] = await this.db.select().from(valoresUf).where(eq(valoresUf.fecha, hoy));
+    if (!uf) throw new BadRequestException(`No hay valor UF cargado para hoy (${fechaCl(hoy)}); cárguelo antes de notificar el pago`);
+    const [d] = await this.db
+      .select({ codPlan: atenciones.codPlan, afiliadoId: atenciones.afiliadoId, correlativo: atenciones.correlativo, email: afiliados.email, nombre: afiliados.nombres })
+      .from(atenciones)
+      .innerJoin(afiliados, eq(afiliados.id, atenciones.afiliadoId))
+      .where(eq(atenciones.id, atencionId));
+    if (!d.email) throw new BadRequestException("El afiliado no tiene correo registrado; agréguelo en su ficha");
+    if (!this.correos) throw new BadRequestException("El envío de correos no está disponible");
+    const montoClp = ufCentesimasAClp(actual.copagoUfCentesimas ?? 0, uf.valorCentavos) ?? 0;
+    if (montoClp <= 0) throw new BadRequestException("El copago de esta atención es cero");
+    const { pago, redirectUrl } = await this.db.transaction(async (tx) => {
+      const orden = await crearOrdenWebPay(tx, {
+        codPlan: d.codPlan,
+        afiliadoId: d.afiliadoId,
+        atencionId,
+        monto: montoClp,
+        returnUrl: this.correos!.url("/pago"),
+        metadata: { arancelAtencionId: actual.id, ufValorCentavos: uf.valorCentavos },
+      });
+      const [row] = await tx
+        .update(arancelesAtencion)
+        .set({ caminoPago: "WebPay", webpayOrdenCompra: orden.pago.ordenCompra, updatedAt: new Date() })
+        .where(and(eq(arancelesAtencion.id, actual.id), eq(arancelesAtencion.estado, actual.estado)))
+        .returning();
+      if (!row) throw new ConflictException("El arancel cambió mientras se procesaba; actualice y reintente");
+      await this.evento(tx, actual.id, actual.estado, actual.estado, usuarioId, `Pago notificado al cliente por WebPay (orden ${orden.pago.ordenCompra})`);
+      return orden;
+    });
+    const estado = await this.correos.enviar(
+      [d.email],
+      plantillaPagoWebPay({ cliente: d.nombre, correlativo: d.correlativo, montoClp, url: redirectUrl }),
+      { plantilla: "cliente.pago_webpay", atencionId, enviadoPorId: usuarioId },
+    );
+    return { ordenCompra: pago.ordenCompra, montoClp, estado, para: d.email };
+  }
+
+  // Pago WebPay confirmado de una orden de arancel: queda Pagado desde cualquier estado pendiente,
+  // sin registro manual, y se avisa al abogado y su jefatura (Anexo §IX 4.1, l.1451).
+  async pagoWebPay(pago: Pago) {
+    const arancelId = pago.metadata?.arancelAtencionId as string | undefined;
+    if (!arancelId) return null;
+    const [actual] = await this.db.select().from(arancelesAtencion).where(eq(arancelesAtencion.id, arancelId));
+    if (!actual || actual.atencionId !== pago.atencionId) return null;
+    const ufValor = typeof pago.metadata?.ufValorCentavos === "number" ? (pago.metadata.ufValorCentavos as number) : null;
+    const row = await this.db.transaction(async (tx) => {
+      const [r] = await tx
+        .update(arancelesAtencion)
+        .set({
+          estado: "Pagado",
+          caminoPago: "WebPay",
+          fechaPago: hoyChileISO(pago.fechaResolucion ?? new Date()),
+          medioPago: "WebPay",
+          referenciaPago: pago.ordenCompra,
+          ufValorCentavos: ufValor,
+          montoClp: pago.monto,
+          registradoPorId: null,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(arancelesAtencion.id, arancelId), inArray(arancelesAtencion.estado, [...ESTADOS_ARANCEL_PAGABLES_WEBPAY])))
+        .returning();
+      if (r) await this.evento(tx, arancelId, actual.estado, "Pagado", null, `Pagado por WebPay (orden ${pago.ordenCompra})`);
+      return r;
+    });
+    if (!row) {
+      // Ya estaba pagado (p. ej. también en casa central): Finanzas debe revisar la devolución.
+      const finanzas = await usuariosConPermiso(this.db, ["aranceles_atencion.registrar_pago"]);
+      await avisar(
+        this.notif,
+        finanzas,
+        { codPlan: pago.codPlan, severidad: "critical", titulo: `Pago WebPay sobre un arancel ya resuelto (${pago.ordenCompra})`, detalle: `Estado: ${ESTADO_ARANCEL_LABEL[actual.estado]}`, accionUrl: `/atenciones/${actual.atencionId}` },
+        null,
+      );
+      return null;
+    }
+    await this.avisar(actual.atencionId, "Pagado", "", `${pago.monto.toLocaleString("es-CL")} pesos (WebPay)`);
     return row;
   }
 

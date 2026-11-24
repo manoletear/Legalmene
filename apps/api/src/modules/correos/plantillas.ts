@@ -71,6 +71,20 @@ export function plantillaSolicitudAntecedentes(p: { cliente: string; abogado: st
   };
 }
 
+// Al cliente: enlace de pago en línea del arancel (Anexo §IX 3.ii, "Notificar Pago").
+export function plantillaPagoWebPay(p: { cliente: string; correlativo: string; montoClp: number; url: string }): Contenido {
+  const lineas = [
+    `Estimado(a) ${p.cliente}:`,
+    `El copago de su atención ${p.correlativo} es de $${p.montoClp.toLocaleString("es-CL")}.`,
+    "Puede pagarlo en línea con WebPay desde el siguiente enlace. Al completarse, el pago queda registrado en su atención.",
+  ];
+  return {
+    asunto: textoLinea(`LegalChile · Pago del arancel de su atención ${p.correlativo}`),
+    html: marco("Pago de arancel", parrafos(lineas) + boton(p.url, "Pagar con WebPay")),
+    texto: [...lineas, p.url].join("\n\n"),
+  };
+}
+
 // Al cliente: inicio o término de una gestión (Anexo §VII l.1015, §VIII l.1105).
 export function plantillaGestionCliente(p: {
   cliente: string;

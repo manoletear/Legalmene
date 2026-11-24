@@ -43,6 +43,10 @@ import {
   type EstadoArancelAtencion,
   ESTADO_ARANCEL_COLOR,
   ESTADO_ARANCEL_LABEL,
+  CAMINO_PAGO_LABEL,
+  DECISION_PROVISION_LABEL,
+  type DecisionProvision,
+  type CaminoPagoArancel,
   TIPO_GESTION_LABEL,
   TIPO_PLAZO_LABEL,
   ESTADO_RENDICION_CLIENTE_LABEL,
@@ -222,6 +226,9 @@ interface PipelineStep {
                   <span style="width:10px; height:10px; border-radius:50%;" [style.background]="colorArancel(ar.estado)"></span>
                   <strong class="lm-small">{{ etiquetaArancel(ar.estado) }}</strong>
                 </div>
+                <div *ngIf="ar.caminoPago && ar.estado !== 'Pagado'" class="lm-small lm-muted" data-testid="arancel-camino">
+                  {{ caminoPago(ar.caminoPago) }}<span *ngIf="ar.webpayOrdenCompra && ar.caminoPago === 'WebPay'"> · orden {{ ar.webpayOrdenCompra }}</span>
+                </div>
                 <div *ngIf="ar.motivoRechazo && ar.estado === 'Requerido'" class="lm-small" style="color:#dc2626;">Rechazado: {{ ar.motivoRechazo }}</div>
                 <div *ngIf="ar.estado === 'Pagado'" class="lm-small lm-muted">
                   Pagado {{ ar.fechaPago | date: 'dd/MM/yyyy' }} · {{ ar.medioPago }} · $ {{ ar.montoClp | number }}
@@ -232,6 +239,9 @@ interface PipelineStep {
                 </ng-container>
                 <div class="lm-row" style="gap:4px; flex-wrap:wrap; margin-top:6px;">
                   <button *ngIf="ar.estado === 'Requerido' && me.tiene('aranceles_atencion.enviar')" pButton size="small" [outlined]="true" label="Enviar a aprobación" (click)="accionArancel(a.id, 'enviar')"></button>
+                  <!-- Anexo §IX 3.ii: el camino WebPay se puede elegir en cualquier estado salvo Pagado. -->
+                  <button *ngIf="['Requerido', 'EnAprobacion', 'Aprobado'].includes(ar.estado) && me.tiene('aranceles_atencion.enviar')" pButton size="small" [outlined]="true"
+                    icon="pi pi-send" label="Notificar pago (WebPay)" data-testid="notificar-pago" (click)="notificarPago(a.id)"></button>
                   <ng-container *ngIf="ar.estado === 'EnAprobacion' && me.tiene('aranceles_atencion.aprobar')">
                     <button pButton size="small" severity="success" [outlined]="true" label="Aprobar" (click)="accionArancel(a.id, 'aprobar')"></button>
                     <button pButton size="small" severity="danger" [outlined]="true" label="Rechazar" (click)="accionArancel(a.id, 'rechazar')"></button>
@@ -276,6 +286,16 @@ interface PipelineStep {
                   </ng-container>
                 </div>
               </ng-container>
+              <!-- Anexo §X 02: el cliente decide si provisiona; si no, o si paga directo, el flujo no opera. -->
+              <div class="lm-small" data-testid="decision-provision" style="margin-top:6px;">
+                <span class="lm-muted">Cliente: </span>
+                <strong>{{ a.decisionProvision ? decisionLabel(a.decisionProvision.decision) : 'sin decisión registrada' }}</strong>
+                <ng-container *lmPermiso="'provisiones.solicitar'">
+                  <span *ngFor="let d of decisionesProvision(a.tipo)">
+                    · <a *ngIf="a.decisionProvision?.decision !== d" style="cursor:pointer;" (click)="registrarDecision(a.id, d)">{{ decisionLabel(d) }}</a>
+                  </span>
+                </ng-container>
+              </div>
               <div class="lm-info-card-footer">
                 <a style="cursor:pointer;" (click)="solicitarProvision(a.id)">Solicitar provisión</a> ·
                 <a routerLink="/provisiones">Ver provisiones →</a>
@@ -683,6 +703,26 @@ export class AtencionDetailComponent implements OnInit {
     this.provisionesApi.porAtencion(id).subscribe((r) => this.resumenProvision.set(r.resumen));
   }
 
+  protected decisionLabel(d: DecisionProvision): string {
+    return DECISION_PROVISION_LABEL[d];
+  }
+
+  // "Paga directamente los gastos" no aplica a juicios (Anexo §X 021).
+  protected decisionesProvision(tipo: string): DecisionProvision[] {
+    return tipo === "Juicio" ? ["Acepta", "NoAcepta"] : ["Acepta", "NoAcepta", "PagaDirecto"];
+  }
+
+  async registrarDecision(atencionId: string, decision: DecisionProvision) {
+    const observacion = decision === "Acepta" ? undefined : ((await this.prompt.open({ header: DECISION_PROVISION_LABEL[decision], label: "Observación (opcional)", multiline: true })) ?? undefined);
+    this.provisionesApi.decisionCliente(atencionId, decision, observacion || undefined).subscribe({
+      next: () => {
+        this.msg.add({ severity: "success", summary: DECISION_PROVISION_LABEL[decision], life: 2500 });
+        this.api.obtener(atencionId).subscribe((a) => this.atencion.set(a));
+      },
+      error: (err) => this.msg.add({ severity: "error", summary: "No se pudo registrar", detail: err.error?.message ?? err.message, life: 5000 }),
+    });
+  }
+
   async solicitarProvision(atencionId: string) {
     const montoTxt = await this.prompt.open({ header: "Solicitar provisión", label: "Monto en pesos", required: true });
     if (!montoTxt) return;
@@ -708,6 +748,21 @@ export class AtencionDetailComponent implements OnInit {
 
   protected etiquetaArancel(e: EstadoArancelAtencion): string {
     return ESTADO_ARANCEL_LABEL[e];
+  }
+
+  protected caminoPago(c: CaminoPagoArancel): string {
+    return CAMINO_PAGO_LABEL[c];
+  }
+
+  // Envía al cliente el enlace de pago WebPay por el copago, con la UF de hoy.
+  notificarPago(atencionId: string) {
+    this.api.notificarPagoArancel(atencionId).subscribe({
+      next: (r) => {
+        this.msg.add({ severity: "success", summary: "Pago notificado", detail: `$ ${r.montoClp.toLocaleString("es-CL")} · ${r.para}`, life: 4000 });
+        this.api.arancel(atencionId).subscribe((ar) => this.arancel.set(ar));
+      },
+      error: (err) => this.msg.add({ severity: "error", summary: "No se pudo notificar", detail: err.error?.message ?? err.message, life: 6000 }),
+    });
   }
 
   async accionArancel(atencionId: string, accion: "enviar" | "aprobar" | "rechazar" | "pago") {

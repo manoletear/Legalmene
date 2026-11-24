@@ -6,6 +6,7 @@ import {
   PLAZO_CONTACTO_DIAS_HABILES,
   PLAZO_PRIMERA_PRESENTACION_DIAS_HABILES,
   PLAZO_RENDICION_DIAS_HABILES,
+  PLAZO_SOLICITUD_ANTECEDENTES_DIAS_HABILES,
   TIPO_PLAZO_LABEL,
   type EstadoArancelAtencion,
   type EstadoPlazo,
@@ -25,6 +26,8 @@ export interface DatosPlazos {
   tipo: TipoAtencion;
   creadaEn: Date;
   fechaPrimerContacto: Date | null;
+  antecedentesFaltantesDesde?: Date | null;
+  antecedentesSolicitadosEn?: Date | null;
   arancel: { estado: EstadoArancelAtencion; fechaPago: string | null; creadoEn: Date } | null;
   primerEscritoEn: Date | null;
   provisiones: { id: string; fechaEntrega: Date | null; fechaRendicion: Date | null }[];
@@ -71,6 +74,11 @@ export function calcularPlazos(d: DatosPlazos, ahora: Date = new Date()): PlazoA
           ? d.arancel.creadoEn
           : null;
     if (desde) lista.push(plazo("PrimeraPresentacion", desde, PLAZO_PRIMERA_PRESENTACION_DIAS_HABILES, d.primerEscritoEn, ahora));
+  }
+  // Solo la última vez que faltaron antecedentes: una solicitud anterior no la cumple.
+  if (d.antecedentesFaltantesDesde) {
+    const pedido = d.antecedentesSolicitadosEn && d.antecedentesSolicitadosEn >= d.antecedentesFaltantesDesde ? d.antecedentesSolicitadosEn : null;
+    lista.push(plazo("SolicitudAntecedentes", d.antecedentesFaltantesDesde, PLAZO_SOLICITUD_ANTECEDENTES_DIAS_HABILES, pedido, ahora));
   }
   for (const p of d.provisiones) {
     if (p.fechaEntrega) lista.push(plazo("RendicionFondos", p.fechaEntrega, PLAZO_RENDICION_DIAS_HABILES, p.fechaRendicion, ahora, p.id));
@@ -119,6 +127,8 @@ export class PlazosService {
           tipo: atenciones.tipo,
           createdAt: atenciones.createdAt,
           fechaPrimerContacto: atenciones.fechaPrimerContacto,
+          antecedentesFaltantesDesde: atenciones.antecedentesFaltantesDesde,
+          antecedentesSolicitadosEn: atenciones.antecedentesSolicitadosEn,
           correlativo: atenciones.correlativo,
           codPlan: atenciones.codPlan,
           responsableId: sql<string | null>`coalesce(${atenciones.abogadoAsignadoId}, ${atenciones.creadoPorId})`,
@@ -156,6 +166,8 @@ export class PlazosService {
         tipo: a.tipo,
         creadaEn: a.createdAt,
         fechaPrimerContacto: a.fechaPrimerContacto,
+        antecedentesFaltantesDesde: a.antecedentesFaltantesDesde,
+        antecedentesSolicitadosEn: a.antecedentesSolicitadosEn,
         arancel: ar ? { estado: ar.estado, fechaPago: ar.fechaPago, creadoEn: ar.createdAt } : null,
         primerEscritoEn: escrito ? new Date(escrito) : null,
         provisiones: provs.filter((p) => p.atencionId === a.id),

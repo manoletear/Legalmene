@@ -1,5 +1,27 @@
 import { z } from "zod";
 
+// Decisión del cliente ante el monto a provisionar (Anexo §X 02–021). Si no acepta o paga
+// directamente los gastos (no en juicios), el flujo de provisiones no opera; se puede reiniciar
+// registrando que acepta.
+export const DecisionProvisionEnum = z.enum(["Acepta", "NoAcepta", "PagaDirecto"]);
+export type DecisionProvision = z.infer<typeof DecisionProvisionEnum>;
+export const DECISION_PROVISION_LABEL: Record<DecisionProvision, string> = {
+  Acepta: "Acepta provisionar",
+  NoAcepta: "No acepta provisionar",
+  PagaDirecto: "Paga directamente los gastos",
+};
+export const DecisionProvisionSchema = z.object({
+  decision: DecisionProvisionEnum,
+  observacion: z.string().trim().max(500).optional(),
+});
+export type DecisionProvisionInput = z.infer<typeof DecisionProvisionSchema>;
+export interface DecisionProvisionRegistro {
+  decision: DecisionProvision;
+  observacion?: string | null;
+  usuarioId: string;
+  fecha: string;
+}
+
 // Ciclo de provisión de fondos (Anexo §X). Rechazada = solicitud inicial rechazada (legado);
 // el rechazo de una entrega devuelve la provisión a Pagada.
 export const EstadoProvisionEnum = z.enum([

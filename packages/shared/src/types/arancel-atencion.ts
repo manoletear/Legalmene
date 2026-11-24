@@ -44,6 +44,17 @@ export const TRANSICIONES_ARANCEL: Record<EstadoArancelAtencion, readonly Estado
   Rechazado: [],
 };
 
+// Camino elegido con el cliente (Anexo §IX 3): "Enviar Arancel" a la jefatura o "Notificar Pago" por
+// WebPay. Se puede cambiar en cualquier momento salvo con el arancel Pagado.
+export const CaminoPagoArancelEnum = z.enum(["Aprobacion", "WebPay"]);
+export type CaminoPagoArancel = z.infer<typeof CaminoPagoArancelEnum>;
+export const CAMINO_PAGO_LABEL: Record<CaminoPagoArancel, string> = {
+  Aprobacion: "Aprobación de jefatura y pago en casa central",
+  WebPay: "Pago en línea (WebPay)",
+};
+// Estados desde los que el pago WebPay del cliente deja el arancel Pagado.
+export const ESTADOS_ARANCEL_PAGABLES_WEBPAY: readonly EstadoArancelAtencion[] = ["Requerido", "EnAprobacion", "Aprobado"];
+
 export interface ArancelAtencion {
   id: string;
   atencionId: string;
@@ -60,6 +71,8 @@ export interface ArancelAtencion {
   ufValorCentavos: number | null;
   montoClp: number | null;
   comprobanteDocumentoId: string | null;
+  caminoPago: CaminoPagoArancel | null;
+  webpayOrdenCompra: string | null;
 }
 
 export interface ArancelAtencionRow extends ArancelAtencion {

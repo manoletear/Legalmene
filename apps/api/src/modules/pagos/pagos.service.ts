@@ -1,12 +1,13 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, Inject, Injectable, Logger, NotFoundException, Optional, forwardRef } from "@nestjs/common";
 import { and, count, desc, eq, ilike, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
-import { ulid } from "ulid";
 import { DRIZZLE, Database } from "../../db/database.module";
-import { pagos, NuevoPago, Pago } from "../../db/schema/pagos";
+import { pagos, Pago } from "../../db/schema/pagos";
 import type { CriteriosBusqueda, IniciarPago, TipoPago } from "@legalmene/shared";
 import { rangoFechas, rutComparable } from "../../common/busqueda/criterios";
 import { asegurarAtencionVisible, filtroAtenciones } from "../../common/acceso/alcance";
 import { atenciones } from "../../db/schema/atenciones";
+import { ArancelesAtencionService } from "../coberturas/aranceles-atencion.service";
+import { crearOrdenWebPay } from "./orden-webpay";
 
 // Un pago ligado a una atención solo se ve si esa atención es visible para el usuario.
 export function alcancePagos(): SQL | undefined {
@@ -47,7 +48,12 @@ export function condicionPagos(f: FiltroPagos): SQL | undefined {
  */
 @Injectable()
 export class PagosService {
-  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+  private readonly logger = new Logger(PagosService.name);
+
+  constructor(
+    @Inject(DRIZZLE) private readonly db: Database,
+    @Optional() @Inject(forwardRef(() => ArancelesAtencionService)) private readonly aranceles?: ArancelesAtencionService,
+  ) {}
 
   async listar(opts: FiltroPagos = {}) {
     const page = opts.page ?? 1;
@@ -74,24 +80,7 @@ export class PagosService {
 
   async iniciar(input: IniciarPago): Promise<{ pago: Pago; redirectUrl: string }> {
     if (input.atencionId) await asegurarAtencionVisible(this.db, input.atencionId);
-    const ordenCompra = `OC-${ulid()}`;
-    const payload: NuevoPago = {
-      codPlan: input.codPlan,
-      afiliadoId: input.afiliadoId,
-      atencionId: input.atencionId ?? null,
-      monto: input.monto,
-      ordenCompra,
-      estado: "Iniciado",
-      proveedor: "WebPay",
-      tokenTransaccion: null,
-      metadata: { returnUrl: input.returnUrl },
-    };
-    const [pago] = await this.db.insert(pagos).values(payload).returning();
-    // TODO: invocar SDK Transbank y reemplazar redirectUrl real.
-    return {
-      pago,
-      redirectUrl: `${input.returnUrl}?ordenCompra=${ordenCompra}`,
-    };
+    return crearOrdenWebPay(this.db, input);
   }
 
   // Solo un pago Iniciado se resuelve, una vez: los ya resueltos no se reescriben (409).
@@ -109,6 +98,10 @@ export class PagosService {
       const [existe] = await this.db.select({ estado: pagos.estado }).from(pagos).where(eq(pagos.ordenCompra, ordenCompra));
       if (existe) throw new ConflictException(`El pago ${ordenCompra} ya fue resuelto (${existe.estado})`);
       throw new NotFoundException(`Pago ${ordenCompra} no existe`);
+    }
+    // Orden de un arancel (Notificar Pago): el pago lo deja Pagado sin registro manual (Anexo §IX 4.1).
+    if (exitoso && updated.atencionId && updated.metadata?.arancelAtencionId && this.aranceles) {
+      await this.aranceles.pagoWebPay(updated).catch((e) => this.logger.error(`No se pudo registrar el pago WebPay ${ordenCompra} en el arancel: ${e}`));
     }
     return updated;
   }

@@ -471,6 +471,8 @@ export class AtencionesService {
     if (actual.tipo === "Consulta" && ["Respondida", "Terminada"].includes(input.estado) && !actual.horaTermino) {
       set.horaTermino = ahora;
     }
+    // Detectar que faltan antecedentes inicia el plazo para pedirlos al cliente.
+    if (input.estado === "EnEsperaAntecedentes") set.antecedentesFaltantesDesde = ahora;
     if (input.observacion) {
       set.metadata = { ...(actual.metadata ?? {}), ultimaObservacionEstado: input.observacion };
     }
@@ -652,6 +654,9 @@ export class AtencionesService {
       plantillaSolicitudAntecedentes({ cliente: d.cliente, abogado: ab?.nombre ?? "su abogado", correlativo: d.correlativo, antecedentes: input.antecedentes, plazo }),
       { plantilla: "cliente.antecedentes", atencionId: id, enviadoPorId: actor.id },
     );
+    if (estado !== "Error") {
+      await this.db.update(atenciones).set({ antecedentesSolicitadosEn: new Date() }).where(eq(atenciones.id, id));
+    }
     return { estado, para: d.email };
   }
 

@@ -24,6 +24,7 @@ import {
   type CuentaCorrienteAbogado,
   type ResumenProvisionAtencion,
   type SolicitarProvision,
+  type DecisionProvisionInput,
 } from "@legalmene/shared";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { filtroAtenciones } from "../../common/acceso/alcance";
@@ -212,6 +213,39 @@ export class ProvisionesService {
     if (r) throw new ConflictException("Hay una rendición al cliente en curso: no se piden ni entregan fondos hasta terminarla");
   }
 
+  // Anexo §X 02–021: el cliente decide si provisiona. "Paga directo" no aplica a juicios. Volver a
+  // "Acepta" reinicia el flujo en cualquier momento de la atención.
+  async registrarDecision(atencionId: string, usuarioId: string, input: DecisionProvisionInput) {
+    const atencion = await this.assertAtencion(atencionId);
+    if (ESTADOS_ATENCION_CERRADA.includes(atencion.estado)) {
+      throw new BadRequestException(`La atención está ${atencion.estado}`);
+    }
+    if (input.decision === "PagaDirecto" && atencion.tipo === "Juicio") {
+      throw new BadRequestException("En un juicio el cliente no puede pagar directamente los gastos: debe provisionar");
+    }
+    if (input.decision !== "Acepta") {
+      const [abiertas] = await this.db
+        .select({ n: count() })
+        .from(provisiones)
+        .where(and(eq(provisiones.atencionId, atencionId), inArray(provisiones.estado, ["Solicitada", "EnAprobacion", "Autorizada", "Disponible"])));
+      if (Number(abiertas?.n ?? 0) > 0) throw new ConflictException("Hay provisiones en curso: resuélvalas antes de registrar que el cliente no provisiona");
+    }
+    const registro = { decision: input.decision, observacion: input.observacion ?? null, usuarioId, fecha: new Date().toISOString() };
+    const [row] = await this.db
+      .update(atenciones)
+      .set({ decisionProvision: registro, updatedAt: new Date() })
+      .where(eq(atenciones.id, atencionId))
+      .returning({ decisionProvision: atenciones.decisionProvision });
+    return row.decisionProvision;
+  }
+
+  private async asegurarClienteProvisiona(atencionId: string) {
+    const [a] = await this.db.select({ d: atenciones.decisionProvision }).from(atenciones).where(eq(atenciones.id, atencionId));
+    const d = a?.d?.decision;
+    if (d === "NoAcepta") throw new ConflictException("El cliente no aceptó provisionar fondos: registre que acepta para reiniciar el flujo");
+    if (d === "PagaDirecto") throw new ConflictException("El cliente paga directamente los gastos: el flujo de provisiones no opera");
+  }
+
   async solicitar(atencionId: string, usuarioId: string, input: SolicitarProvision): Promise<Provision> {
     const atencion = await this.assertAtencion(atencionId);
     if (ESTADOS_ATENCION_CERRADA.includes(atencion.estado)) {
@@ -219,6 +253,7 @@ export class ProvisionesService {
     }
     await this.assertSinRendicionPendiente(atencionId);
     await this.asegurarSinRendicionEnCurso(atencionId);
+    await this.asegurarClienteProvisiona(atencionId);
     return this.db.transaction(async (tx) => {
       const [row] = await tx
         .insert(provisiones)
@@ -789,7 +824,7 @@ export class ProvisionesService {
 
   private async assertAtencion(atencionId: string) {
     const [row] = await this.db
-      .select({ id: atenciones.id, estado: atenciones.estado, codPlan: atenciones.codPlan, correlativo: atenciones.correlativo })
+      .select({ id: atenciones.id, estado: atenciones.estado, tipo: atenciones.tipo, codPlan: atenciones.codPlan, correlativo: atenciones.correlativo })
       .from(atenciones)
       .where(and(eq(atenciones.id, atencionId), filtroAtenciones()));
     if (!row) throw new NotFoundException(`Atención ${atencionId} no existe`);

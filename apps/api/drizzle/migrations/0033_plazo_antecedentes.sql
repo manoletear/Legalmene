@@ -1,0 +1,2 @@
+ALTER TABLE "atenciones" ADD COLUMN "antecedentes_faltantes_desde" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "atenciones" ADD COLUMN "antecedentes_solicitados_en" timestamp with time zone;
