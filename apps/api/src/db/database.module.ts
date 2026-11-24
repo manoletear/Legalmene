@@ -1,3 +1,4 @@
+import { urlBaseDatos } from "./url";
 import { Global, Module, OnModuleDestroy, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { drizzle, NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -16,9 +17,7 @@ export type Database = NodePgDatabase<typeof schema>;
       provide: PG_POOL,
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        const url = config.get<string>("DATABASE_URL");
-        if (!url) throw new Error("DATABASE_URL no configurada");
-        return new Pool({ connectionString: url, max: 20 });
+        return new Pool({ connectionString: urlBaseDatos((k) => config.get<string>(k)), max: 20 });
       },
     },
     {

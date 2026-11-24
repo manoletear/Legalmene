@@ -1,27 +1,26 @@
-FROM node:20-alpine AS deps
+# Imagen de la API (ECS Fargate). Se construye desde la raíz del repo:
+#   docker build -f apps/api/Dockerfile -t legalmene-api .
+# Al iniciar, ejecutar las migraciones con:
+#   node dist/apps/api/src/db/migrate.js   (usa ./drizzle/migrations y DATABASE_URL)
+
+FROM node:22-alpine AS build
 WORKDIR /app
 RUN npm install -g pnpm@9.15.0
-COPY pnpm-workspace.yaml package.json ./
+# Solo los manifiestos primero, para reutilizar la capa de dependencias.
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
 COPY apps/api/package.json apps/api/
 COPY packages/shared/package.json packages/shared/
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --filter "@legalmene/api..."
+COPY packages/shared packages/shared
+COPY apps/api apps/api
+RUN pnpm --filter @legalmene/shared build && pnpm --filter @legalmene/api build
+# Directorio autónomo con dependencias de producción (incluye @legalmene/shared compilado).
+RUN pnpm --filter @legalmene/api deploy --prod /out
 
-FROM node:20-alpine AS build
-WORKDIR /app
-RUN npm install -g pnpm@9.15.0
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
-COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
-COPY . .
-RUN pnpm --filter @legalmene/api build
-
-FROM node:20-alpine AS runtime
+FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=build /app/apps/api/dist ./dist
-COPY --from=build /app/apps/api/package.json ./
-COPY --from=build /app/packages/shared ./packages/shared
-COPY --from=build /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /out ./
 EXPOSE 3001
 USER node
 CMD ["node", "dist/apps/api/src/main.js"]

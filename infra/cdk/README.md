@@ -65,7 +65,7 @@ estimación de `docs/propuesta-arquitectura-legalchile.md` sección 8).
 
 - ElastiCache Redis (sesiones, caché de catálogo)
 - OpenSearch (búsqueda full-text en documentos)
-- SES domain identity + IAM para emails de notificación
+- SES domain identity (el permiso ses:SendEmail de la tarea ya está; ver docs/runbook.md › Despliegue)
 - EventBridge + SQS para eventos async
 - Route53 + ACM para dominio custom
 - Pipeline CodePipeline o GitHub Actions OIDC role

@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { urlBaseDatos } from "./url";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema";
@@ -25,8 +26,7 @@ async function ufDelDia(): Promise<{ fecha: string; valorCentavos: number } | nu
 }
 
 async function main() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL no configurada");
+  const url = urlBaseDatos();
   const pool = new Pool({ connectionString: url });
   const db = drizzle(pool, { schema });
 

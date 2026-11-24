@@ -20,6 +20,9 @@ interface ComputeStackProps extends cdk.StackProps {
   documentsBucket: s3.IBucket;
 }
 
+const sinVacias = (env: Record<string, string>): Record<string, string> =>
+  Object.fromEntries(Object.entries(env).filter(([, v]) => v !== ""));
+
 export class ComputeStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ComputeStackProps) {
     super(scope, id, props);
@@ -52,6 +55,24 @@ export class ComputeStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
     });
     props.documentsBucket.grantReadWrite(taskRole);
+    // Correos de los flujos (modules/correos) por Amazon SES.
+    taskRole.addToPolicy(new iam.PolicyStatement({ actions: ["ses:SendEmail", "ses:SendRawEmail"], resources: ["*"] }));
+
+    // Configuración por ambiente vía contexto (cdk deploy -c webOrigin=https://… -c entraTenantId=…).
+    // Lo que falte queda como advertencia de la síntesis: la API no arranca sin lo obligatorio.
+    const ctx = (clave: string, porDefecto = ""): string => {
+      const v = (this.node.tryGetContext(clave) as string | undefined) ?? porDefecto;
+      if (!v) cdk.Annotations.of(this).addWarning(`Falta el contexto "${clave}" (ver infra/cdk/README.md)`);
+      return v;
+    };
+    const entraTenant = ctx("entraTenantId");
+
+    // Secreto de las sesiones propias (login con enlace): generado y guardado en Secrets Manager.
+    const sessionSecret = new secretsmanager.Secret(this, "SessionJwtSecret", {
+      description: "SESSION_JWT_SECRET de la API (sesiones del login con enlace)",
+      generateSecretString: { passwordLength: 64, excludePunctuation: true },
+      removalPolicy: props.stage === "prod" ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
 
     // Import del secret por ARN (no por objeto) para que CDK no intente
     // agregar resource policy a un recurso que vive en el Data stack.
@@ -75,17 +96,35 @@ export class ComputeStack extends cdk.Stack {
         containerPort: 3001,
         taskRole,
         logDriver: ecs.LogDrivers.awsLogs({ streamPrefix: "api", logGroup }),
-        environment: {
+        // Las vacías no se pasan: la API trata "" distinto de "no definida".
+        environment: sinVacias({
           NODE_ENV: props.stage === "prod" ? "production" : props.stage,
           PORT: "3001",
           DB_HOST: props.databaseEndpoint,
           DB_PORT: props.databasePort,
           S3_DOCUMENTS_BUCKET: props.documentsBucket.bucketName,
-        },
+          STORAGE_BACKEND: "s3",
+          // Detrás del ALB hay un salto de proxy: la IP real sale de X-Forwarded-For.
+          TRUSTED_PROXY_HOPS: "1",
+          WEB_ORIGIN: ctx("webOrigin"),
+          ALLOWED_EMAIL_DOMAIN: ctx("allowedEmailDomain", "legalchile.cl"),
+          BOOTSTRAP_ADMIN_EMAILS: ctx("bootstrapAdminEmails"),
+          ENTRA_TENANT_ID: entraTenant,
+          ENTRA_AUDIENCE: ctx("entraAudience"),
+          ENTRA_ISSUER: entraTenant ? `https://login.microsoftonline.com/${entraTenant}/v2.0` : "",
+          ENTRA_JWKS_URI: entraTenant ? `https://login.microsoftonline.com/${entraTenant}/discovery/v2.0/keys` : "",
+          SES_ENABLED: ctx("sesEnabled", "false"),
+          SES_FROM: ctx("sesFrom", "no-reply@legalchile.cl"),
+          CORREO_APRUEBA_ARANCEL: ctx("correoApruebaArancel"),
+          CORREO_SOLICITUD_FONDOS: ctx("correoSolicitudFondos"),
+          CORREO_AUTORIZA_PROVISION: ctx("correoAutorizaProvision"),
+          CORREO_OPERACIONES: ctx("correoOperaciones"),
+        }),
         secrets: {
           DB_USERNAME: ecs.Secret.fromSecretsManager(databaseSecret, "username"),
           DB_PASSWORD: ecs.Secret.fromSecretsManager(databaseSecret, "password"),
           DB_NAME: ecs.Secret.fromSecretsManager(databaseSecret, "dbname"),
+          SESSION_JWT_SECRET: ecs.Secret.fromSecretsManager(sessionSecret),
         },
       },
       publicLoadBalancer: true,

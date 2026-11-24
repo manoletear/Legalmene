@@ -21,7 +21,7 @@ pnpm db:studio  # Drizzle Studio UI sobre el schema
 
 | Variable | Default | Notas |
 |---|---|---|
-| `DATABASE_URL` | postgres://localhost:5432 | Aurora en prod |
+| `DATABASE_URL` | postgres://localhost:5432 | En AWS se arma con `DB_HOST`/`DB_PORT`/`DB_USERNAME`/`DB_PASSWORD`/`DB_NAME` |
 | `AUTH_DISABLED` | `true` (dev) | **NUNCA** `true` en prod |
 | `STORAGE_BACKEND` | `local` (dev) / `s3` (prod) | |
 | `S3_DOCUMENTS_BUCKET` | — | Requerido si backend=s3 |
@@ -81,22 +81,56 @@ S3 STANDARD_IA. Pruebas de restore mensuales obligatorias.
 
 ## Despliegue
 
-```bash
-# Push imagen API a ECR (CI lo hace automático en main)
-aws ecr get-login-password | docker login ...
-docker build -t legalmene-api apps/api
-docker tag legalmene-api $ECR/legalmene-api:latest
-docker push $ECR/legalmene-api:latest
+Primer despliegue de un ambiente (`dev`, `staging` o `prod`). El CI construye y prueba la imagen
+(`Imagen Docker de la API`) pero **no** publica en ECR ni despliega: eso requiere credenciales de la cuenta AWS.
 
-# CDK
-cd infra/cdk
-pnpm build
-npx cdk deploy --all --context stage=prod
+**1. Infraestructura.** La configuración del ambiente va como contexto de CDK; lo que falte aparece como
+advertencia en la síntesis.
+
+| Contexto | Variable en la API | Ejemplo |
+|---|---|---|
+| `webOrigin` | `WEB_ORIGIN` | `https://nexus.legalchile.cl` (obligatorio: enlaces de acceso y CORS) |
+| `allowedEmailDomain` | `ALLOWED_EMAIL_DOMAIN` | `legalchile.cl` |
+| `bootstrapAdminEmails` | `BOOTSTRAP_ADMIN_EMAILS` | correos del primer administrador |
+| `entraTenantId` / `entraAudience` | `ENTRA_*` | registro de la aplicación en Entra ID |
+| `sesEnabled` / `sesFrom` | `SES_ENABLED` / `SES_FROM` | `true` / remitente verificado en SES |
+| `correoApruebaArancel`, `correoSolicitudFondos`, `correoAutorizaProvision`, `correoOperaciones` | `CORREO_*` | casillas del Anexo |
+
+`SESSION_JWT_SECRET` se genera en Secrets Manager y la base de datos llega como `DB_HOST`, `DB_PORT`,
+`DB_USERNAME`, `DB_PASSWORD` y `DB_NAME` (la API arma la URL; ver `apps/api/src/db/url.ts`).
+
+```bash
+cd infra/cdk && pnpm build
+export CDK_DEFAULT_ACCOUNT=<cuenta> CDK_DEFAULT_REGION=sa-east-1
+npx cdk bootstrap                       # una vez por cuenta y región
+npx cdk deploy --all -c stage=prod -c webOrigin=https://… -c entraTenantId=… -c entraAudience=… \
+  -c sesEnabled=true -c sesFrom=no-reply@legalchile.cl -c correoOperaciones=operaciones@legalchile.cl
 ```
 
-Rolling deploy ECS Fargate: circuit breaker activado, rollback automático
-en healthcheck fallido. Min 100% / max 200% para no degradar durante el
-deploy.
+**2. Imagen de la API** (desde la raíz del repo; el repositorio ECR lo crea el stack Compute):
+
+```bash
+aws ecr get-login-password | docker login --username AWS --password-stdin $ECR
+docker build -f apps/api/Dockerfile -t $ECR/legalmene-prod-api:latest .
+docker push $ECR/legalmene-prod-api:latest
+```
+
+**3. Migraciones**, como tarea única de ECS con la misma definición de tarea (mismas variables y secretos),
+antes de que el servicio tome la imagen nueva:
+
+```bash
+aws ecs run-task --cluster legalmene-prod --launch-type FARGATE --task-definition <api-task-def> \
+  --network-configuration "awsvpcConfiguration={subnets=[<subnets privadas>],securityGroups=[<sg del servicio>]}" \
+  --overrides '{"containerOverrides":[{"name":"web","command":["node","dist/apps/api/src/db/migrate.js"]}]}'
+aws ecs update-service --cluster legalmene-prod --service <servicio> --force-new-deployment
+```
+
+Rolling deploy en ECS Fargate: circuit breaker con rollback automático si el healthcheck (`/api/v1/health`)
+falla; mínimo 100 % y máximo 200 % para no degradar durante el deploy.
+
+**Pendientes antes de producción:** SSL hacia Aurora (`DB_SSLMODE` + certificado de RDS en la imagen),
+dominio verificado en SES, Route53/ACM para el dominio y un pipeline con rol OIDC de GitHub para publicar
+la imagen y desplegar.
 
 ## Incidentes comunes
 

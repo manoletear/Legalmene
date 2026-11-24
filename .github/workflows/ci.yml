@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 env:
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
   PNPM_VERSION: "9.15.0"
 
 concurrency:
@@ -184,9 +184,42 @@ jobs:
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @legalmene/infra-cdk build
-      - name: Synth (no-credentials check)
+      # Sin cuenta: stacks independientes del entorno, sin consultas a AWS. Debe sintetizar sin errores.
+      - name: Synth (dev y prod, sin credenciales)
         working-directory: infra/cdk
         env:
           CDK_DEFAULT_REGION: sa-east-1
-          CDK_DEFAULT_ACCOUNT: "123456789012"
-        run: npx cdk synth --quiet || true
+        run: |
+          npx cdk synth --quiet
+          npx cdk synth --quiet --context stage=prod
+
+  docker-api:
+    name: Imagen Docker de la API
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: legalmene
+          POSTGRES_PASSWORD: legalmene
+          POSTGRES_DB: legalmene
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir imagen
+        run: docker build -f apps/api/Dockerfile -t legalmene-api:ci .
+      # La imagen debe migrar con las variables que entrega ECS (DB_*) y responder /health.
+      - name: Migrar y arrancar
+        run: |
+          DB="-e DB_HOST=localhost -e DB_PORT=5432 -e DB_USERNAME=legalmene -e DB_PASSWORD=legalmene -e DB_NAME=legalmene"
+          docker run --rm --network host $DB legalmene-api:ci node dist/apps/api/src/db/migrate.js
+          docker run -d --name api --network host $DB -e PORT=3001 -e NODE_ENV=production \
+            -e SESSION_JWT_SECRET=ci-secreto-de-prueba-con-mas-de-32-caracteres -e WEB_ORIGIN=http://localhost:4200 legalmene-api:ci
+          for i in $(seq 1 30); do curl -sf localhost:3001/api/v1/health && exit 0; sleep 2; done
+          docker logs api; exit 1
