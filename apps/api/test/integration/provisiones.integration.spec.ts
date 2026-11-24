@@ -161,6 +161,8 @@ const RUN = !!process.env.DATABASE_URL;
     // Anexo §X 14: el contador registra el reingreso del saldo exacto.
     await expect(service.registrarReingreso(p.id, jefe, 100_000)).rejects.toThrow(/saldo no gastado \(\$150\.000\)/);
     expect((await service.registrarReingreso(p.id, jefe, 150_000)).estado).toBe("Reingresado");
+    const rei = await moduleRef.get(ComprobantesPdfService).reingreso(p.id);
+    expect(rei.secciones[1].filas).toEqual(expect.arrayContaining([["Saldo reingresado", "$ 150.000"]]));
     expect(await service.resumenAtencion(atencionId)).toMatchObject({
       provisionado: 450_000,
       entregado: 450_000,

@@ -71,6 +71,13 @@ export class ExportsController {
   }
 
   // Anexo §X 12: comprobante de entrega de fondos al abogado, en dos copias.
+  @Get("comprobantes/reingreso/:provisionId.pdf")
+  @Permiso("finanzas.ver")
+  async reingreso(@Param("provisionId", ParseUUIDPipe) provisionId: string, @Res() res: Response) {
+    const c = await this.comprobantes.reingreso(provisionId);
+    this.enviarComprobante(c, `reingreso-${c.numero}.pdf`, res);
+  }
+
   @Get("comprobantes/entrega/:provisionId.pdf")
   @Permiso("finanzas.ver")
   async entregaFondos(@Param("provisionId", ParseUUIDPipe) provisionId: string, @Res() res: Response) {

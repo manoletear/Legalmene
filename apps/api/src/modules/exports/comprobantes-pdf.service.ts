@@ -361,4 +361,44 @@ export class ComprobantesPdfService {
       firmas: ["Entregado por (Finanzas)", "Recibí conforme (Abogado)"],
     };
   }
+
+  // Anexo §X l.1740–1755: comprobante del saldo no gastado devuelto por el abogado (reingreso).
+  async reingreso(provisionId: string): Promise<Comprobante> {
+    const [p] = await this.db.select().from(provisiones).where(eq(provisiones.id, provisionId));
+    if (!p) throw new NotFoundException(`Provisión ${provisionId} no existe`);
+    const a = await this.atencion(p.atencionId);
+    const [m] = await this.db
+      .select()
+      .from(provisionMovimientos)
+      .where(and(eq(provisionMovimientos.provisionId, provisionId), eq(provisionMovimientos.tipo, "Reintegro")))
+      .orderBy(desc(provisionMovimientos.fecha))
+      .limit(1);
+    if (!m) throw new ConflictException("La provisión no tiene un reingreso registrado");
+    const gastos = await this.db
+      .select({ monto: provisionMovimientos.monto })
+      .from(provisionMovimientos)
+      .where(and(eq(provisionMovimientos.provisionId, provisionId), eq(provisionMovimientos.tipo, "Gasto")));
+    return {
+      titulo: "Comprobante de reingreso de fondos",
+      numero: `${a.correlativo}-REI-${p.id.slice(0, 8).toUpperCase()}`,
+      copias: ["Finanzas", "Abogado"],
+      secciones: [
+        this.seccionAtencion(a),
+        {
+          titulo: "Reingreso",
+          filas: [
+            ["Abogado", await this.nombreUsuario(p.solicitadaPorId)],
+            ["Motivo de la provisión", p.motivo],
+            ["Monto entregado", clp(p.montoEntregado)],
+            ["Gastos rendidos", clp(gastos.reduce((x, g) => x + g.monto, 0))],
+            ["Saldo reingresado", clp(m.monto)],
+            ["Fecha", fecha(m.fecha)],
+            ["Registrado por", await this.nombreUsuario(m.registradoPorId)],
+          ],
+        },
+      ],
+      nota: m.glosa ?? undefined,
+      firmas: ["Recibido por (Finanzas)", "Entregado por (Abogado)"],
+    };
+  }
 }

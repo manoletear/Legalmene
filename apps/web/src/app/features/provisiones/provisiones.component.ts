@@ -83,6 +83,8 @@ import { Observable } from "rxjs";
             <td class="lm-small">{{ p.solicitadaPorEmail }}</td>
             <td class="lm-small">{{ p.fechaSolicitud | date: 'dd/MM/yyyy' }}</td>
             <td style="text-align:right; white-space:nowrap;">
+              <button *ngIf="['Reingresado', 'RendidaCliente', 'Cerrada'].includes(p.estado) && p.fechaEntrega" pButton type="button" class="p-button-sm p-button-text" icon="pi pi-print"
+                label="Reingreso" title="Comprobante de reingreso del saldo no gastado (2 copias)" (click)="comprobanteReingreso(p)"></button>
               <button *ngIf="p.fechaEntrega" pButton type="button" class="p-button-sm p-button-text" icon="pi pi-print"
                 label="Entrega" title="Comprobante de entrega de fondos al abogado (2 copias)" (click)="comprobanteEntrega(p)"></button>
               <button *ngIf="p.fechaPagoCliente" pButton type="button" class="p-button-sm p-button-text" icon="pi pi-print"
@@ -111,6 +113,15 @@ export class ProvisionesComponent implements OnInit {
   private me = inject(MeService);
   private pagoDialog = inject(PagoDialogService);
   private gastoDialog = inject(GastoDialogService);
+
+  // Anexo §X l.1740: comprobante del saldo reingresado.
+  async comprobanteReingreso(p: { id: string; correlativo: string }) {
+    try {
+      await descargarArchivo(`/exports/comprobantes/reingreso/${p.id}.pdf`, `reingreso-${p.correlativo}.pdf`);
+    } catch (e) {
+      this.msg.add({ severity: "error", summary: "No se pudo generar el comprobante", detail: (e as Error).message, life: 5000 });
+    }
+  }
 
   // Anexo §X 12: comprobante de entrega de fondos al abogado.
   async comprobanteEntrega(p: { id: string; correlativo: string }) {
