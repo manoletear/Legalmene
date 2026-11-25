@@ -175,3 +175,13 @@ En **Reportes**, elija el período y presione *Generar*; todo se descarga en Exc
 - **Consultas:** *Enviar respuesta al cliente* manda por correo la respuesta guardada; junto a *Derivar* se
   ve el beneficio del plan para asesoría y juicio.
 - **Reportes → Compromisos de comité:** seguimiento de compromisos pendientes o vencidos, con Excel.
+
+### Novedades (25-11-2026)
+
+- **Informar condiciones al cliente** (ficha, *Acciones rápidas*): correo con el copago y cómo pagarlo, la
+  provisión estimada y el *plazo de primeros avances* (se completa en los datos de la asesoría o juicio).
+- **Nueva provisión:** diálogo con monto, motivo, gestión que la origina y la opción *Guardar como borrador*.
+  Los borradores no los ve Finanzas; marque los que corresponda y use *Notificar seleccionadas*.
+- **Sin gestiones predefinidas** para la materia: *Pedir a jefatura que defina las gestiones*.
+- **Al completar la última gestión abierta** la ficha pregunta si registrar otra o pasar a la etapa siguiente.
+

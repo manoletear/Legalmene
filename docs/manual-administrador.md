@@ -55,6 +55,13 @@ de consulta, causas de término, calidades procesales, **canales**, **regiones**
 - **Formatos de exportación** (**Administración → Formatos de exportación**): elija las columnas y su orden
   para cada planilla de búsqueda. "Volver a todas las columnas" quita el formato.
 
+- **Tipos de gestión** (**Maestros → Tipos de gestión**): nombres editables; cada uno tiene una categoría del sistema
+  (llamada, correo, reunión, escrito judicial…) que define las reglas (p. ej. con arancel impago solo se permiten
+  llamadas, correos y reuniones).
+- **Materias:** además de "Requiere provisión", la *provisión estimada* en pesos que se informa al cliente.
+- **Horario de acceso por perfil** (**Administración → Perfiles**): días y horas (hora de Chile) en que el perfil puede
+  usar el sistema. El Administrador nunca se restringe.
+
 ## 4. Planes, aranceles y coberturas
 
 - **Planes:** productos contratables, con canal y término de vigencia. Un plan vencido o desactivado no

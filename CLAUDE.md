@@ -205,7 +205,8 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   de flujo usan `avisar(notif, destinatarios, aviso, actor, { servicio: this.correos, casillas, atencionId })`
   (`notif-inbox/destinatarios.ts`): mismo aviso en la aplicación y por correo, nunca a quien hizo la acción. Las casillas
   institucionales (`aprueba.arancel@`, `solicitud.fondos@`, `autoriza.provision@`, `operaciones@`) vienen de `CORREO_*`.
-  Al cliente solo van la presentación del abogado, la solicitud de antecedentes, la respuesta de la consulta
+  Al cliente solo van la presentación del abogado, la solicitud de antecedentes, las condiciones de la atención
+  (`informarCondiciones()`: copago y cómo pagarlo, provisión estimada, plazo de avances; máx. 3 cada 24 h), la respuesta de la consulta
   (`enviarRespuestaConsulta()`, máx. 3 cada 24 h), el enlace de pago WebPay, el inicio/término de gestiones con
   `informarCliente`, el término de la atención y el aviso de cambio de correo a la dirección anterior.
 - **Correcciones (`modules/correcciones`)**: única vía para escribir estados fuera de los flujos (reabrir atenciones, reiniciar
@@ -231,6 +232,13 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
 - **Arancel por WebPay**: "Notificar pago" (`notificarPago()`) crea la orden con `crearOrdenWebPay()` por el copago con la
   UF de hoy y envía el enlace al cliente; el camino (`caminoPago`) cambia en cualquier estado salvo Pagado. Un pago WebPay
   confirmado de una orden de arancel lo deja Pagado vía `pagoWebPay()`, sin registro manual.
+- **Gestiones**: el tipo visible sale del maestro `tipos_gestion` (`tipoGestionId`); `gestiones.tipo` es su categoría del
+  sistema (TipoGestionEnum) y es la que usan las reglas (contacto con arancel impago, escritos de la primera presentación).
+  Sin gestiones predefinidas, `solicitarGestionesPredefinidas()` avisa a quienes administran maestros.
+- **Provisiones en borrador**: estado `Borrador` (no lo ve Finanzas, no avisa); `notificarBorradores()` los pasa a Solicitada con
+  las mismas validaciones que `solicitar()`. Una provisión puede indicar `gestionId` (de la misma atención).
+- **Horario por perfil**: `perfiles.horario` (días 1–7 y horas de Chile); `contextoAcceso()` rechaza fuera de horario con
+  `dentroDeHorario()` (shared). El Administrador nunca se restringe.
 - **Decisión de provisión**: `atenciones.decision_provision` (Acepta / NoAcepta / PagaDirecto, esta última no en juicios);
   sin aceptación `ProvisionesService.solicitar()` responde 409. Plazo de antecedentes: entrar a EnEsperaAntecedentes fija
   `antecedentes_faltantes_desde`; `solicitarAntecedentes()` (máx. 3 por atención cada 24 h) cumple el plazo de 1 día hábil.
@@ -285,7 +293,8 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
 
 ## TODOs prioritarios
 
-**Seguimiento vigente:** [`docs/plan-cumplimiento-anexo.md`](./docs/plan-cumplimiento-anexo.md) (fases 0–7, con casillas)
+**Seguimiento vigente:** [`docs/plan-cumplimiento-anexo.md`](./docs/plan-cumplimiento-anexo.md) (fases 0–7, con casillas),
+las preguntas abiertas al cliente en [`docs/decisiones-pendientes-legalchile.md`](./docs/decisiones-pendientes-legalchile.md)
 y el detalle requisito por requisito en `docs/cumplimiento-anexo-detalle.md`. El orden histórico está en
 `docs/requerimientos-anexo-psl.md` §5. Pendientes técnicos:
 
