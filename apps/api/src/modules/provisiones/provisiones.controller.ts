@@ -27,6 +27,7 @@ import {
   RegistrarMovimientoDto,
   SolicitarProvisionDto,
   DecisionProvisionDto,
+  NotificarProvisionesDto,
 } from "./dto";
 
 function usuarioId(user: AuthenticatedUser): string {
@@ -57,6 +58,22 @@ export class ProvisionesController {
   @Get("atenciones/:atencionId/provisiones")
   listarPorAtencion(@Param("atencionId", ParseUUIDPipe) atencionId: string) {
     return this.service.listarPorAtencion(atencionId);
+  }
+
+  @Post("atenciones/:atencionId/provisiones/notificar")
+  @Permiso("provisiones.solicitar")
+  notificarBorradores(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("atencionId", ParseUUIDPipe) atencionId: string,
+    @Body() body: NotificarProvisionesDto,
+  ) {
+    return this.service.notificarBorradores(atencionId, usuarioId(user), body.ids);
+  }
+
+  @Post("provisiones/:id/descartar")
+  @Permiso("provisiones.solicitar")
+  descartar(@CurrentUser() user: AuthenticatedUser, @Param("id", ParseUUIDPipe) id: string) {
+    return this.service.descartarBorrador(id, usuarioId(user));
   }
 
   @Post("atenciones/:atencionId/provisiones/decision-cliente")

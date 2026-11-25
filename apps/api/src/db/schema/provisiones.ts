@@ -17,6 +17,7 @@ import { documentos } from "./documentos";
 
 // Ciclo del Anexo §X (ver shared/provision.ts).
 export const estadoProvisionEnum = pgEnum("estado_provision", [
+  "Borrador",
   "Solicitada",
   "Pagada",
   "EnAprobacion",
@@ -45,6 +46,8 @@ export const provisiones = pgTable(
       .references(() => atenciones.id, { onDelete: "restrict" }),
     monto: integer("monto").notNull(),
     motivo: varchar("motivo", { length: 500 }).notNull(),
+    // Gestión que origina la provisión (opcional).
+    gestionId: uuid("gestion_id"),
     estado: estadoProvisionEnum("estado").notNull().default("Solicitada"),
     solicitadaPorId: uuid("solicitada_por_id")
       .notNull()

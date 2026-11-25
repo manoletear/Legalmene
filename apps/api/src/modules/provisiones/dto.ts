@@ -10,6 +10,7 @@ import {
   RegistrarMovimientoSchema,
   SolicitarProvisionSchema,
   DecisionProvisionSchema,
+  NotificarProvisionesSchema,
 } from "@legalmene/shared";
 import { createZodDto } from "nestjs-zod";
 import { z } from "zod";
@@ -31,3 +32,4 @@ export const FiltroProvisionesSchema = CriteriosBusquedaSchema.extend({
 });
 export class FiltroProvisionesDto extends createZodDto(FiltroProvisionesSchema) {}
 export class DecisionProvisionDto extends createZodDto(DecisionProvisionSchema) {}
+export class NotificarProvisionesDto extends createZodDto(NotificarProvisionesSchema) {}

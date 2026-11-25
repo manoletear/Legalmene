@@ -49,6 +49,7 @@ import {
   CAMINO_PAGO_LABEL,
   TIPO_DOCUMENTO_LABEL,
   type TipoDocumento,
+  type Provision,
   DECISION_PROVISION_LABEL,
   type DecisionProvision,
   type CaminoPagoArancel,
@@ -307,6 +308,16 @@ interface PipelineStep {
                   </span>
                 </ng-container>
               </div>
+              <!-- Anexo §X 03: borradores que el abogado notifica juntos como Solicitadas. -->
+              <div *ngIf="borradores().length" class="lm-small" data-testid="borradores-provision" style="margin-top:6px;">
+                <strong>Borradores sin notificar</strong>
+                <div *ngFor="let b of borradores()" class="lm-row" style="gap:6px; align-items:center;">
+                  <input type="checkbox" [checked]="borradoresSel.has(b.id)" (change)="alternarBorrador(b.id)" [attr.aria-label]="b.motivo" />
+                  <span class="lm-grow">{{ b.motivo }} · $ {{ b.monto | number }}</span>
+                  <a style="cursor:pointer;" (click)="descartarBorrador(a.id, b.id)">Descartar</a>
+                </div>
+                <button pButton size="small" [outlined]="true" icon="pi pi-send" label="Notificar seleccionadas" [disabled]="!borradoresSel.size" (click)="notificarBorradores(a.id)"></button>
+              </div>
               <div class="lm-info-card-footer">
                 <a style="cursor:pointer;" (click)="solicitarProvision(a.id)">Solicitar provisión</a> ·
                 <a routerLink="/provisiones">Ver provisiones →</a>
@@ -562,6 +573,21 @@ interface PipelineStep {
       </div>
     </p-dialog>
 
+    <p-dialog header="Nueva provisión de fondos" [visible]="!!npAtencion()" (visibleChange)="!$event && npAtencion.set(null)" [modal]="true" [style]="{ width: '480px', maxWidth: '95vw' }">
+      <div class="lm-col" style="gap:10px;" data-testid="nueva-provision">
+        <label class="lm-col" style="gap:4px;">Monto en pesos *<input pInputText name="npMonto" [(ngModel)]="np.monto" inputmode="numeric" /></label>
+        <label class="lm-col" style="gap:4px;">Motivo *<textarea pTextarea name="npMotivo" [(ngModel)]="np.motivo" rows="2" maxlength="500"></textarea></label>
+        <label class="lm-col" style="gap:4px;">Gestión que la origina
+          <p-select name="npGestion" [(ngModel)]="np.gestionId" [options]="gestionOpts()" optionLabel="label" optionValue="value" [showClear]="true" placeholder="Sin gestión" appendTo="body"></p-select>
+        </label>
+        <label class="lm-row" style="gap:6px; align-items:center;"><input type="checkbox" name="npBorrador" [(ngModel)]="np.borrador" /> Guardar como borrador (notificar después)</label>
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button pButton label="Cancelar" [text]="true" (click)="npAtencion.set(null)"></button>
+          <button pButton [label]="np.borrador ? 'Guardar borrador' : 'Solicitar'" icon="pi pi-check" [disabled]="!np.monto.trim() || np.motivo.trim().length < 3" (click)="guardarProvision()"></button>
+        </div>
+      </div>
+    </p-dialog>
+
     <!-- Anexo §VII l.876: tras completar una gestión, decidir si hay otra o se pasa a la etapa siguiente. -->
     <p-dialog header="Gestión completada: ¿qué sigue?" [visible]="!!siguientePaso()" (visibleChange)="!$event && siguientePaso.set(null)" [modal]="true" [style]="{ width: '440px', maxWidth: '95vw' }">
       <div class="lm-col" style="gap:8px;" data-testid="siguiente-paso">
@@ -753,7 +779,32 @@ export class AtencionDetailComponent implements OnInit {
   }
 
   private cargarProvisiones(id: string) {
-    this.provisionesApi.porAtencion(id).subscribe((r) => this.resumenProvision.set(r.resumen));
+    this.provisionesApi.porAtencion(id).subscribe((r) => {
+      this.resumenProvision.set(r.resumen);
+      this.borradores.set(r.data.filter((p) => p.estado === "Borrador"));
+      this.borradoresSel = new Set();
+    });
+  }
+
+  protected borradores = signal<Provision[]>([]);
+  protected borradoresSel = new Set<string>();
+  protected alternarBorrador(id: string) {
+    const s = new Set(this.borradoresSel);
+    if (s.has(id)) s.delete(id);
+    else s.add(id);
+    this.borradoresSel = s;
+  }
+  notificarBorradores(atencionId: string) {
+    this.provisionesApi.notificarBorradores(atencionId, [...this.borradoresSel]).subscribe({
+      next: (r) => {
+        this.msg.add({ severity: "success", summary: `${r.length} provisión(es) notificada(s)`, life: 3000 });
+        this.cargarProvisiones(atencionId);
+      },
+      error: (e) => this.msg.add({ severity: "error", summary: "No se pudo notificar", detail: e.error?.message ?? e.message, life: 5000 }),
+    });
+  }
+  descartarBorrador(atencionId: string, id: string) {
+    this.provisionesApi.descartarBorrador(id).subscribe({ next: () => this.cargarProvisiones(atencionId) });
   }
 
   protected decisionLabel(d: DecisionProvision): string {
@@ -776,24 +827,39 @@ export class AtencionDetailComponent implements OnInit {
     });
   }
 
-  async solicitarProvision(atencionId: string) {
-    const montoTxt = await this.prompt.open({ header: "Solicitar provisión", label: "Monto en pesos", required: true });
-    if (!montoTxt) return;
-    const monto = Number(montoTxt.replace(/[.\s$]/g, ""));
+  // Nueva provisión: monto, motivo, gestión que la origina (opcional) y si queda como borrador.
+  protected np = { monto: "", motivo: "", gestionId: "" as string, borrador: false };
+  protected npAtencion = signal<string | null>(null);
+  protected gestionOpts = computed(() => this.gestiones().map((g) => ({ label: g.titulo, value: g.id })));
+  solicitarProvision(atencionId: string) {
+    this.np = { monto: "", motivo: "", gestionId: "", borrador: false };
+    this.npAtencion.set(atencionId);
+  }
+  protected guardarProvision() {
+    const atencionId = this.npAtencion();
+    if (!atencionId) return;
+    const monto = Number(this.np.monto.replace(/[.\s$]/g, ""));
     if (!Number.isInteger(monto) || monto <= 0) {
       this.msg.add({ severity: "warn", summary: "Monto inválido", life: 3000 });
       return;
     }
-    const motivo = await this.prompt.open({ header: "Motivo de la provisión", label: "Motivo", multiline: true, required: true });
-    if (!motivo) return;
-    this.provisionesApi.solicitar(atencionId, { monto, motivo }).subscribe({
-      next: () => {
-        this.msg.add({ severity: "success", summary: "Provisión solicitada", detail: "Queda pendiente del pago del cliente", life: 3000 });
-        this.cargarProvisiones(atencionId);
-      },
-      error: (err) => this.msg.add({ severity: "error", summary: "Error", detail: err.error?.message ?? err.message, life: 4000 }),
-    });
+    this.provisionesApi
+      .solicitar(atencionId, { monto, motivo: this.np.motivo.trim(), gestionId: this.np.gestionId || undefined, borrador: this.np.borrador || undefined })
+      .subscribe({
+        next: () => {
+          this.npAtencion.set(null);
+          this.msg.add({
+            severity: "success",
+            summary: this.np.borrador ? "Borrador guardado" : "Provisión solicitada",
+            detail: this.np.borrador ? "Notifíquela cuando corresponda" : "Queda pendiente del pago del cliente",
+            life: 3000,
+          });
+          this.cargarProvisiones(atencionId);
+        },
+        error: (err) => this.msg.add({ severity: "error", summary: "Error", detail: err.error?.message ?? err.message, life: 4000 }),
+      });
   }
+
 
   protected colorArancel(e: EstadoArancelAtencion): string {
     return ESTADO_ARANCEL_COLOR[e];

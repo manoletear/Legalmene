@@ -66,6 +66,14 @@ export class ProvisionesApiService {
     return this.http.post<Provision>(`${this.base}/atenciones/${atencionId}/provisiones`, payload);
   }
 
+  notificarBorradores(atencionId: string, ids: string[]): Observable<Provision[]> {
+    return this.http.post<Provision[]>(`${this.base}/atenciones/${atencionId}/provisiones/notificar`, { ids });
+  }
+
+  descartarBorrador(id: string): Observable<Provision> {
+    return this.http.post<Provision>(`${this.base}/provisiones/${id}/descartar`, {});
+  }
+
   decisionCliente(atencionId: string, decision: DecisionProvision, observacion?: string): Observable<DecisionProvisionRegistro | null> {
     return this.http.post<DecisionProvisionRegistro | null>(`${this.base}/atenciones/${atencionId}/provisiones/decision-cliente`, { decision, observacion });
   }

@@ -1,3 +1,4 @@
+import { gestiones } from "../../db/schema/gestiones";
 import { plantillaAviso } from "../correos/plantillas";
 import { CorreosService } from "../correos/correos.service";
 import { documentos } from "../../db/schema/documentos";
@@ -13,7 +14,7 @@ import {
   NotFoundException,
   Optional,
 } from "@nestjs/common";
-import { and, asc, count, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, ne, or, sql, type SQL } from "drizzle-orm";
 import {
   ESTADO_PROVISION_LABEL,
   puedeTransicionarProvision,
@@ -24,7 +25,7 @@ import {
   type CuentaCorrienteAbogado,
   type ResumenProvisionAtencion,
   type SolicitarProvision,
-  type DecisionProvisionInput,
+    type DecisionProvisionInput,
 } from "@legalmene/shared";
 import { DRIZZLE, Database } from "../../db/database.module";
 import { filtroAtenciones } from "../../common/acceso/alcance";
@@ -90,7 +91,8 @@ export class ProvisionesService {
     const where = and(
       filtroAtenciones(),
       condicionAtencion(filtro, provisiones.fechaSolicitud),
-      filtro.estado ? eq(provisiones.estado, filtro.estado) : undefined,
+      // Los borradores solo se ven en la ficha de la atención.
+      filtro.estado ? eq(provisiones.estado, filtro.estado) : ne(provisiones.estado, "Borrador"),
     );
     const [rows, [{ value: total }]] = await Promise.all([
       this.db
@@ -258,20 +260,51 @@ export class ProvisionesService {
     if (ESTADOS_ATENCION_CERRADA.includes(atencion.estado)) {
       throw new BadRequestException(`No se pueden solicitar provisiones en un caso ${atencion.estado}`);
     }
-    await this.assertSinRendicionPendiente(atencionId);
-    await this.asegurarSinRendicionEnCurso(atencionId);
-    await this.asegurarClienteProvisiona(atencionId);
+    if (input.gestionId) {
+      const [g] = await this.db.select({ atencionId: gestiones.atencionId }).from(gestiones).where(eq(gestiones.id, input.gestionId));
+      if (g?.atencionId !== atencionId) throw new BadRequestException("La gestión no corresponde a esta atención");
+    }
+    const estado: EstadoProvision = input.borrador ? "Borrador" : "Solicitada";
+    if (!input.borrador) {
+      await this.assertSinRendicionPendiente(atencionId);
+      await this.asegurarSinRendicionEnCurso(atencionId);
+      await this.asegurarClienteProvisiona(atencionId);
+    }
     return this.db.transaction(async (tx) => {
       const [row] = await tx
         .insert(provisiones)
-        .values({ atencionId, monto: input.monto, motivo: input.motivo, solicitadaPorId: usuarioId })
+        .values({ atencionId, monto: input.monto, motivo: input.motivo, solicitadaPorId: usuarioId, estado, gestionId: input.gestionId ?? null })
         .returning();
-      await this.evento(tx, row.id, null, "Solicitada", usuarioId, null);
+      await this.evento(tx, row.id, null, estado, usuarioId, null);
       return row;
     }).then(async (row) => {
-      await this.notificar(row, "Solicitada", null, usuarioId);
+      if (estado === "Solicitada") await this.notificar(row, "Solicitada", null, usuarioId);
       return row;
     });
+  }
+
+  // Anexo §X 03: de las provisiones ingresadas, el abogado elige cuáles notificar como Solicitadas.
+  async notificarBorradores(atencionId: string, usuarioId: string, ids: string[]): Promise<Provision[]> {
+    const atencion = await this.assertAtencion(atencionId);
+    if (ESTADOS_ATENCION_CERRADA.includes(atencion.estado)) {
+      throw new BadRequestException(`No se pueden solicitar provisiones en un caso ${atencion.estado}`);
+    }
+    await this.assertSinRendicionPendiente(atencionId);
+    await this.asegurarSinRendicionEnCurso(atencionId);
+    await this.asegurarClienteProvisiona(atencionId);
+    const filas = await this.db.select().from(provisiones).where(and(eq(provisiones.atencionId, atencionId), inArray(provisiones.id, ids)));
+    if (filas.length !== new Set(ids).size || filas.some((p) => p.estado !== "Borrador")) {
+      throw new ConflictException("Solo se notifican borradores de esta atención");
+    }
+    const out: Provision[] = [];
+    for (const p of filas) out.push(await this.transicionar(p.id, "Solicitada", usuarioId, { fechaSolicitud: new Date() }));
+    return out;
+  }
+
+  async descartarBorrador(id: string, usuarioId: string): Promise<Provision> {
+    const p = await this.obtener(id);
+    if (p.estado !== "Borrador") throw new ConflictException("Solo se descarta un borrador");
+    return this.transicionar(id, "Cerrada", usuarioId, {}, "Borrador descartado");
   }
 
   // Cambio de estado con bloqueo de fila para que dos usuarios no resuelvan la misma etapa.

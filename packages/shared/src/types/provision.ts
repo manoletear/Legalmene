@@ -25,6 +25,8 @@ export interface DecisionProvisionRegistro {
 // Ciclo de provisión de fondos (Anexo §X). Rechazada = solicitud inicial rechazada (legado);
 // el rechazo de una entrega devuelve la provisión a Pagada.
 export const EstadoProvisionEnum = z.enum([
+  // Ingresada por el abogado y aún no notificada (Anexo §X 03): no la ve Finanzas.
+  "Borrador",
   "Solicitada",
   "Pagada",
   "EnAprobacion",
@@ -42,6 +44,7 @@ export const EstadoProvisionEnum = z.enum([
 export type EstadoProvision = z.infer<typeof EstadoProvisionEnum>;
 
 export const ESTADO_PROVISION_LABEL: Record<EstadoProvision, string> = {
+  Borrador: "Borrador (sin notificar)",
   Solicitada: "Solicitada",
   Pagada: "Pagada por cliente",
   EnAprobacion: "Entrega en aprobación",
@@ -57,6 +60,7 @@ export const ESTADO_PROVISION_LABEL: Record<EstadoProvision, string> = {
 
 // Transiciones manuales permitidas (Cerrada la asigna el cierre de la atención).
 export const TRANSICIONES_PROVISION: Record<EstadoProvision, readonly EstadoProvision[]> = {
+  Borrador: ["Solicitada", "Cerrada"],
   Solicitada: ["Pagada"],
   Pagada: ["EnAprobacion", "RendidaCliente"],
   EnAprobacion: ["Autorizada", "Pagada"],
@@ -116,7 +120,13 @@ export type Provision = z.infer<typeof ProvisionSchema>;
 export const SolicitarProvisionSchema = z.object({
   monto: z.number().int().positive(),
   motivo: z.string().min(3).max(500),
+  // Gestión que origina el gasto (Anexo §VIII l.1062: "indicando la gestión a realizar").
+  gestionId: z.string().uuid().optional(),
+  // Ingresarla sin notificar; se notifica después junto con otras (Anexo §X 03).
+  borrador: z.boolean().optional(),
 });
+export const NotificarProvisionesSchema = z.object({ ids: z.array(z.string().uuid()).min(1).max(50) });
+export type NotificarProvisiones = z.infer<typeof NotificarProvisionesSchema>;
 export type SolicitarProvision = z.infer<typeof SolicitarProvisionSchema>;
 
 // Datos del pago que registra el contador (Anexo §X 05): medio, cuotas y referencia del depósito o

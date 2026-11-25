@@ -225,6 +225,23 @@ const RUN = !!process.env.DATABASE_URL;
     ).rejects.toThrow(/supera el saldo/);
   });
 
+  it("borradores: se ingresan sin avisar a Finanzas y se notifican varios a la vez", async () => {
+    const atencionId = await nuevaAtencion();
+    notifs.length = 0;
+    const b1 = await service.solicitar(atencionId, abogado, { monto: 10_000, motivo: "Receptor", borrador: true });
+    const b2 = await service.solicitar(atencionId, abogado, { monto: 20_000, motivo: "Peritaje", borrador: true });
+    const b3 = await service.solicitar(atencionId, abogado, { monto: 5_000, motivo: "Copias", borrador: true });
+    expect([b1.estado, b2.estado]).toEqual(["Borrador", "Borrador"]);
+    expect(notifs).toEqual([]);
+    expect((await service.listar({})).data.some((p) => p.id === b1.id)).toBe(false);
+    const notificadas = await service.notificarBorradores(atencionId, abogado, [b1.id, b2.id]);
+    expect(notificadas.map((p) => p.estado)).toEqual(["Solicitada", "Solicitada"]);
+    expect(notifs.length).toBeGreaterThan(0);
+    await expect(service.notificarBorradores(atencionId, abogado, [b1.id])).rejects.toThrow(/Solo se notifican borradores/);
+    expect((await service.descartarBorrador(b3.id, abogado)).estado).toBe("Cerrada");
+    expect((await service.resumenAtencion(atencionId)).pendientePago).toBe(30_000);
+  });
+
   it("decisión del cliente: no acepta o paga directo detiene el flujo; aceptar lo reinicia", async () => {
     const juicio = await nuevaAtencion();
     await expect(service.registrarDecision(juicio, abogado, { decision: "PagaDirecto" })).rejects.toThrow(/juicio/);
