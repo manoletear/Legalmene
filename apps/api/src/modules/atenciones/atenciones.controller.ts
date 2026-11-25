@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   Body,
   Controller,
@@ -44,6 +45,8 @@ class SolicitarTerminoDto extends createZodDto(SolicitarTerminoSchema) {}
 class RechazarTerminoDto extends createZodDto(RechazarTerminoSchema) {}
 class ResolverCoberturaDto extends createZodDto(ResolverCoberturaSchema) {}
 class RechazarCoberturaDto extends createZodDto(RechazarCoberturaSchema) {}
+
+class ComentarioDto extends createZodDto(z.object({ comentario: z.string().trim().max(300).optional() })) {}
 
 @ApiTags("atenciones")
 @ApiBearerAuth("EntraID")
@@ -129,6 +132,13 @@ export class AtencionesController {
   @Permiso("atenciones.aprobar_termino")
   aprobarTermino(@Param("id", ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.service.aprobarTermino(id, user);
+  }
+
+  // Sin gestiones predefinidas para la materia: pedir a la jefatura que las defina.
+  @Post("atenciones/:id/solicitar-gestiones-predefinidas")
+  @Permiso("gestiones.registrar")
+  solicitarGestiones(@Param("id", ParseUUIDPipe) id: string, @Body() body: ComentarioDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.solicitarGestionesPredefinidas(id, user, body.comentario);
   }
 
   // Correo al cliente con copago, forma de pago, provisión estimada y plazo de primeros avances.

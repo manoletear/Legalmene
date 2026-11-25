@@ -392,7 +392,14 @@ interface PipelineStep {
                           </ng-container>
                         </td>
                       </tr>
-                      <tr *ngIf="!gestiones().length"><td colspan="7" class="lm-muted" style="text-align:center; padding:24px;">Sin gestiones registradas.</td></tr>
+                      <tr *ngIf="!gestiones().length"><td colspan="7" class="lm-muted" style="text-align:center; padding:24px;">
+                        Sin gestiones registradas.
+                        <!-- Anexo §VII l.866: sin gestiones predefinidas, pedir a la jefatura que las defina. -->
+                        <div *ngIf="a.tipo !== 'Consulta' && me.tiene('gestiones.registrar')" style="margin-top:8px;">
+                          <button pButton size="small" [text]="true" icon="pi pi-question-circle" label="Pedir a jefatura que defina las gestiones de esta materia"
+                            data-testid="pedir-gestiones" (click)="pedirGestiones(a.id)"></button>
+                        </div>
+                      </td></tr>
                     </tbody>
                   </table>
                 </p-tabpanel>
@@ -552,6 +559,15 @@ interface PipelineStep {
           <button pButton label="Cancelar" [text]="true" (click)="ngVisible.set(false)"></button>
           <button pButton label="Crear gestión" icon="pi pi-check" [disabled]="!ng.titulo.trim() || !ng.responsableId || !ng.inicio" [loading]="ngGuardando()" (click)="crearGestion()"></button>
         </div>
+      </div>
+    </p-dialog>
+
+    <!-- Anexo §VII l.876: tras completar una gestión, decidir si hay otra o se pasa a la etapa siguiente. -->
+    <p-dialog header="Gestión completada: ¿qué sigue?" [visible]="!!siguientePaso()" (visibleChange)="!$event && siguientePaso.set(null)" [modal]="true" [style]="{ width: '440px', maxWidth: '95vw' }">
+      <div class="lm-col" style="gap:8px;" data-testid="siguiente-paso">
+        <button pButton icon="pi pi-plus" label="Registrar otra gestión" (click)="pasoNuevaGestion()"></button>
+        <button pButton icon="pi pi-flag" [outlined]="true" label="Ir a la etapa siguiente (estado / término)" (click)="pasoEtapa()"></button>
+        <button pButton [text]="true" label="Por ahora nada" (click)="siguientePaso.set(null)"></button>
       </div>
     </p-dialog>
 
@@ -1030,6 +1046,26 @@ export class AtencionDetailComponent implements OnInit {
     this.completando.set(g);
   }
 
+  protected siguientePaso = signal<string | null>(null);
+  protected pasoNuevaGestion() {
+    const id = this.siguientePaso();
+    this.siguientePaso.set(null);
+    if (id) this.abrirNuevaGestion(id);
+  }
+  protected pasoEtapa() {
+    this.siguientePaso.set(null);
+    document.querySelector("lm-atencion-flujo")?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  async pedirGestiones(atencionId: string) {
+    const comentario = await this.prompt.open({ header: "Pedir gestiones predefinidas", label: "Comentario para la jefatura (opcional)", multiline: true });
+    if (comentario === null) return;
+    this.api.solicitarGestionesPredefinidas(atencionId, comentario || undefined).subscribe({
+      next: (r) => this.msg.add({ severity: "success", summary: "Solicitud enviada", detail: `${r.avisados} persona(s) avisada(s)`, life: 3000 }),
+      error: (e) => this.msg.add({ severity: "error", summary: "No se pudo enviar", detail: e.error?.message ?? e.message, life: 5000 }),
+    });
+  }
+
   protected completarGestion() {
     const g = this.completando();
     if (!g) return;
@@ -1038,6 +1074,9 @@ export class AtencionDetailComponent implements OnInit {
         this.completando.set(null);
         this.msg.add({ severity: "success", summary: "Gestión completada", life: 2500 });
         this.cargar(g.atencionId);
+        // Si no quedan gestiones abiertas, se ofrece el paso siguiente.
+        const abiertas = this.gestiones().filter((x) => x.id !== g.id && (x.estado === "Pendiente" || x.estado === "Vencida"));
+        if (!abiertas.length) this.siguientePaso.set(g.atencionId);
       },
       error: (err) => {
         this.msg.add({ severity: "error", summary: "No se pudo completar", detail: err.error?.message ?? err.message, life: 5000 });

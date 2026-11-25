@@ -1,7 +1,7 @@
 import { valoresUf } from "../../db/schema/aranceles";
 import { plantillaPresentacionAbogado, plantillaCondicionesAtencion, plantillaRespuestaConsulta, plantillaSolicitudAntecedentes, plantillaTerminoAtencion } from "../correos/plantillas";
 import { CorreosService } from "../correos/correos.service";
-import { avisar, jefeDe } from "../notif-inbox/destinatarios";
+import { avisar, jefeDe, usuariosConPermiso } from "../notif-inbox/destinatarios";
 import {
   Inject,
   Injectable,
@@ -711,6 +711,34 @@ export class AtencionesService {
       { plantilla: "cliente.respuesta_consulta", atencionId: id, enviadoPorId: actor.id },
     );
     return { estado, para: d.email };
+  }
+
+  // Anexo §VII l.866: sin gestiones predefinidas para la materia o el procedimiento, el abogado pide a
+  // la jefatura (quienes administran maestros, y su jefe directo) que las defina.
+  async solicitarGestionesPredefinidas(id: string, actor: Actor, comentario?: string) {
+    await asegurarAtencionVisible(this.db, id);
+    const a = await this.fila(id);
+    if (a.tipo === "Consulta") throw new BadRequestException("Las gestiones predefinidas son de asesorías y juicios");
+    const existentes = await this.plantillas.listar({ materiaId: a.materiaId, vigente: true });
+    const porProc = a.procedimientoId ? await this.plantillas.listar({ procedimientoId: a.procedimientoId, vigente: true }) : [];
+    if (existentes.length + porProc.length > 0) throw new ConflictException("La materia ya tiene gestiones predefinidas");
+    const [m] = await this.db.select({ nombre: materias.nombre }).from(materias).where(eq(materias.id, a.materiaId));
+    const destinatarios = [...(await usuariosConPermiso(this.db, ["maestros.administrar"])), await jefeDe(this.db, actor.id)];
+    const n = await avisar(
+      this.notif,
+      destinatarios,
+      {
+        codPlan: a.codPlan,
+        severidad: "warn",
+        titulo: `Definir gestiones para ${m?.nombre ?? "la materia"} (${a.correlativo})`,
+        detalle: comentario?.slice(0, 300) ?? "La materia no tiene gestiones predefinidas.",
+        accionUrl: "/admin/maestros",
+        metadata: { atencionId: id, solicitudGestiones: true },
+      },
+      actor.id,
+      { servicio: this.correos, atencionId: id, plantilla: "gestiones.definir" },
+    );
+    return { avisados: n };
   }
 
   // Correo al cliente con el copago y su forma de pago, la provisión estimada y el plazo de primeros avances.
