@@ -53,6 +53,7 @@ const FECHA_PAGO = "2001-03-15";
   let afiliadoId: string;
   let abogado: { id: string; permisos: readonly string[] };
   let jefe: { id: string; permisos: readonly string[] };
+  let contadorId: string;
   let causaId: string;
 
   const avisos: { usuarioId: string; titulo: string }[] = [];
@@ -116,6 +117,8 @@ const FECHA_PAGO = "2001-03-15";
     await afiliadosSrv.asignarPlan(afiliadoId, { codPlan: PLAN, fechaInicio: "2024-01-01" });
     const uj = await usuarioDePrueba(db, "GERENCIA_SERVICIOS");
     const ua = await usuarioDePrueba(db, "ABOGADO", { jefeId: uj.id });
+    // Sin seed (CI) debe existir alguien de Finanzas a quien avisar.
+    contadorId = (await usuarioDePrueba(db, "CONTADOR")).id;
     abogado = { id: ua.id, permisos: ua.permisos };
     jefe = { id: uj.id, permisos: uj.permisos };
     const [c] = await db.insert(causasTermino).values({ nombre: `Causa ${PLAN}` }).returning();
@@ -130,7 +133,7 @@ const FECHA_PAGO = "2001-03-15";
     await db.execute(sql`DELETE FROM planes_afiliado WHERE cod_plan = ${PLAN}`);
     await db.execute(sql`DELETE FROM afiliados WHERE id = ${afiliadoId}`);
     await db.execute(sql`DELETE FROM causas_termino WHERE id = ${causaId}`);
-    await db.execute(sql`DELETE FROM usuarios WHERE id IN (${abogado.id}, ${jefe.id})`);
+    await db.execute(sql`DELETE FROM usuarios WHERE id IN (${abogado.id}, ${jefe.id}, ${contadorId})`);
     await db.execute(sql`DELETE FROM planes WHERE cod_plan = ${PLAN}`);
     await borrarMateriaDePrueba(db, cm);
     await moduleRef.close();

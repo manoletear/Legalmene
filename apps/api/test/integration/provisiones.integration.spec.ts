@@ -35,6 +35,7 @@ const RUN = !!process.env.DATABASE_URL;
   const OTRO_PLAN = planAleatorio("TQ");
   let abogado: string;
   let jefe: string;
+  let contador: string;
   let afiliadoId: string;
   let cm: MateriaPrueba;
   let n = 0;
@@ -97,6 +98,8 @@ const RUN = !!process.env.DATABASE_URL;
     cm = await materiaDePrueba(db);
     abogado = (await usuarioDePrueba(db, "ABOGADO")).id;
     jefe = (await usuarioDePrueba(db, "GERENCIA_SERVICIOS")).id;
+    // Sin seed (CI) debe existir alguien de Finanzas a quien avisar.
+    contador = (await usuarioDePrueba(db, "CONTADOR")).id;
     const [afi] = await db
       .insert(afiliados)
       .values({ rut: rutAleatorio(), nombres: "Test", apellidoPaterno: "Provision" })
@@ -108,7 +111,7 @@ const RUN = !!process.env.DATABASE_URL;
     const db = drizzle(pool);
     await borrarAtencionesDePlan(db, PLAN);
     await db.execute(sql`DELETE FROM afiliados WHERE id = ${afiliadoId}`);
-    await db.execute(sql`DELETE FROM usuarios WHERE id IN (${abogado}, ${jefe})`);
+    await db.execute(sql`DELETE FROM usuarios WHERE id IN (${abogado}, ${jefe}, ${contador})`);
     await db.execute(sql`DELETE FROM planes WHERE cod_plan IN (${PLAN}, ${OTRO_PLAN})`);
     await borrarMateriaDePrueba(db, cm);
     await moduleRef.close();
