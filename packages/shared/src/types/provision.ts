@@ -60,7 +60,7 @@ export const ESTADO_PROVISION_LABEL: Record<EstadoProvision, string> = {
 
 // Transiciones manuales permitidas (Cerrada la asigna el cierre de la atención).
 export const TRANSICIONES_PROVISION: Record<EstadoProvision, readonly EstadoProvision[]> = {
-  Borrador: ["Solicitada", "Cerrada"],
+  Borrador: ["Solicitada", "Rechazada"],
   Solicitada: ["Pagada"],
   Pagada: ["EnAprobacion", "RendidaCliente"],
   EnAprobacion: ["Autorizada", "Pagada"],

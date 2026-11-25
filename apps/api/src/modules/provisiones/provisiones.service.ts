@@ -17,6 +17,7 @@ import {
 import { and, asc, count, desc, eq, inArray, ne, or, sql, type SQL } from "drizzle-orm";
 import {
   ESTADO_PROVISION_LABEL,
+  ESTADOS_PROVISION_ABIERTOS,
   puedeTransicionarProvision,
   type EstadoProvision,
   type EventoFinanciero,
@@ -92,7 +93,8 @@ export class ProvisionesService {
       filtroAtenciones(),
       condicionAtencion(filtro, provisiones.fechaSolicitud),
       // Los borradores solo se ven en la ficha de la atención.
-      filtro.estado ? eq(provisiones.estado, filtro.estado) : ne(provisiones.estado, "Borrador"),
+      ne(provisiones.estado, "Borrador"),
+      filtro.estado ? eq(provisiones.estado, filtro.estado) : undefined,
     );
     const [rows, [{ value: total }]] = await Promise.all([
       this.db
@@ -236,7 +238,12 @@ export class ProvisionesService {
       const [abiertas] = await this.db
         .select({ n: count() })
         .from(provisiones)
-        .where(and(eq(provisiones.atencionId, atencionId), inArray(provisiones.estado, ["Solicitada", "EnAprobacion", "Autorizada", "Disponible"])));
+        .where(
+          and(
+            eq(provisiones.atencionId, atencionId),
+            or(inArray(provisiones.estado, [...ESTADOS_PROVISION_ABIERTOS]), condicionFondosPendientes()),
+          ),
+        );
       if (Number(abiertas?.n ?? 0) > 0) throw new ConflictException("Hay provisiones en curso: resuélvalas antes de registrar que el cliente no provisiona");
     }
     const registro = { decision: input.decision, observacion: input.observacion ?? null, usuarioId, fecha: new Date().toISOString() };
@@ -304,7 +311,7 @@ export class ProvisionesService {
   async descartarBorrador(id: string, usuarioId: string): Promise<Provision> {
     const p = await this.obtener(id);
     if (p.estado !== "Borrador") throw new ConflictException("Solo se descarta un borrador");
-    return this.transicionar(id, "Cerrada", usuarioId, {}, "Borrador descartado");
+    return this.transicionar(id, "Rechazada", usuarioId, {}, "Borrador descartado");
   }
 
   // Cambio de estado con bloqueo de fila para que dos usuarios no resuelvan la misma etapa.

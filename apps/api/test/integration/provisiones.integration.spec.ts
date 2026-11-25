@@ -238,8 +238,12 @@ const RUN = !!process.env.DATABASE_URL;
     expect(notificadas.map((p) => p.estado)).toEqual(["Solicitada", "Solicitada"]);
     expect(notifs.length).toBeGreaterThan(0);
     await expect(service.notificarBorradores(atencionId, abogado, [b1.id])).rejects.toThrow(/Solo se notifican borradores/);
-    expect((await service.descartarBorrador(b3.id, abogado)).estado).toBe("Cerrada");
-    expect((await service.resumenAtencion(atencionId)).pendientePago).toBe(30_000);
+    expect((await service.descartarBorrador(b3.id, abogado)).estado).toBe("Rechazada");
+    const resumen = await service.resumenAtencion(atencionId);
+    expect(resumen.pendientePago).toBe(30_000);
+    // Un borrador descartado nunca cuenta como dinero del cliente (revisión de seguridad).
+    expect(resumen.provisionado).toBe(0);
+    expect(resumen.saldoCuenta).toBe(0);
   });
 
   it("decisión del cliente: no acepta o paga directo detiene el flujo; aceptar lo reinicia", async () => {

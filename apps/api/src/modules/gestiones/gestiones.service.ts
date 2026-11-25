@@ -113,7 +113,7 @@ export class GestionesService {
     // Con un tipo del maestro, la categoría del sistema sale de él (no la elige el cliente).
     if (input.tipoGestionId) {
       const [tg] = await this.db.select().from(tiposGestion).where(eq(tiposGestion.id, input.tipoGestionId));
-      if (!tg) throw new BadRequestException("El tipo de gestión no existe");
+      if (!tg || !tg.vigente) throw new BadRequestException("El tipo de gestión no existe o no está vigente");
       input = { ...input, tipo: tg.categoria as CreateGestion["tipo"] };
     }
     await this.asegurarArancelRegularizado(input.atencionId, input.tipo);

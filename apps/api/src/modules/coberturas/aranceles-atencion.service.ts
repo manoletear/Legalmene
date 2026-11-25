@@ -3,7 +3,8 @@ import { CorreosService } from "../correos/correos.service";
 import type { CriteriosBusqueda } from "@legalmene/shared";
 import { condicionAtencion } from "../../common/busqueda/criterios";
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray } from "drizzle-orm";
+import { correosEnviados } from "../../db/schema/correos";
 import {
   ESTADO_ARANCEL_LABEL,
   ESTADOS_ARANCEL_BLOQUEANTES,
@@ -91,7 +92,11 @@ export class ArancelesAtencionService {
     if (!actual || !["NoRequerido", "Requerido"].includes(actual.estado)) return;
     const datos = await this.snapshot(atencionId);
     await this.db.transaction(async (tx) => {
-      await tx.update(arancelesAtencion).set({ ...datos, updatedAt: new Date() }).where(eq(arancelesAtencion.id, actual.id));
+      const cambia = datos.copagoUfCentesimas !== actual.copagoUfCentesimas;
+      await tx
+        .update(arancelesAtencion)
+        .set({ ...datos, ...(cambia ? { webpayOrdenCompra: null } : {}), updatedAt: new Date() })
+        .where(eq(arancelesAtencion.id, actual.id));
       if (datos.estado !== actual.estado) await this.evento(tx, actual.id, actual.estado, datos.estado, usuarioId, "Recalculado por cambio de materia");
     });
   }
@@ -245,6 +250,17 @@ export class ArancelesAtencionService {
       .where(eq(atenciones.id, atencionId));
     if (!d.email) throw new BadRequestException("El afiliado no tiene correo registrado; agréguelo en su ficha");
     if (!this.correos) throw new BadRequestException("El envío de correos no está disponible");
+    const [envios] = await this.db
+      .select({ n: count() })
+      .from(correosEnviados)
+      .where(
+        and(
+          eq(correosEnviados.atencionId, atencionId),
+          eq(correosEnviados.plantilla, "cliente.pago_webpay"),
+          gte(correosEnviados.createdAt, new Date(Date.now() - 24 * 3600 * 1000)),
+        ),
+      );
+    if (Number(envios?.n ?? 0) >= 3) throw new ConflictException("Ya se notificó el pago 3 veces en las últimas 24 horas");
     const montoClp = ufCentesimasAClp(actual.copagoUfCentesimas ?? 0, uf.valorCentavos) ?? 0;
     if (montoClp <= 0) throw new BadRequestException("El copago de esta atención es cero");
     const { pago, redirectUrl } = await this.db.transaction(async (tx) => {
@@ -281,6 +297,25 @@ export class ArancelesAtencionService {
     const [actual] = await this.db.select().from(arancelesAtencion).where(eq(arancelesAtencion.id, arancelId));
     if (!actual || actual.atencionId !== pago.atencionId) return null;
     const ufValor = typeof pago.metadata?.ufValorCentavos === "number" ? (pago.metadata.ufValorCentavos as number) : null;
+    // Solo la orden vigente y por el copago actual: una orden antigua (materia cambiada, nueva
+    // notificación) no deja el arancel pagado; se avisa a Finanzas para revisarla.
+    const esperado = ufValor != null ? ufCentesimasAClp(actual.copagoUfCentesimas ?? 0, ufValor) : null;
+    if (actual.webpayOrdenCompra !== pago.ordenCompra || esperado == null || esperado !== pago.monto) {
+      const finanzas = await usuariosConPermiso(this.db, ["aranceles_atencion.registrar_pago"]);
+      await avisar(
+        this.notif,
+        finanzas,
+        {
+          codPlan: pago.codPlan,
+          severidad: "critical",
+          titulo: `Pago WebPay que no corresponde a la orden vigente del arancel (${pago.ordenCompra})`,
+          detalle: `Pagado $${pago.monto.toLocaleString("es-CL")}; revise el arancel y la devolución si corresponde`,
+          accionUrl: `/atenciones/${actual.atencionId}`,
+        },
+        null,
+      );
+      return null;
+    }
     const row = await this.db.transaction(async (tx) => {
       const [r] = await tx
         .update(arancelesAtencion)
@@ -295,7 +330,14 @@ export class ArancelesAtencionService {
           registradoPorId: null,
           updatedAt: new Date(),
         })
-        .where(and(eq(arancelesAtencion.id, arancelId), inArray(arancelesAtencion.estado, [...ESTADOS_ARANCEL_PAGABLES_WEBPAY])))
+        .where(
+          and(
+            eq(arancelesAtencion.id, arancelId),
+            eq(arancelesAtencion.estado, actual.estado),
+            eq(arancelesAtencion.webpayOrdenCompra, pago.ordenCompra),
+            inArray(arancelesAtencion.estado, [...ESTADOS_ARANCEL_PAGABLES_WEBPAY]),
+          ),
+        )
         .returning();
       if (r) await this.evento(tx, arancelId, actual.estado, "Pagado", null, `Pagado por WebPay (orden ${pago.ordenCompra})`);
       return r;

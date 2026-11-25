@@ -49,8 +49,8 @@ export class JwtAuthGuard extends AuthGuard("jwt-entra") {
       if (!entraConfigurado()) throw new UnauthorizedException("Sesión no válida. Ingrese nuevamente.");
       await (super.canActivate(context) as Promise<boolean>);
       usuarioId = (req.user as { id: string }).id;
-      await this.registrarIngresoEntra(req, bearer!, usuarioId);
     }
+    const entra = req.user as { id: string; email?: string; exp?: number } | undefined;
 
     let user: AuthenticatedUser;
     try {
@@ -70,6 +70,11 @@ export class JwtAuthGuard extends AuthGuard("jwt-entra") {
       const msg = "Su cuenta no pertenece a un dominio autorizado de LegalChile";
       await this.denegar(req, user, msg);
       throw new ForbiddenException(msg);
+    }
+    // Solo un ingreso con Microsoft que pasó todas las validaciones queda como INGRESO.
+    if (!sesion && process.env.AUTH_DISABLED !== "true" && entra) {
+      req.user = entra as unknown as AuthenticatedUser;
+      await this.registrarIngresoEntra(req, bearer!, usuarioId);
     }
     req.user = user;
     fijarAcceso({ usuarioId: user.id, permisos: new Set(user.permisos) });

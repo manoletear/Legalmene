@@ -78,6 +78,7 @@ export function plantillaCondicionesAtencion(p: {
   correlativo: string;
   abogado: string;
   copago: string | null;
+  copagoPagado?: string | null;
   provisionEstimada: string | null;
   plazoAvances: string | null;
 }): Contenido {
@@ -86,8 +87,10 @@ export function plantillaCondicionesAtencion(p: {
   if (p.copago) {
     items.push(`Copago: ${p.copago}.`);
     items.push("Puede pagarlo en la casa central de LegalChile (efectivo o transferencia) o en línea con WebPay si su abogado le envía el enlace. Si paga por transferencia, responda este correo adjuntando el comprobante.");
+  } else if (p.copagoPagado) {
+    items.push(`Copago pagado (${p.copagoPagado}).`);
   } else {
-    items.push("Su plan cubre esta atención sin copago.");
+    items.push("Su plan cubre esta atención sin copago pendiente.");
   }
   if (p.provisionEstimada) items.push(`Provisión de fondos estimada para gastos del caso: ${p.provisionEstimada}. Su abogado le informará cada solicitud.`);
   if (p.plazoAvances) items.push(`Le informaremos los primeros avances a más tardar el ${p.plazoAvances}.`);

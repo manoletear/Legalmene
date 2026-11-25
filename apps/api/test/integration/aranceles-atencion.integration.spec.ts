@@ -233,15 +233,21 @@ const FECHA_PAGO = "2001-03-15";
     const ar = await arancelSrv.obtener(a.id);
     expect(ar).toMatchObject({ estado: "EnAprobacion", caminoPago: "WebPay", webpayOrdenCompra: n.ordenCompra });
 
+    // Una nueva notificación deja sin efecto la orden anterior: pagarla no marca el arancel.
+    const n2 = await arancelSrv.notificarPago(a.id, abogado.id);
     avisos.length = 0;
-    await moduleRef.get(PagosService).confirmar(n.ordenCompra, "AUTH1", true);
+    await moduleRef.get(PagosService).confirmar(n.ordenCompra, "AUTH0", true);
+    expect((await arancelSrv.obtener(a.id))?.estado).toBe("EnAprobacion");
+    expect(avisos.some((x) => /no corresponde a la orden vigente/.test(x.titulo))).toBe(true);
+    avisos.length = 0;
+    await moduleRef.get(PagosService).confirmar(n2.ordenCompra, "AUTH1", true);
     const pagado = await arancelSrv.obtener(a.id);
-    expect(pagado).toMatchObject({ estado: "Pagado", medioPago: "WebPay", montoClp: esperado, referenciaPago: n.ordenCompra, fechaPago: hoy });
+    expect(pagado).toMatchObject({ estado: "Pagado", medioPago: "WebPay", montoClp: esperado, referenciaPago: n2.ordenCompra, fechaPago: hoy });
     // Aviso al abogado y a su jefatura (Anexo §IX 4.1).
     expect(avisos.filter((x) => /Arancel pagado/.test(x.titulo)).map((x) => x.usuarioId).sort()).toEqual([abogado.id, jefe.id].sort());
     // Pagado: ya no se notifica ni se cambia el camino.
     await expect(arancelSrv.notificarPago(a.id, abogado.id)).rejects.toBeInstanceOf(ConflictException);
-    expect((await arancelSrv.eventos(a.id)).map((e) => e.estadoHasta)).toEqual(["Requerido", "EnAprobacion", "EnAprobacion", "Pagado"]);
+    expect((await arancelSrv.eventos(a.id)).map((e) => e.estadoHasta)).toEqual(["Requerido", "EnAprobacion", "EnAprobacion", "EnAprobacion", "Pagado"]);
   });
 
   it("sin copago el arancel queda NoRequerido y no detiene la atención", async () => {

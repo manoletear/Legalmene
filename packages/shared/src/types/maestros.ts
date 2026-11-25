@@ -130,4 +130,5 @@ export const TipoGestionMaestroSchema = z.object({
 });
 export type TipoGestionMaestro = z.infer<typeof TipoGestionMaestroSchema>;
 export const CreateTipoGestionSchema = TipoGestionMaestroSchema.omit(sinId).partial({ vigente: true });
-export const UpdateTipoGestionSchema = CreateTipoGestionSchema.partial();
+// La categoría no cambia: definiría otras reglas para las gestiones ya registradas.
+export const UpdateTipoGestionSchema = CreateTipoGestionSchema.omit({ categoria: true }).partial().strict();

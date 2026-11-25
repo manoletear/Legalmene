@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { and, asc, eq, isNull, or, type SQL } from "drizzle-orm";
+import { and, asc, eq, isNull, notInArray, or, type SQL } from "drizzle-orm";
 import type {
   ActualizarCampoAdicional,
   CampoAdicional,
@@ -18,7 +18,7 @@ const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 
 // Valida y normaliza un valor según el tipo del campo (null = vacío).
 export function validarValor(c: Pick<CampoAdicional, "etiqueta" | "tipoDato" | "opciones">, v: ValorCampoAdicional): ValorCampoAdicional {
-  if (v === null || v === "") return null;
+  if (v === null || (typeof v === "string" && v.trim() === "")) return null;
   switch (c.tipoDato) {
     case "Texto":
       if (typeof v !== "string") throw new BadRequestException(`${c.etiqueta}: debe ser texto`);
@@ -140,7 +140,13 @@ export class CamposAdicionalesService {
         throw new BadRequestException(`${c.etiqueta} es obligatorio`);
       }
     }
-    await this.db.update(atenciones).set({ camposAdicionales: nuevos, updatedAt: new Date() }).where(eq(atenciones.id, atencionId));
+    // Solo si la atención sigue abierta (otra petición pudo cerrarla entretanto).
+    const [ok] = await this.db
+      .update(atenciones)
+      .set({ camposAdicionales: nuevos, updatedAt: new Date() })
+      .where(and(eq(atenciones.id, atencionId), notInArray(atenciones.estado, ["Terminada", "Abandonada", "Derivada"])))
+      .returning({ id: atenciones.id });
+    if (!ok) throw new ConflictException("La atención se cerró mientras se guardaba; recargue");
     return { campos, valores: nuevos };
   }
 }

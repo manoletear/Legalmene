@@ -1,3 +1,4 @@
+import { accesoActual } from "../../common/acceso/contexto";
 import { ConflictException, Inject, Injectable, Logger, NotFoundException, Optional, forwardRef } from "@nestjs/common";
 import { and, count, desc, eq, getTableColumns, ilike, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import { afiliados } from "../../db/schema/afiliados";
@@ -79,8 +80,11 @@ export class PagosService {
         .offset((page - 1) * pageSize),
       this.db.select({ value: count() }).from(pagos).where(where),
     ]);
+    // Datos personales del afiliado solo para quien puede ver afiliados.
+    const acceso = accesoActual();
+    const verAfiliados = !acceso || acceso.permisos.has("afiliados.ver");
     return {
-      data: rows,
+      data: verAfiliados ? rows : rows.map((r) => ({ ...r, rut: null, nombre: null, email: null, region: null, comuna: null })),
       page,
       pageSize,
       total: Number(total),

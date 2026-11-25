@@ -8,6 +8,7 @@ import { atenciones } from "../../db/schema/atenciones";
 import { usuarios } from "../../db/schema/usuarios";
 import { asegurarAtencionVisible } from "../../common/acceso/alcance";
 import { NotifInboxService } from "../notif-inbox/notif-inbox.service";
+import { jefeDe, usuariosConPermiso } from "../notif-inbox/destinatarios";
 
 const autor = alias(usuarios, "autor");
 const destino = alias(usuarios, "destino");
@@ -44,13 +45,16 @@ export class NotasService {
   async crear(atencionId: string, autorId: string, input: CrearNota): Promise<NotaAtencion> {
     await asegurarAtencionVisible(this.db, atencionId);
     const [a] = await this.db
-      .select({ abogadoId: atenciones.abogadoAsignadoId, correlativo: atenciones.correlativo, codPlan: atenciones.codPlan })
+      .select({ abogadoId: atenciones.abogadoAsignadoId, creadoPorId: atenciones.creadoPorId, correlativo: atenciones.correlativo, codPlan: atenciones.codPlan })
       .from(atenciones)
       .where(eq(atenciones.id, atencionId));
     const destinatarioId = input.destinatarioId ?? a.abogadoId ?? null;
     if (input.destinatarioId) {
       const [u] = await this.db.select({ id: usuarios.id, activo: usuarios.activo }).from(usuarios).where(eq(usuarios.id, input.destinatarioId));
       if (!u?.activo) throw new BadRequestException("El destinatario no existe o no está activo");
+      // Solo alguien que ve la atención: su abogado, quien la creó, la jefatura del abogado o quien ve todas.
+      const permitidos = new Set([a.abogadoId, a.creadoPorId, await jefeDe(this.db, a.abogadoId), ...(await usuariosConPermiso(this.db, ["atenciones.ver_todas"]))]);
+      if (!permitidos.has(input.destinatarioId)) throw new BadRequestException("El destinatario no tiene acceso a esta atención");
     }
     const [n] = await this.db.insert(notasAtencion).values({ atencionId, texto: input.texto, autorId, destinatarioId }).returning();
     if (destinatarioId && destinatarioId !== autorId) {

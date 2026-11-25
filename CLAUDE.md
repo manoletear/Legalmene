@@ -279,6 +279,12 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
   (`configPool()` en `db/url.ts`; la imagen trae el bundle de RDS). El archivo de auditoría va a un bucket con Object Lock
   (`AUDIT_ARCHIVE_BUCKET`, solo `PutObject`) y se borran exactamente las filas archivadas. SES solo envía desde `SES_FROM`.
   El aviso de errores a administradores lleva método, patrón de ruta y tipo de error, nunca el mensaje ni datos del request.
+- **Revisión run-4 (25-11-2026)**: un pago WebPay solo deja Pagado el arancel si es la orden vigente (`webpayOrdenCompra`) y por el
+  copago actual; si no, avisa a Finanzas. Cambiar la materia anula la orden vigente. Un borrador de provisión descartado queda
+  Rechazada (nunca suma como dinero del cliente). Los topes de correos al cliente se serializan con `conTopeEnvios()`
+  (bloqueo transaccional). Las notas solo van a quien ve la atención. La categoría de un tipo de gestión no cambia. El
+  enlace de acceso no se consume si el usuario no puede ingresar ahora (bloqueado o fuera de horario). `GET /pagos` oculta
+  datos del afiliado sin `afiliados.ver`.
 - **Días hábiles y feriados**: todo plazo en días hábiles usa `sumarDiasHabiles()`/`diasHabilesEntre()`
   (`common/utils/dias-habiles.ts`), que saltan fines de semana y la tabla `feriados`. Los legales los calcula
   `feriadosLegales()` (`feriados-chile.ts`) y `FeriadosService` los carga para el año en curso y el siguiente;

@@ -444,6 +444,8 @@ export class ExportsService {
     const where = this.acotar(and(
       filtroAtenciones(),
       condicionAtencion(f, provisiones.fechaSolicitud),
+      // Los borradores solo existen para el abogado en la ficha.
+      sql`${provisiones.estado} <> 'Borrador'`,
       f.estado ? sql`${provisiones.estado} = ${f.estado}` : undefined,
     ));
     await this.contar(() =>

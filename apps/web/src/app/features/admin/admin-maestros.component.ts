@@ -109,7 +109,7 @@ const vacio = (): Partial<Fila> => ({
           <label class="lm-small"><p-checkbox [(ngModel)]="form.requiereProvision" name="rp" [binary]="true"></p-checkbox> Requiere provisión</label>
           <input pInputText type="number" min="0" [(ngModel)]="form.provisionEstimadaClp" name="pe" placeholder="Provisión estimada ($)" style="width:180px;" aria-label="Provisión estimada en pesos" />
         </ng-container>
-        <p-select *ngIf="tab().categoria" [(ngModel)]="form.categoria" name="categoria" [options]="categoriasGestion" optionLabel="label" optionValue="value"
+        <p-select *ngIf="tab().categoria" [disabled]="!!editandoId()" [(ngModel)]="form.categoria" name="categoria" [options]="categoriasGestion" optionLabel="label" optionValue="value"
           placeholder="Categoría del sistema" appendTo="body" [style]="{ width: '220px' }" ariaLabel="Categoría"></p-select>
         <button pButton type="submit" [label]="editandoId() ? 'Guardar cambios' : 'Agregar'" [icon]="editandoId() ? 'pi pi-check' : 'pi pi-plus'" [disabled]="!valido()"></button>
         <button *ngIf="editandoId()" pButton type="button" label="Cancelar" [text]="true" severity="secondary" (click)="limpiar()"></button>
@@ -245,8 +245,9 @@ export class AdminMaestrosComponent implements OnInit {
       const pe = this.form.provisionEstimadaClp;
       body.provisionEstimadaClp = pe === null || pe === undefined || (pe as unknown) === "" ? null : Math.max(0, Math.round(Number(pe)));
     }
-    if (t.categoria) body.categoria = this.form.categoria;
     const id = this.editandoId();
+    // La categoría se fija al crear: define las reglas de las gestiones ya registradas.
+    if (t.categoria && !id) body.categoria = this.form.categoria;
     const req = id ? this.api.actualizar(t.tipo, id, body) : this.api.crear(t.tipo, body);
     req.subscribe({
       next: () => {

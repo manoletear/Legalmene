@@ -650,23 +650,14 @@ export class AtencionesService {
     if (!d.email) throw new BadRequestException("El afiliado no tiene correo registrado; agréguelo en su ficha");
     if (!this.correos) throw new BadRequestException("El envío de correos no está disponible");
     // Texto libre hacia el cliente: a lo más 3 solicitudes por atención cada 24 horas.
-    const [envios] = await this.db
-      .select({ n: count() })
-      .from(correosEnviados)
-      .where(
-        and(
-          eq(correosEnviados.atencionId, id),
-          eq(correosEnviados.plantilla, "cliente.antecedentes"),
-          gte(correosEnviados.createdAt, new Date(Date.now() - 24 * 3600 * 1000)),
-        ),
-      );
-    if (Number(envios?.n ?? 0) >= 3) throw new ConflictException("Ya se enviaron 3 solicitudes de antecedentes en las últimas 24 horas");
     const [ab] = d.abogadoId ? await this.db.select({ nombre: usuarios.nombre }).from(usuarios).where(eq(usuarios.id, d.abogadoId)) : [];
     const plazo = input.plazo ? input.plazo.split("-").reverse().join("-") : null;
-    const estado = await this.correos.enviar(
+    const estado = await this.conTopeEnvios(id, "cliente.antecedentes", 3, "Ya se enviaron 3 solicitudes de antecedentes en las últimas 24 horas", () =>
+      this.correos!.enviar(
       [d.email],
       plantillaSolicitudAntecedentes({ cliente: d.cliente, abogado: ab?.nombre ?? "su abogado", correlativo: d.correlativo, antecedentes: input.antecedentes, plazo }),
       { plantilla: "cliente.antecedentes", atencionId: id, enviadoPorId: actor.id },
+      ),
     );
     if (estado !== "Error") {
       await this.db.update(atenciones).set({ antecedentesSolicitadosEn: new Date() }).where(eq(atenciones.id, id));
@@ -693,24 +684,35 @@ export class AtencionesService {
     if (!d.respuesta?.trim()) throw new BadRequestException("Guarde primero la respuesta de la consulta");
     if (!d.email) throw new BadRequestException("El afiliado no tiene correo registrado; agréguelo en su ficha");
     if (!this.correos) throw new BadRequestException("El envío de correos no está disponible");
-    const [envios] = await this.db
-      .select({ n: count() })
-      .from(correosEnviados)
-      .where(
-        and(
-          eq(correosEnviados.atencionId, id),
-          eq(correosEnviados.plantilla, "cliente.respuesta_consulta"),
-          gte(correosEnviados.createdAt, new Date(Date.now() - 24 * 3600 * 1000)),
-        ),
-      );
-    if (Number(envios?.n ?? 0) >= 3) throw new ConflictException("Ya se envió la respuesta 3 veces en las últimas 24 horas");
     const [ab] = d.abogadoId ? await this.db.select({ nombre: usuarios.nombre }).from(usuarios).where(eq(usuarios.id, d.abogadoId)) : [];
-    const estado = await this.correos.enviar(
+    const estado = await this.conTopeEnvios(id, "cliente.respuesta_consulta", 3, "Ya se envió la respuesta 3 veces en las últimas 24 horas", () =>
+      this.correos!.enviar(
       [d.email],
-      plantillaRespuestaConsulta({ cliente: d.cliente, correlativo: d.correlativo, respuesta: d.respuesta, abogado: ab?.nombre ?? "LegalChile" }),
+      plantillaRespuestaConsulta({ cliente: d.cliente, correlativo: d.correlativo, respuesta: d.respuesta!, abogado: ab?.nombre ?? "LegalChile" }),
       { plantilla: "cliente.respuesta_consulta", atencionId: id, enviadoPorId: actor.id },
+      ),
     );
     return { estado, para: d.email };
+  }
+
+  // Tope de correos al cliente por atención y plantilla en 24 h, serializado con un bloqueo
+  // transaccional para que dos envíos simultáneos no lo superen.
+  private async conTopeEnvios<T>(atencionId: string, plantilla: string, max: number, mensaje: string, enviar: () => Promise<T>): Promise<T> {
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${atencionId + ":" + plantilla}))`);
+      const [envios] = await tx
+        .select({ n: count() })
+        .from(correosEnviados)
+        .where(
+          and(
+            eq(correosEnviados.atencionId, atencionId),
+            eq(correosEnviados.plantilla, plantilla),
+            gte(correosEnviados.createdAt, new Date(Date.now() - 24 * 3600 * 1000)),
+          ),
+        );
+      if (Number(envios?.n ?? 0) >= max) throw new ConflictException(mensaje);
+      return enviar();
+    });
   }
 
   // Anexo §VII l.866: sin gestiones predefinidas para la materia o el procedimiento, el abogado pide a
@@ -724,7 +726,8 @@ export class AtencionesService {
     if (existentes.length + porProc.length > 0) throw new ConflictException("La materia ya tiene gestiones predefinidas");
     const [m] = await this.db.select({ nombre: materias.nombre }).from(materias).where(eq(materias.id, a.materiaId));
     const destinatarios = [...(await usuariosConPermiso(this.db, ["maestros.administrar"])), await jefeDe(this.db, actor.id)];
-    const n = await avisar(
+    const n = await this.conTopeEnvios(id, "gestiones.definir", 1, "La solicitud ya se envió hoy para esta atención", () =>
+      avisar(
       this.notif,
       destinatarios,
       {
@@ -737,6 +740,7 @@ export class AtencionesService {
       },
       actor.id,
       { servicio: this.correos, atencionId: id, plantilla: "gestiones.definir" },
+      ),
     );
     return { avisados: n };
   }
@@ -761,20 +765,10 @@ export class AtencionesService {
     if (d.tipo === "Consulta") throw new BadRequestException("Las condiciones se informan en asesorías y juicios");
     if (!d.email) throw new BadRequestException("El afiliado no tiene correo registrado; agréguelo en su ficha");
     if (!this.correos) throw new BadRequestException("El envío de correos no está disponible");
-    const [envios] = await this.db
-      .select({ n: count() })
-      .from(correosEnviados)
-      .where(
-        and(
-          eq(correosEnviados.atencionId, id),
-          eq(correosEnviados.plantilla, "cliente.condiciones"),
-          gte(correosEnviados.createdAt, new Date(Date.now() - 24 * 3600 * 1000)),
-        ),
-      );
-    if (Number(envios?.n ?? 0) >= 3) throw new ConflictException("Ya se informaron las condiciones 3 veces en las últimas 24 horas");
     const ar = await this.arancelesAtencion.obtener(id);
     const [uf] = await this.db.select().from(valoresUf).orderBy(desc(valoresUf.fecha)).limit(1);
-    const copagoUf = ar && ar.estado !== "NoRequerido" && (ar.copagoUfCentesimas ?? 0) > 0 ? ar.copagoUfCentesimas! : null;
+    const pendiente = !!ar && ["Requerido", "EnAprobacion", "Aprobado"].includes(ar.estado);
+    const copagoUf = pendiente && (ar!.copagoUfCentesimas ?? 0) > 0 ? ar!.copagoUfCentesimas! : null;
     const pesos = (n: number) => "$" + n.toLocaleString("es-CL");
     const copago =
       copagoUf == null
@@ -782,17 +776,20 @@ export class AtencionesService {
         : `${(copagoUf / 100).toLocaleString("es-CL", { minimumFractionDigits: 2 })} UF` +
           (uf ? ` (aprox. ${pesos(Math.round((copagoUf * uf.valorCentavos) / 10_000))} con la UF del ${uf.fecha.split("-").reverse().join("-")})` : "");
     const [ab] = d.abogadoId ? await this.db.select({ nombre: usuarios.nombre }).from(usuarios).where(eq(usuarios.id, d.abogadoId)) : [];
-    const estado = await this.correos.enviar(
+    const estado = await this.conTopeEnvios(id, "cliente.condiciones", 3, "Ya se informaron las condiciones 3 veces en las últimas 24 horas", () =>
+      this.correos!.enviar(
       [d.email],
       plantillaCondicionesAtencion({
         cliente: d.cliente,
         correlativo: d.correlativo,
         abogado: ab?.nombre ?? "su abogado",
         copago,
+        copagoPagado: ar?.estado === "Pagado" ? (ar.fechaPago ?? "").split("-").reverse().join("-") || "registrado" : null,
         provisionEstimada: d.provision ? pesos(d.provision) : null,
         plazoAvances: d.plazo ? d.plazo.split("-").reverse().join("-") : null,
       }),
       { plantilla: "cliente.condiciones", atencionId: id, enviadoPorId: actor.id },
+      ),
     );
     return { estado, para: d.email };
   }

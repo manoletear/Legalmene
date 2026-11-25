@@ -97,6 +97,23 @@ export class EnlacesAccesoService {
   // Canjea el enlace (una sola vez, antes de vencer) por un token de sesión.
   async verificar(token: string, req: OrigenSolicitud = {}): Promise<SesionIniciada> {
     const ahora = new Date();
+    // Si el enlace es válido pero el usuario no puede ingresar ahora (bloqueado, fuera de horario),
+    // se rechaza sin consumirlo: reintentar no cuenta como intento fallido.
+    const [vigente] = await this.db
+      .select({ usuarioId: enlacesAcceso.usuarioId })
+      .from(enlacesAcceso)
+      .where(and(eq(enlacesAcceso.tokenHash, hashToken(token)), isNull(enlacesAcceso.usadoEn), gt(enlacesAcceso.expiraEn, ahora)));
+    if (vigente) {
+      try {
+        await this.usuarios.contextoAcceso(vigente.usuarioId);
+      } catch (err) {
+        if (err instanceof UsuarioNoHabilitadoError) {
+          await this.registrar(err.usuario, "ACCESO_DENEGADO", req, { motivo: err.message });
+          throw new ForbiddenException(err.message);
+        }
+        throw err;
+      }
+    }
     const [canjeado] = await this.db
       .update(enlacesAcceso)
       .set({ usadoEn: ahora })
