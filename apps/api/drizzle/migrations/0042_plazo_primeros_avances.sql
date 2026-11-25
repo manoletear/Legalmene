@@ -1,0 +1,1 @@
+ALTER TABLE "atenciones" ADD COLUMN "plazo_primeros_avances" date;

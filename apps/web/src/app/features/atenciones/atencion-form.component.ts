@@ -131,6 +131,12 @@ import type { Afiliado, AfiliadoConPlanes, CanalContacto, Competencia, CopagoRes
             </ng-container>
             <ng-template #sinArancel>Sin arancel definido para esta materia.</ng-template>
           </small>
+          <!-- Anexo §VI l.554: informar provisiones estimadas y formas de pago. -->
+          <small *ngIf="form.value.tipo !== 'Consulta' && materiaElegida() as m" class="lm-muted" data-testid="condiciones-form">
+            <span *ngIf="m.provisionEstimadaClp">Provisión estimada: $ {{ m.provisionEstimadaClp | number }}. </span>
+            <span *ngIf="m.requiereProvision && !m.provisionEstimadaClp">La materia requiere provisión de fondos. </span>
+            Formas de pago: casa central (efectivo o transferencia) o WebPay.
+          </small>
         </div>
 
         <div class="lm-col" style="gap:4px;">
@@ -224,6 +230,9 @@ export class AtencionFormComponent {
 
   protected competencias = signal<Competencia[]>([]);
   protected materias = signal<Materia[]>([]);
+  protected materiaElegida(): Materia | undefined {
+    return this.materias().find((m) => m.id === this.form.value.materiaId);
+  }
   protected copago = signal<CopagoResultado | null>(null);
   protected tiposConsulta = signal<MaestroSimple[]>([]);
   protected canalOpts: { label: string; value: CanalContacto }[] = [

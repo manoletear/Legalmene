@@ -71,6 +71,34 @@ export function plantillaSolicitudAntecedentes(p: { cliente: string; abogado: st
   };
 }
 
+// Al cliente: condiciones de su atención (Anexo §VI l.554, §VII l.767 y l.772): copago y cómo pagarlo,
+// provisión de fondos estimada y plazo de los primeros avances.
+export function plantillaCondicionesAtencion(p: {
+  cliente: string;
+  correlativo: string;
+  abogado: string;
+  copago: string | null;
+  provisionEstimada: string | null;
+  plazoAvances: string | null;
+}): Contenido {
+  const lineas = [`Estimado(a) ${p.cliente}:`, `Le informamos las condiciones de su atención ${p.correlativo}:`];
+  const items: string[] = [];
+  if (p.copago) {
+    items.push(`Copago: ${p.copago}.`);
+    items.push("Puede pagarlo en la casa central de LegalChile (efectivo o transferencia) o en línea con WebPay si su abogado le envía el enlace. Si paga por transferencia, responda este correo adjuntando el comprobante.");
+  } else {
+    items.push("Su plan cubre esta atención sin copago.");
+  }
+  if (p.provisionEstimada) items.push(`Provisión de fondos estimada para gastos del caso: ${p.provisionEstimada}. Su abogado le informará cada solicitud.`);
+  if (p.plazoAvances) items.push(`Le informaremos los primeros avances a más tardar el ${p.plazoAvances}.`);
+  const cierre = [`Ante cualquier duda puede responder este correo o escribir a ${p.abogado}.`];
+  return {
+    asunto: textoLinea(`LegalChile · Condiciones de su atención ${p.correlativo}`),
+    html: marco("Condiciones de su atención", parrafos(lineas) + `<ul>${items.map((i) => `<li>${escaparHtml(i)}</li>`).join("")}</ul>` + parrafos(cierre)),
+    texto: [...lineas, ...items.map((i) => `- ${i}`), ...cierre].join("\n\n"),
+  };
+}
+
 // Al cliente: respuesta escrita de su consulta (Anexo §VI l.580).
 export function plantillaRespuestaConsulta(p: { cliente: string; correlativo: string; respuesta: string; abogado: string }): Contenido {
   const intro = [`Estimado(a) ${p.cliente}:`, `Le enviamos la respuesta a su consulta ${p.correlativo}:`];

@@ -12,6 +12,7 @@ import {
   integer,
   boolean,
   smallint,
+  date,
 } from "drizzle-orm/pg-core";
 import { planes } from "./planes";
 import { afiliados, cargasAfiliado } from "./afiliados";
@@ -115,6 +116,8 @@ export const atenciones = pgTable(
     canalContacto: canalContactoEnum("canal_contacto"),
     tipoConsultaId: uuid("tipo_consulta_id").references(() => tiposConsulta.id, { onDelete: "restrict" }),
     codigoGrabacion: varchar("codigo_grabacion", { length: 120 }),
+    // Fecha comprometida al cliente para los primeros avances (Anexo §VII l.767).
+    plazoPrimerosAvances: date("plazo_primeros_avances", { mode: "string" }),
     horaInicio: timestamp("hora_inicio", { withTimezone: true }),
     horaTermino: timestamp("hora_termino", { withTimezone: true }),
     respuesta: text("respuesta"),

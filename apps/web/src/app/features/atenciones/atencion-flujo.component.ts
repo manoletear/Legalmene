@@ -205,6 +205,10 @@ const MONEDAS: MonedaCuantia[] = ["CLP", "UF", "UTM", "USD"];
             <label class="lm-small" for="grabacionCaso">Código de grabación</label>
             <input pInputText id="grabacionCaso" [(ngModel)]="caso.codigoGrabacion" placeholder="Entrevista grabada (opcional)" />
           </div>
+          <div class="lm-col">
+            <label class="lm-small" for="plazoAvances">Plazo de primeros avances</label>
+            <input pInputText id="plazoAvances" type="date" [(ngModel)]="caso.plazoPrimerosAvances" />
+          </div>
           <ng-container *ngIf="a.tipo === 'Juicio'">
             <div class="lm-col">
               <label class="lm-small">Tribunal</label>
@@ -364,6 +368,7 @@ export class AtencionFlujoComponent implements OnInit {
         tribunalId: a.tribunalId ?? null,
         rolCausa: a.rolCausa ?? null,
         codigoGrabacion: a.codigoGrabacion ?? null,
+        plazoPrimerosAvances: a.plazoPrimerosAvances ?? null,
         ruc: a.ruc ?? null,
         cuantiaMoneda: a.cuantiaMoneda ?? null,
         calidadProcesalId: a.calidadProcesalId ?? null,

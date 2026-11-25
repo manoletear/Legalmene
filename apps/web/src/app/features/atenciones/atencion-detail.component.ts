@@ -503,6 +503,8 @@ interface PipelineStep {
                 ></button>
               </ng-container>
               <button pButton icon="pi pi-pencil" label="Registrar gestión" [text]="true" severity="secondary" (click)="abrirNuevaGestion(a.id)"></button>
+              <button *ngIf="a.tipo !== 'Consulta' && me.tiene('atenciones.editar')" pButton icon="pi pi-envelope" label="Informar condiciones al cliente" [text]="true" severity="secondary"
+                data-testid="informar-condiciones" (click)="informarCondiciones(a.id)"></button>
               <button *ngIf="a.tipo !== 'Consulta'" pButton icon="pi pi-file-pdf" label="Informe final al cliente (PDF)" [text]="true" severity="secondary"
                 data-testid="informe-final" (click)="descargarInformeFinal(a.id, a.correlativo)"></button>
             </div>
@@ -928,6 +930,14 @@ export class AtencionDetailComponent implements OnInit {
   }
 
   // Anexo §IX 5.4: comprobante del pago del arancel (dos copias en el PDF).
+  // Anexo §VI l.554, §VII l.767 y l.772: copago, forma de pago, provisión estimada y plazo de avances.
+  informarCondiciones(atencionId: string) {
+    this.api.informarCondiciones(atencionId).subscribe({
+      next: (r) => this.msg.add({ severity: "success", summary: "Condiciones informadas", detail: r.para, life: 3000 }),
+      error: (e) => this.msg.add({ severity: "error", summary: "No se pudo informar", detail: e.error?.message ?? e.message, life: 5000 }),
+    });
+  }
+
   // Anexo §VII l.915 / §VIII l.1178: resultado, gestiones, documentos y rendición de gastos.
   async descargarInformeFinal(atencionId: string, correlativo: string) {
     try {

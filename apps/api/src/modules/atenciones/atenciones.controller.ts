@@ -131,6 +131,13 @@ export class AtencionesController {
     return this.service.aprobarTermino(id, user);
   }
 
+  // Correo al cliente con copago, forma de pago, provisión estimada y plazo de primeros avances.
+  @Post("atenciones/:id/informar-condiciones")
+  @Permiso("atenciones.editar")
+  informarCondiciones(@Param("id", ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.informarCondiciones(id, user);
+  }
+
   // Correo al cliente con la respuesta de la consulta.
   @Post("atenciones/:id/enviar-respuesta")
   @Permiso("atenciones.editar")

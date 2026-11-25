@@ -207,6 +207,10 @@ export class AtencionesApiService {
     return this.http.post<ArancelAtencion>(`${this.base}/${id}/arancel/enviar`, {});
   }
 
+  informarCondiciones(id: string): Observable<{ estado: string | null; para: string }> {
+    return this.http.post<{ estado: string | null; para: string }>(`${this.base}/${id}/informar-condiciones`, {});
+  }
+
   enviarRespuesta(id: string): Observable<{ estado: string | null; para: string }> {
     return this.http.post<{ estado: string | null; para: string }>(`${this.base}/${id}/enviar-respuesta`, {});
   }

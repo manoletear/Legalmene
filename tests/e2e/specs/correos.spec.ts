@@ -55,4 +55,20 @@ test.describe("Correos al cliente", () => {
     await page.getByTestId("enviar-respuesta").click();
     await expect(page.getByText("Respuesta enviada", { exact: true })).toBeVisible();
   });
+
+  test("las condiciones de la atención (copago, pago, plazo de avances) se informan al cliente", async ({ page, request }) => {
+    const a = await crearAsesoria(request, `Condiciones E2E ${Date.now()}`);
+    const ficha = await request.get(`${API}/atenciones/${a.id}`).then((r) => r.json());
+    const afiliados = await request.get(`${API}/afiliados?rut=${ficha.afiliado.rut}`).then((r) => r.json());
+    const email = `condiciones.e2e.${Date.now()}@ejemplo.cl`;
+    expect((await request.patch(`${API}/afiliados/${afiliados.data[0].id}`, { data: { email } })).ok()).toBeTruthy();
+    expect((await request.patch(`${API}/atenciones/${a.id}`, { data: { plazoPrimerosAvances: "2030-01-15" } })).ok()).toBeTruthy();
+
+    await page.goto(`/atenciones/${a.id}`);
+    await page.getByTestId("informar-condiciones").click();
+    await expect(page.getByText("Condiciones informadas", { exact: true })).toBeVisible();
+    await page.reload();
+    await page.getByRole("tab", { name: "Historial" }).click();
+    await expect(page.getByTestId("correos").locator("tr", { hasText: "Condiciones de su atención" })).toContainText(email);
+  });
 });

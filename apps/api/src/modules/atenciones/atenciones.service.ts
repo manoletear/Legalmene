@@ -1,4 +1,5 @@
-import { plantillaPresentacionAbogado, plantillaRespuestaConsulta, plantillaSolicitudAntecedentes, plantillaTerminoAtencion } from "../correos/plantillas";
+import { valoresUf } from "../../db/schema/aranceles";
+import { plantillaPresentacionAbogado, plantillaCondicionesAtencion, plantillaRespuestaConsulta, plantillaSolicitudAntecedentes, plantillaTerminoAtencion } from "../correos/plantillas";
 import { CorreosService } from "../correos/correos.service";
 import { avisar, jefeDe } from "../notif-inbox/destinatarios";
 import {
@@ -708,6 +709,62 @@ export class AtencionesService {
       [d.email],
       plantillaRespuestaConsulta({ cliente: d.cliente, correlativo: d.correlativo, respuesta: d.respuesta, abogado: ab?.nombre ?? "LegalChile" }),
       { plantilla: "cliente.respuesta_consulta", atencionId: id, enviadoPorId: actor.id },
+    );
+    return { estado, para: d.email };
+  }
+
+  // Correo al cliente con el copago y su forma de pago, la provisión estimada y el plazo de primeros avances.
+  async informarCondiciones(id: string, actor: Actor) {
+    await asegurarAtencionVisible(this.db, id);
+    const [d] = await this.db
+      .select({
+        tipo: atenciones.tipo,
+        correlativo: atenciones.correlativo,
+        plazo: atenciones.plazoPrimerosAvances,
+        cliente: afiliados.nombres,
+        email: afiliados.email,
+        abogadoId: atenciones.abogadoAsignadoId,
+        provision: materias.provisionEstimadaClp,
+      })
+      .from(atenciones)
+      .innerJoin(afiliados, eq(afiliados.id, atenciones.afiliadoId))
+      .innerJoin(materias, eq(materias.id, atenciones.materiaId))
+      .where(eq(atenciones.id, id));
+    if (d.tipo === "Consulta") throw new BadRequestException("Las condiciones se informan en asesorías y juicios");
+    if (!d.email) throw new BadRequestException("El afiliado no tiene correo registrado; agréguelo en su ficha");
+    if (!this.correos) throw new BadRequestException("El envío de correos no está disponible");
+    const [envios] = await this.db
+      .select({ n: count() })
+      .from(correosEnviados)
+      .where(
+        and(
+          eq(correosEnviados.atencionId, id),
+          eq(correosEnviados.plantilla, "cliente.condiciones"),
+          gte(correosEnviados.createdAt, new Date(Date.now() - 24 * 3600 * 1000)),
+        ),
+      );
+    if (Number(envios?.n ?? 0) >= 3) throw new ConflictException("Ya se informaron las condiciones 3 veces en las últimas 24 horas");
+    const ar = await this.arancelesAtencion.obtener(id);
+    const [uf] = await this.db.select().from(valoresUf).orderBy(desc(valoresUf.fecha)).limit(1);
+    const copagoUf = ar && ar.estado !== "NoRequerido" && (ar.copagoUfCentesimas ?? 0) > 0 ? ar.copagoUfCentesimas! : null;
+    const pesos = (n: number) => "$" + n.toLocaleString("es-CL");
+    const copago =
+      copagoUf == null
+        ? null
+        : `${(copagoUf / 100).toLocaleString("es-CL", { minimumFractionDigits: 2 })} UF` +
+          (uf ? ` (aprox. ${pesos(Math.round((copagoUf * uf.valorCentavos) / 10_000))} con la UF del ${uf.fecha.split("-").reverse().join("-")})` : "");
+    const [ab] = d.abogadoId ? await this.db.select({ nombre: usuarios.nombre }).from(usuarios).where(eq(usuarios.id, d.abogadoId)) : [];
+    const estado = await this.correos.enviar(
+      [d.email],
+      plantillaCondicionesAtencion({
+        cliente: d.cliente,
+        correlativo: d.correlativo,
+        abogado: ab?.nombre ?? "su abogado",
+        copago,
+        provisionEstimada: d.provision ? pesos(d.provision) : null,
+        plazoAvances: d.plazo ? d.plazo.split("-").reverse().join("-") : null,
+      }),
+      { plantilla: "cliente.condiciones", atencionId: id, enviadoPorId: actor.id },
     );
     return { estado, para: d.email };
   }

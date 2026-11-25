@@ -81,6 +81,8 @@ export const AtencionSchema = z.object({
   procedimientoId: z.string().uuid().optional().nullable(),
   tribunalId: z.string().uuid().optional().nullable(),
   rolCausa: z.string().max(60).optional().nullable(),
+  // Fecha comprometida al cliente para los primeros avances (Anexo §VII l.767).
+  plazoPrimerosAvances: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   ruc: z.string().max(60).optional().nullable(),
   cuantiaMonto: z.number().int().nonnegative().optional().nullable(),
   cuantiaMoneda: MonedaCuantiaEnum.optional().nullable(),
