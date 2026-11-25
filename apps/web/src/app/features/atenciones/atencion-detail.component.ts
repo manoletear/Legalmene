@@ -1,3 +1,4 @@
+import { MaestrosApiService } from "../../core/services/maestros.service";
 import { PosesionPanelComponent } from "./posesion-panel.component";
 import { Component, DestroyRef, OnInit, inject, signal, computed } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
@@ -529,7 +530,7 @@ interface PipelineStep {
     <p-dialog header="Nueva gestión" [visible]="ngVisible()" (visibleChange)="ngVisible.set($event)" [modal]="true" [style]="{ width: '560px', maxWidth: '95vw' }">
       <div class="lm-col" style="gap:12px;">
         <label class="lm-col" style="gap:4px;">Tipo *
-          <p-select name="ngTipo" [(ngModel)]="ng.tipo" [options]="tiposGestion" optionLabel="label" optionValue="value" appendTo="body"></p-select>
+          <p-select name="ngTipo" [(ngModel)]="ng.tipoGestionId" [options]="tiposGestion()" optionLabel="label" optionValue="value" appendTo="body" [filter]="tiposGestion().length > 8"></p-select>
         </label>
         <label class="lm-col" style="gap:4px;">Título *<input pInputText name="ngTitulo" [(ngModel)]="ng.titulo" maxlength="200" /></label>
         <label class="lm-col" style="gap:4px;">Detalle<textarea pTextarea name="ngDetalle" [(ngModel)]="ng.detalle" rows="2"></textarea></label>
@@ -570,6 +571,7 @@ export class AtencionDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private api = inject(AtencionesApiService);
   private gestionesApi = inject(GestionesApiService);
+  private maestrosApi = inject(MaestrosApiService);
   private documentosApi = inject(DocumentosApiService);
   private msg = inject(MessageService);
   private prompt = inject(PromptService);
@@ -600,11 +602,23 @@ export class AtencionDetailComponent implements OnInit {
   protected documentos = signal<DocumentoMeta[]>([]);
   protected uploading = signal(false);
   protected pestana = signal<string>("gestiones");
-  protected tiposGestion = TipoGestionEnum.options.map((value) => ({ value, label: TIPO_GESTION_LABEL[value] }));
+  // Tipos del maestro (Anexo §II l.150); sin maestro cargado, las categorías del sistema.
+  protected tiposGestion = signal<{ value: string; label: string; categoria: TipoGestion }[]>(
+    TipoGestionEnum.options.map((value) => ({ value, label: TIPO_GESTION_LABEL[value], categoria: value })),
+  );
+  private cargarTiposGestion() {
+    this.maestrosApi.listar("tipos-gestion", { vigente: true }).subscribe((ts) => {
+      if (ts.length) this.tiposGestion.set(ts.map((t) => ({ value: t.id, label: t.nombre, categoria: t.categoria })));
+    });
+  }
+  private tipoPorDefecto(): string {
+    const l = this.tiposGestion();
+    return (l.find((t) => t.categoria === "Reunion") ?? l[0])?.value ?? "Reunion";
+  }
   protected hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(new Date());
   protected ngVisible = signal(false);
   protected ngGuardando = signal(false);
-  protected ng = { tipo: "Reunion" as TipoGestion, titulo: "", detalle: "", responsableId: "", inicio: "", compromiso: "", informarCliente: false };
+  protected ng = { tipoGestionId: "Reunion", titulo: "", detalle: "", responsableId: "", inicio: "", compromiso: "", informarCliente: false };
   protected correos = signal<CorreoEnviado[]>([]);
   protected responsableOpts = signal<{ label: string; value: string }[]>([]);
   protected completando = signal<Gestion | null>(null);
@@ -693,6 +707,7 @@ export class AtencionDetailComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
 
   ngOnInit() {
+    this.cargarTiposGestion();
     this.usuariosApi.opciones().subscribe((us) => {
       this.nombres.set(new Map(us.map((u) => [u.id, u.nombre])));
       this.responsableOpts.set(us.map((u) => ({ label: `${u.nombre} (${u.email})`, value: u.id })));
@@ -951,7 +966,7 @@ export class AtencionDetailComponent implements OnInit {
   // Anexo §VII l.860, §VIII l.1122: responsable, fecha de inicio y compromiso.
   abrirNuevaGestion(atencionId: string) {
     this.atencionGestion = atencionId;
-    this.ng = { tipo: "Reunion", titulo: "", detalle: "", responsableId: this.responsableId() ?? "", inicio: this.hoy, compromiso: "", informarCliente: false };
+    this.ng = { tipoGestionId: this.tipoPorDefecto(), titulo: "", detalle: "", responsableId: this.responsableId() ?? "", inicio: this.hoy, compromiso: "", informarCliente: false };
     this.ngVisible.set(true);
   }
 
@@ -964,12 +979,19 @@ export class AtencionDetailComponent implements OnInit {
     return fecha === this.hoy ? new Date().toISOString() : new Date(`${fecha}T12:00:00`).toISOString();
   }
 
+  // El valor es el id del maestro; si el maestro no cargó, es directamente la categoría.
+  private tipoElegido(): { tipo: TipoGestion; tipoGestionId?: string } {
+    const t = this.tiposGestion().find((x) => x.value === this.ng.tipoGestionId);
+    if (!t) return { tipo: "Otra" };
+    return t.value === t.categoria ? { tipo: t.categoria } : { tipo: t.categoria, tipoGestionId: t.value };
+  }
+
   protected crearGestion() {
     const id = this.atencionGestion;
     this.ngGuardando.set(true);
     this.gestionesApi
       .crear(id, {
-        tipo: this.ng.tipo,
+        ...this.tipoElegido(),
         titulo: this.ng.titulo.trim(),
         detalle: this.ng.detalle.trim() || null,
         responsableId: this.ng.responsableId,

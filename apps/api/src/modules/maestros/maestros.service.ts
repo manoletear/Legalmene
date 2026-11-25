@@ -4,6 +4,8 @@ import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import type { ZodTypeAny } from "zod";
 import {
   CreateCanalSchema,
+  CreateTipoGestionSchema,
+  UpdateTipoGestionSchema,
   CreateCompetenciaSchema,
   CreateLugarSchema,
   CreateRegionSchema,
@@ -34,6 +36,7 @@ import {
   regiones,
   tiposConsulta,
   tribunales,
+  tiposGestion,
   type MateriaRow,
 } from "../../db/schema/maestros";
 import { canales } from "../../db/schema/planes";
@@ -84,6 +87,7 @@ export const MAESTROS = {
   regiones: { table: regiones, etiqueta: "región", create: CreateRegionSchema, update: UpdateRegionSchema },
   ciudades: { table: ciudades, etiqueta: "ciudad", create: CreateLugarSchema, update: UpdateLugarSchema, porRegion: true },
   comunas: { table: comunas, etiqueta: "comuna", create: CreateLugarSchema, update: UpdateLugarSchema, porRegion: true },
+  "tipos-gestion": { table: tiposGestion, etiqueta: "tipo de gestión", create: CreateTipoGestionSchema, update: UpdateTipoGestionSchema },
 } satisfies Record<string, DefMaestro>;
 
 export type TipoMaestro = keyof typeof MAESTROS;

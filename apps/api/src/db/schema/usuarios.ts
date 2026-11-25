@@ -8,6 +8,7 @@ import {
   timestamp,
   primaryKey,
   index,
+  jsonb,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
@@ -20,6 +21,8 @@ export const perfiles = pgTable("perfiles", {
   vigente: boolean("vigente").notNull().default(true),
   // Perfiles del organigrama: editables pero no eliminables.
   esSistema: boolean("es_sistema").notNull().default(false),
+  // Horario de acceso (HorarioPerfil en shared); null = sin restricción.
+  horario: jsonb("horario").$type<{ dias: number[]; desde: string; hasta: string }>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

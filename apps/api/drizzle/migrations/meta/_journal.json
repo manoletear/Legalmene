@@ -281,6 +281,20 @@
       "when": 1795546627713,
       "tag": "0039_notas_atencion",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1795610218031,
+      "tag": "0040_tipos_gestion",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1795610422448,
+      "tag": "0041_horario_perfil",
+      "breakpoints": true
     }
   ]
 }

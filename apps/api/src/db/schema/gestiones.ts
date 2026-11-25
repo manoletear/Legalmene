@@ -62,6 +62,8 @@ export const gestiones = pgTable(
       .notNull()
       .references(() => atenciones.id, { onDelete: "cascade" }),
     tipo: tipoGestionEnum("tipo").notNull(),
+    // Tipo del maestro editable (nombre); `tipo` es su categoría del sistema.
+    tipoGestionId: uuid("tipo_gestion_id"),
     estado: estadoGestionEnum("estado").notNull().default("Pendiente"),
     titulo: varchar("titulo", { length: 200 }).notNull(),
     detalle: text("detalle"),

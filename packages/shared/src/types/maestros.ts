@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TipoGestionEnum } from "./gestion";
 
 // Maestros administrables (Anexo §II.E). `vigente=false` los oculta de los formularios
 // pero se conservan para los registros históricos.
@@ -20,6 +21,8 @@ export const MateriaSchema = z.object({
   aplicaAsesoria: z.boolean(),
   aplicaJuicio: z.boolean(),
   requiereProvision: z.boolean(),
+  // Provisión de fondos estimada en pesos para informar al cliente (Anexo §VI l.554); null = sin estimación.
+  provisionEstimadaClp: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
   vigente: z.boolean(),
 });
 export type Materia = z.infer<typeof MateriaSchema>;
@@ -64,6 +67,7 @@ export const CreateMateriaSchema = MateriaSchema.omit(sinId).partial({
   aplicaAsesoria: true,
   aplicaJuicio: true,
   requiereProvision: true,
+  provisionEstimadaClp: true,
   vigente: true,
 });
 export const UpdateMateriaSchema = CreateMateriaSchema.partial();
@@ -115,3 +119,15 @@ export const CreateFeriadoSchema = z.object({ fecha: FechaFeriado, nombre: z.str
 export type CreateFeriado = z.infer<typeof CreateFeriadoSchema>;
 export const UpdateFeriadoSchema = z.object({ nombre: z.string().trim().min(1).max(200).optional(), vigente: z.boolean().optional() });
 export type UpdateFeriado = z.infer<typeof UpdateFeriadoSchema>;
+
+// Tipos de gestión (Anexo §II l.150): maestro editable. La categoría es la del sistema (TipoGestionEnum)
+// y define las reglas (gestiones de contacto con arancel impago, escritos para la primera presentación).
+export const TipoGestionMaestroSchema = z.object({
+  id: z.string().uuid(),
+  nombre,
+  categoria: TipoGestionEnum,
+  vigente: z.boolean(),
+});
+export type TipoGestionMaestro = z.infer<typeof TipoGestionMaestroSchema>;
+export const CreateTipoGestionSchema = TipoGestionMaestroSchema.omit(sinId).partial({ vigente: true });
+export const UpdateTipoGestionSchema = CreateTipoGestionSchema.partial();

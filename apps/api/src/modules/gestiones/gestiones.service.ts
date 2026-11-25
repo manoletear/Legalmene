@@ -1,3 +1,4 @@
+import { tiposGestion } from "../../db/schema/maestros";
 import { plantillaGestionCliente } from "../correos/plantillas";
 import { CorreosService } from "../correos/correos.service";
 import { avisar, equipoDeAtencion } from "../notif-inbox/destinatarios";
@@ -109,6 +110,12 @@ export class GestionesService {
 
   async crear(input: CreateGestion): Promise<Gestion> {
     const codPlan = await this.planDeAtencion(input.atencionId);
+    // Con un tipo del maestro, la categoría del sistema sale de él (no la elige el cliente).
+    if (input.tipoGestionId) {
+      const [tg] = await this.db.select().from(tiposGestion).where(eq(tiposGestion.id, input.tipoGestionId));
+      if (!tg) throw new BadRequestException("El tipo de gestión no existe");
+      input = { ...input, tipo: tg.categoria as CreateGestion["tipo"] };
+    }
     await this.asegurarArancelRegularizado(input.atencionId, input.tipo);
     const [resp] = await this.db
       .select({ activo: usuarios.activo, bloqueado: usuarios.bloqueado })
@@ -122,6 +129,7 @@ export class GestionesService {
     const payload: NuevaGestion = {
       atencionId: input.atencionId,
       tipo: input.tipo,
+      tipoGestionId: input.tipoGestionId ?? null,
       estado: input.estado ?? "Pendiente",
       titulo: input.titulo,
       detalle: input.detalle ?? null,

@@ -1,3 +1,4 @@
+import { TIPO_GESTION_LABEL, TipoGestionEnum, type TipoGestion } from "@legalmene/shared";
 import { Component, OnInit, computed, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
@@ -22,6 +23,7 @@ interface DefTab {
   porRegion?: boolean;
   ubicacion?: boolean;
   flags?: boolean;
+  categoria?: boolean;
 }
 
 const TABS: DefTab[] = [
@@ -34,6 +36,7 @@ const TABS: DefTab[] = [
   { tipo: "causas-termino", titulo: "Causas de término" },
   { tipo: "calidades-procesales", titulo: "Calidades procesales" },
   { tipo: "canales", titulo: "Canales" },
+  { tipo: "tipos-gestion", titulo: "Tipos de gestión", categoria: true },
   { tipo: "regiones", titulo: "Regiones" },
   { tipo: "ciudades", titulo: "Ciudades", porRegion: true },
   { tipo: "comunas", titulo: "Comunas", porRegion: true },
@@ -52,6 +55,8 @@ interface Fila {
   aplicaAsesoria?: boolean;
   aplicaJuicio?: boolean;
   requiereProvision?: boolean;
+  provisionEstimadaClp?: number | null;
+  categoria?: string;
 }
 
 const vacio = (): Partial<Fila> => ({
@@ -102,7 +107,10 @@ const vacio = (): Partial<Fila> => ({
           <label class="lm-small"><p-checkbox [(ngModel)]="form.aplicaAsesoria" name="aa" [binary]="true"></p-checkbox> Asesoría</label>
           <label class="lm-small"><p-checkbox [(ngModel)]="form.aplicaJuicio" name="aj" [binary]="true"></p-checkbox> Juicio</label>
           <label class="lm-small"><p-checkbox [(ngModel)]="form.requiereProvision" name="rp" [binary]="true"></p-checkbox> Requiere provisión</label>
+          <input pInputText type="number" min="0" [(ngModel)]="form.provisionEstimadaClp" name="pe" placeholder="Provisión estimada ($)" style="width:180px;" aria-label="Provisión estimada en pesos" />
         </ng-container>
+        <p-select *ngIf="tab().categoria" [(ngModel)]="form.categoria" name="categoria" [options]="categoriasGestion" optionLabel="label" optionValue="value"
+          placeholder="Categoría del sistema" appendTo="body" [style]="{ width: '220px' }" ariaLabel="Categoría"></p-select>
         <button pButton type="submit" [label]="editandoId() ? 'Guardar cambios' : 'Agregar'" [icon]="editandoId() ? 'pi pi-check' : 'pi pi-plus'" [disabled]="!valido()"></button>
         <button *ngIf="editandoId()" pButton type="button" label="Cancelar" [text]="true" severity="secondary" (click)="limpiar()"></button>
       </form>
@@ -127,6 +135,7 @@ const vacio = (): Partial<Fila> => ({
             <th *ngIf="tab().ubicacion">Comuna</th>
             <th *ngIf="tab().flags">Aplica a</th>
             <th *ngIf="tab().flags">Provisión</th>
+            <th *ngIf="tab().categoria">Categoría</th>
             <th>Estado</th>
             <th></th>
           </tr>
@@ -139,7 +148,8 @@ const vacio = (): Partial<Fila> => ({
             <td *ngIf="tab().ubicacion">{{ f.region || '—' }}</td>
             <td *ngIf="tab().ubicacion">{{ f.comuna || '—' }}</td>
             <td *ngIf="tab().flags" class="lm-small">{{ aplicaA(f) }}</td>
-            <td *ngIf="tab().flags">{{ f.requiereProvision ? 'Sí' : 'No' }}</td>
+            <td *ngIf="tab().flags">{{ f.requiereProvision ? 'Sí' : 'No' }}<span *ngIf="f.provisionEstimadaClp" class="lm-small lm-muted"> · $ {{ f.provisionEstimadaClp | number }}</span></td>
+            <td *ngIf="tab().categoria">{{ categoriaLabel(f.categoria) }}</td>
             <td><p-tag [value]="f.vigente ? 'Vigente' : 'No vigente'" [severity]="f.vigente ? 'success' : 'secondary'"></p-tag></td>
             <td style="text-align:right; white-space:nowrap;">
               <button pButton type="button" class="p-button-text p-button-sm" label="Editar" (click)="editar(f)"></button>
@@ -159,6 +169,10 @@ export class AdminMaestrosComponent implements OnInit {
   private msg = inject(MessageService);
 
   protected tabs = TABS;
+  protected categoriasGestion = TipoGestionEnum.options.map((value) => ({ value, label: TIPO_GESTION_LABEL[value] }));
+  protected categoriaLabel(c?: string): string {
+    return c ? (TIPO_GESTION_LABEL[c as TipoGestion] ?? c) : "—";
+  }
   protected tab = signal<DefTab>(TABS[0]);
   // Pestañas con componente propio (no son maestros simples).
   protected extra = signal<"plantillas" | "feriados" | null>(null);
@@ -205,7 +219,12 @@ export class AdminMaestrosComponent implements OnInit {
 
   valido(): boolean {
     const t = this.tab();
-    return !!this.form.nombre?.trim() && (!t.porCompetencia || !!this.form.competenciaId) && (!t.porRegion || !!this.form.regionId);
+    return (
+      !!this.form.nombre?.trim() &&
+      (!t.porCompetencia || !!this.form.competenciaId) &&
+      (!t.porRegion || !!this.form.regionId) &&
+      (!t.categoria || !!this.form.categoria)
+    );
   }
 
   guardar() {
@@ -223,7 +242,10 @@ export class AdminMaestrosComponent implements OnInit {
       body.aplicaAsesoria = !!this.form.aplicaAsesoria;
       body.aplicaJuicio = !!this.form.aplicaJuicio;
       body.requiereProvision = !!this.form.requiereProvision;
+      const pe = this.form.provisionEstimadaClp;
+      body.provisionEstimadaClp = pe === null || pe === undefined || (pe as unknown) === "" ? null : Math.max(0, Math.round(Number(pe)));
     }
+    if (t.categoria) body.categoria = this.form.categoria;
     const id = this.editandoId();
     const req = id ? this.api.actualizar(t.tipo, id, body) : this.api.crear(t.tipo, body);
     req.subscribe({

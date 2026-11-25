@@ -37,6 +37,8 @@ export const GestionSchema = z.object({
   id: z.string().uuid(),
   atencionId: z.string().uuid(),
   tipo: TipoGestionEnum,
+  // Tipo del maestro (nombre editable); `tipo` es su categoría.
+  tipoGestionId: z.string().uuid().optional().nullable(),
   estado: EstadoGestionEnum,
   titulo: z.string().min(1).max(200),
   detalle: z.string().max(5000).optional().nullable(),

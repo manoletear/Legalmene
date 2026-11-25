@@ -33,6 +33,7 @@ export class PerfilesService {
       vigente: p.vigente,
       esSistema: p.esSistema,
       permisos: permisosDePerfil(p.codigo, permisos),
+      horario: p.horario ?? null,
       usuarios: usuariosN,
     };
   }
@@ -97,6 +98,7 @@ export class PerfilesService {
     if (actual.codigo === PERFIL_ADMIN) {
       if (patch.vigente === false) throw new BadRequestException("El perfil Administrador del sistema no se puede desactivar");
       if (patch.permisos) throw new BadRequestException("El perfil Administrador del sistema siempre tiene todos los permisos");
+      if (patch.horario) throw new BadRequestException("El perfil Administrador del sistema no tiene horario de acceso");
     }
     const { permisos, ...datos } = patch;
     if (Object.keys(datos).length > 0) {

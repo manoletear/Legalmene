@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, boolean, timestamp, uniqueIndex, index, date } from "drizzle-orm/pg-core";
+import { pgTable, uuid, varchar, boolean, timestamp, uniqueIndex, index, date, integer } from "drizzle-orm/pg-core";
 
 // Maestros administrables (Anexo §II.E). vigente=false oculta el registro de los
 // formularios sin borrarlo, para no romper atenciones históricas.
@@ -29,6 +29,7 @@ export const materias = pgTable(
     aplicaAsesoria: boolean("aplica_asesoria").notNull().default(true),
     aplicaJuicio: boolean("aplica_juicio").notNull().default(true),
     requiereProvision: boolean("requiere_provision").notNull().default(false),
+    provisionEstimadaClp: integer("provision_estimada_clp"),
   },
   (t) => ({
     competenciaNombreUq: uniqueIndex("materias_competencia_nombre_uq").on(t.competenciaId, t.nombre),
@@ -113,4 +114,11 @@ export const feriados = pgTable(
     origen: varchar("origen", { length: 10 }).$type<"Legal" | "Manual">().notNull().default("Manual"),
   },
   (t) => ({ fechaUq: uniqueIndex("feriados_fecha_uq").on(t.fecha) }),
+);
+
+// Tipos de gestión editables (Anexo §II l.150); `categoria` es un valor de TipoGestionEnum.
+export const tiposGestion = pgTable(
+  "tipos_gestion",
+  { ...comunes(), nombre: varchar("nombre", { length: 120 }).notNull(), categoria: varchar("categoria", { length: 30 }).notNull() },
+  (t) => ({ nombreUq: uniqueIndex("tipos_gestion_nombre_uq").on(t.nombre) }),
 );

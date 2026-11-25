@@ -58,6 +58,18 @@ interface GrupoPermisos {
             <input pInputText [(ngModel)]="descripcion" style="width:100%;" />
           </div>
         </div>
+        <!-- Anexo §II l.150: horario de acceso por perfil (hora de Chile). -->
+        <div *ngIf="!esAdmin()" class="lm-row lm-small" style="gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px;" data-testid="horario-perfil">
+          <label class="lm-row" style="gap:4px; align-items:center;"><input type="checkbox" [(ngModel)]="conHorario" name="conHorario" /> Restringir horario de acceso</label>
+          <ng-container *ngIf="conHorario">
+            <label *ngFor="let d of dias" class="lm-row" style="gap:2px; align-items:center;">
+              <input type="checkbox" [checked]="diasHorario.has(d.n)" (change)="alternarDia(d.n)" [attr.aria-label]="d.nombre" /> {{ d.corto }}
+            </label>
+            <input pInputText type="time" [(ngModel)]="desde" name="desde" aria-label="Desde" />
+            <span>a</span>
+            <input pInputText type="time" [(ngModel)]="hasta" name="hasta" aria-label="Hasta" />
+          </ng-container>
+        </div>
 
         <div *ngIf="esAdmin()" class="lm-small" style="background:#f1f5f9; padding:8px 12px; border-radius:6px; margin-bottom:12px;">
           Este perfil tiene siempre todos los permisos, incluidos los que se agreguen en el futuro.
@@ -107,6 +119,25 @@ export class AdminPerfilesComponent implements OnInit {
   protected guardando = signal(false);
   protected nombre = "";
   protected descripcion = "";
+  protected conHorario = false;
+  protected diasHorario = new Set<number>([1, 2, 3, 4, 5]);
+  protected desde = "08:00";
+  protected hasta = "20:00";
+  protected dias = [
+    { n: 1, corto: "L", nombre: "Lunes" },
+    { n: 2, corto: "M", nombre: "Martes" },
+    { n: 3, corto: "X", nombre: "Miércoles" },
+    { n: 4, corto: "J", nombre: "Jueves" },
+    { n: 5, corto: "V", nombre: "Viernes" },
+    { n: 6, corto: "S", nombre: "Sábado" },
+    { n: 7, corto: "D", nombre: "Domingo" },
+  ];
+  protected alternarDia(n: number) {
+    const s = new Set(this.diasHorario);
+    if (s.has(n)) s.delete(n);
+    else s.add(n);
+    this.diasHorario = s;
+  }
 
   protected grupos: GrupoPermisos[] = MODULOS_PERMISOS.map((m) => ({
     modulo: m.modulo,
@@ -133,6 +164,10 @@ export class AdminPerfilesComponent implements OnInit {
     this.marcados.set(new Set(p.permisos));
     this.nombre = p.nombre;
     this.descripcion = p.descripcion ?? "";
+    this.conHorario = !!p.horario;
+    this.diasHorario = new Set(p.horario?.dias ?? [1, 2, 3, 4, 5]);
+    this.desde = p.horario?.desde ?? "08:00";
+    this.hasta = p.horario?.hasta ?? "20:00";
   }
 
   alternar(clave: Permiso, valor: boolean) {
@@ -146,7 +181,12 @@ export class AdminPerfilesComponent implements OnInit {
     this.guardando.set(true);
     const patch = this.esAdmin()
       ? { nombre: this.nombre, descripcion: this.descripcion || null }
-      : { nombre: this.nombre, descripcion: this.descripcion || null, permisos: [...this.marcados()] };
+      : {
+          nombre: this.nombre,
+          descripcion: this.descripcion || null,
+          permisos: [...this.marcados()],
+          horario: this.conHorario ? { dias: [...this.diasHorario].sort(), desde: this.desde, hasta: this.hasta } : null,
+        };
     this.api.actualizar(p.id, patch).subscribe({
       next: () => {
         this.guardando.set(false);

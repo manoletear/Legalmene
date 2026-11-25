@@ -245,6 +245,25 @@ export const PERFILES_SISTEMA: PerfilSistema[] = [
   },
 ];
 
+// Horario de acceso del perfil (Anexo §II l.150). Días 1 = lunes … 7 = domingo; horas de Chile.
+// null = sin restricción. El perfil Administrador nunca se restringe.
+const hora = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Hora en formato HH:MM");
+export const HorarioPerfilSchema = z
+  .object({ dias: z.array(z.number().int().min(1).max(7)).min(1).max(7), desde: hora, hasta: hora })
+  .refine((h) => h.desde < h.hasta, { message: "La hora de inicio debe ser anterior a la de término", path: ["hasta"] });
+export type HorarioPerfil = z.infer<typeof HorarioPerfilSchema>;
+
+// ¿El instante cae dentro del horario? (se evalúa en hora de Chile)
+export function dentroDeHorario(h: HorarioPerfil | null | undefined, ahora: Date = new Date()): boolean {
+  if (!h) return true;
+  const partes = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Santiago", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(ahora);
+  const dia = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(partes.find((p) => p.type === "weekday")?.value ?? "") + 1;
+  const hh = (partes.find((p) => p.type === "hour")?.value ?? "00").replace("24", "00");
+  const mm = partes.find((p) => p.type === "minute")?.value ?? "00";
+  const t = `${hh}:${mm}`;
+  return h.dias.includes(dia) && t >= h.desde && t < h.hasta;
+}
+
 export const PerfilSchema = z.object({
   id: z.string().uuid(),
   codigo: z.string(),
@@ -253,6 +272,7 @@ export const PerfilSchema = z.object({
   vigente: z.boolean(),
   esSistema: z.boolean(),
   permisos: z.array(PermisoEnum),
+  horario: HorarioPerfilSchema.nullable().optional(),
   usuarios: z.number().int().optional(),
 });
 export type Perfil = z.infer<typeof PerfilSchema>;
@@ -277,5 +297,6 @@ export const UpdatePerfilSchema = z.object({
   descripcion: z.string().trim().max(500).optional().nullable(),
   vigente: z.boolean().optional(),
   permisos: z.array(PermisoEnum).optional(),
+  horario: HorarioPerfilSchema.nullable().optional(),
 });
 export type UpdatePerfil = z.infer<typeof UpdatePerfilSchema>;

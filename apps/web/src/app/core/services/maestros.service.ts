@@ -14,7 +14,7 @@ import type {
   TipoAtencion,
   Tribunal,
   UpdateGestionPlantilla,
-} from "@legalmene/shared";
+ TipoGestionMaestro } from "@legalmene/shared";
 
 export type TipoMaestro =
   | "competencias"
@@ -26,6 +26,7 @@ export type TipoMaestro =
   | "causas-termino"
   | "calidades-procesales"
   | "canales"
+  | "tipos-gestion"
   | "regiones"
   | "ciudades"
   | "comunas";
@@ -50,6 +51,7 @@ interface PorTipo {
   regiones: Region;
   ciudades: Lugar;
   comunas: Lugar;
+  "tipos-gestion": TipoGestionMaestro;
 }
 
 @Injectable({ providedIn: "root" })

@@ -1,3 +1,4 @@
+import { dentroDeHorario } from "@legalmene/shared";
 import {
   BadRequestException,
   ConflictException,
@@ -96,6 +97,7 @@ export class UsuariosService {
         perfilCodigo: perfiles.codigo,
         perfilNombre: perfiles.nombre,
         perfilVigente: perfiles.vigente,
+        perfilHorario: perfiles.horario,
       })
       .from(usuarios)
       .innerJoin(perfiles, eq(perfiles.id, usuarios.perfilId))
@@ -113,6 +115,10 @@ export class UsuariosService {
     }
     if (!row.perfilVigente && row.perfilCodigo !== PERFIL_ADMIN) {
       throw new UsuarioNoHabilitadoError("Su perfil está desactivado. Contacte al administrador.", u);
+    }
+    if (row.perfilCodigo !== PERFIL_ADMIN && !dentroDeHorario(row.perfilHorario)) {
+      const h = row.perfilHorario!;
+      throw new UsuarioNoHabilitadoError(`Fuera del horario de acceso de su perfil (${h.desde}–${h.hasta}).`, u);
     }
     const asignados = await this.db
       .select({ permiso: perfilPermisos.permiso })

@@ -1,0 +1,1 @@
+ALTER TABLE "perfiles" ADD COLUMN "horario" jsonb;
