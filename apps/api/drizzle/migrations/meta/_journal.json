@@ -309,6 +309,13 @@
       "when": 1795610922083,
       "tag": "0043_provision_borrador",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1795661258162,
+      "tag": "0044_busqueda_indexado",
+      "breakpoints": true
     }
   ]
 }

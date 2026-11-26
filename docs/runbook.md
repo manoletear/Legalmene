@@ -30,6 +30,9 @@ pnpm db:studio  # Drizzle Studio UI sobre el schema
 | `ENTRA_TENANT_ID` | — | Referencia; la API no lo lee |
 | `ENTRA_AUDIENCE` / `ENTRA_ISSUER` | — | Requeridos para aceptar tokens de Entra ID (sin ellos se rechazan) |
 | `SESSION_JWT_SECRET` | — | Requerido en producción (≥ 32 caracteres) para el login con enlace |
+| `OPENSEARCH_URL` | — | Opcional. Buscador de texto completo; sin él (o si no responde) se busca en Postgres |
+| `OPENSEARCH_AWS_REGION` | — | Con dominio de AWS: firma las llamadas con el rol de la tarea (SigV4) |
+| `OPENSEARCH_INDEX_PREFIX` | `nexus` | Prefijo de los índices (`<prefijo>-atenciones`, `<prefijo>-afiliados`) |
 | `TRUSTED_PROXY_HOPS` | `1` | Proxies propios delante de la API (ALB, Render); define la IP real del cliente |
 
 ## Migraciones
@@ -94,7 +97,13 @@ advertencia en la síntesis.
 | `bootstrapAdminEmails` | `BOOTSTRAP_ADMIN_EMAILS` | correos del primer administrador |
 | `entraTenantId` / `entraAudience` | `ENTRA_*` | registro de la aplicación en Entra ID |
 | `sesEnabled` / `sesFrom` | `SES_ENABLED` / `SES_FROM` | `true` / remitente verificado en SES |
+| `opensearch` | `OPENSEARCH_URL` / `OPENSEARCH_AWS_REGION` | `true` crea el dominio OpenSearch en la VPC (solo con mucho volumen; ver abajo) |
 | `correoApruebaArancel`, `correoSolicitudFondos`, `correoAutorizaProvision`, `correoOperaciones` | `CORREO_*` | casillas del Anexo |
+
+**Buscador (opcional).** Con `--context opensearch=true` el stack Data crea un dominio OpenSearch 2.17 en subredes
+aisladas (HTTPS solo desde la VPC, cifrado en reposo con la llave de datos, acceso por IAM) y la API recibe la URL. Tras el
+primer despliegue o un cambio de mapeo: Administración → Buscador → Reindexar todo. Si el dominio cae, las búsquedas siguen
+en Postgres (aviso en el log "OpenSearch falló") y al volver se pone al día solo por la marca de cada índice.
 
 `SESSION_JWT_SECRET` se genera en Secrets Manager y la base de datos llega como `DB_HOST`, `DB_PORT`,
 `DB_USERNAME`, `DB_PASSWORD` y `DB_NAME` (la API arma la URL; ver `apps/api/src/db/url.ts`).

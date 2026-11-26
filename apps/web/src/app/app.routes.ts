@@ -144,6 +144,11 @@ export const routes: Routes = [
     loadComponent: () => import("./features/admin/admin-formatos-exportacion.component").then((m) => m.AdminFormatosExportacionComponent),
   },
   {
+    path: "admin/buscador",
+    canActivate: [permisoGuard("busqueda.administrar")],
+    loadComponent: () => import("./features/admin/admin-buscador.component").then((m) => m.AdminBuscadorComponent),
+  },
+  {
     path: "admin/correcciones",
     canActivate: [permisoGuard("flujos.corregir")],
     loadComponent: () => import("./features/admin/admin-correcciones.component").then((m) => m.AdminCorreccionesComponent),

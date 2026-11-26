@@ -42,4 +42,6 @@ new ComputeStack(app, `Legalmene-${stage}-Compute`, {
   databaseEndpoint: data.databaseEndpoint,
   databasePort: data.databasePort,
   documentsBucket: edge.documentsBucket,
+  searchEndpoint: data.searchEndpoint,
+  searchDomainArn: data.searchDomainArn,
 });

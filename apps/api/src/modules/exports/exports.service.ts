@@ -1,6 +1,8 @@
+import { condicionIds } from "../busqueda/ids";
+import { OpenSearchService } from "../busqueda/opensearch.service";
 import { AsyncLocalStorage } from "async_hooks";
 import { formatosExportacion } from "../../db/schema/exportaciones";
-import { BadRequestException, ForbiddenException, Inject, Injectable } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Inject, Injectable, Optional } from "@nestjs/common";
 import { and, count, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { posesionesEfectivas } from "../../db/schema/posesiones";
 import { alias } from "drizzle-orm/pg-core";
@@ -107,7 +109,10 @@ export type FilaAtencionDetalle = Awaited<ReturnType<typeof filasAtencionDetalle
 
 @Injectable()
 export class ExportsService {
-  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: Database,
+    @Optional() @Inject(OpenSearchService) private readonly buscador?: OpenSearchService,
+  ) {}
 
   // Búsqueda del Anexo §XI exportada a XLSX, con el mismo alcance y criterios que su pantalla.
   async busqueda(tipo: BusquedaExportable, f: FiltroExportacion): Promise<{ archivo: Buffer; filas: number }> {
@@ -202,12 +207,14 @@ export class ExportsService {
 
   // Anexo §XI A: listado de consultas, asesorías o juicios con sus columnas.
   private async atenciones(tipo: TipoAtencion, f: FiltroExportacion) {
+    const idsTexto = f.q ? ((await this.buscador?.buscarIds("atenciones", f.q)) ?? null) : null;
     const where = this.acotar(and(
       filtroAtenciones(),
       eq(atenciones.tipo, tipo),
       condicionAtencion(f),
       f.estado ? sql`${atenciones.estado} = ${f.estado}` : undefined,
-      f.q ? sql`"atenciones"."search_vector" @@ plainto_tsquery('spanish', ${f.q})` : undefined,
+      f.q && !idsTexto ? sql`"atenciones"."search_vector" @@ plainto_tsquery('spanish', ${f.q})` : undefined,
+      idsTexto ? condicionIds(atenciones.id, idsTexto) : undefined,
     ));
     await this.contar(() => this.db.select({ value: count() }).from(atenciones).where(where));
     const filas = await filasAtencionDetalle(this.db, where);

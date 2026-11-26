@@ -2,6 +2,8 @@ import * as cdk from "aws-cdk-lib";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as rds from "aws-cdk-lib/aws-rds";
 import * as kms from "aws-cdk-lib/aws-kms";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as opensearch from "aws-cdk-lib/aws-opensearchservice";
 import { Construct } from "constructs";
 
 interface DataStackProps extends cdk.StackProps {
@@ -14,6 +16,9 @@ export class DataStack extends cdk.Stack {
   readonly databaseSecretArn: string;
   readonly databaseEndpoint: string;
   readonly databasePort: string;
+  // Buscador de texto completo (opcional: --context opensearch=true). Sin él, la API busca en Postgres.
+  readonly searchEndpoint?: string;
+  readonly searchDomainArn?: string;
 
   constructor(scope: Construct, id: string, props: DataStackProps) {
     super(scope, id, props);
@@ -68,6 +73,43 @@ export class DataStack extends cdk.Stack {
     this.databaseSecretArn = cluster.secret!.secretArn;
     this.databaseEndpoint = cluster.clusterEndpoint.hostname;
     this.databasePort = cluster.clusterEndpoint.port.toString();
+
+    const conBuscador = String(this.node.tryGetContext("opensearch") ?? "false") === "true";
+    if (conBuscador) {
+      const prod = props.stage === "prod";
+      const sg = new ec2.SecurityGroup(this, "SearchSg", { vpc: props.vpc, description: "OpenSearch: HTTPS solo desde la VPC" });
+      sg.addIngressRule(ec2.Peer.ipv4(props.vpc.vpcCidrBlock), ec2.Port.tcp(443));
+      const subnets = props.vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_ISOLATED }).subnets.slice(0, prod ? 2 : 1);
+      const domain = new opensearch.Domain(this, "Search", {
+        version: opensearch.EngineVersion.OPENSEARCH_2_17,
+        vpc: props.vpc,
+        vpcSubnets: [{ subnets }],
+        securityGroups: [sg],
+        capacity: {
+          dataNodes: prod ? 2 : 1,
+          dataNodeInstanceType: prod ? "m7g.large.search" : "t3.small.search",
+          multiAzWithStandbyEnabled: false,
+        },
+        zoneAwareness: prod ? { enabled: true, availabilityZoneCount: 2 } : undefined,
+        ebs: { volumeSize: prod ? 50 : 10, volumeType: ec2.EbsDeviceVolumeType.GP3 },
+        encryptionAtRest: { enabled: true, kmsKey: dataKey },
+        nodeToNodeEncryption: true,
+        enforceHttps: true,
+        tlsSecurityPolicy: opensearch.TLSSecurityPolicy.TLS_1_2,
+        // Acceso por IAM: la política del dominio delega en la cuenta y el rol de la API recibe es:ESHttp*.
+        accessPolicies: [
+          new iam.PolicyStatement({
+            principals: [new iam.AccountRootPrincipal()],
+            actions: ["es:ESHttp*"],
+            resources: [`arn:${cdk.Aws.PARTITION}:es:${this.region}:${this.account}:domain/*/*`],
+          }),
+        ],
+        removalPolicy: prod ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      });
+      this.searchEndpoint = `https://${domain.domainEndpoint}`;
+      this.searchDomainArn = domain.domainArn;
+      new cdk.CfnOutput(this, "SearchEndpoint", { value: this.searchEndpoint });
+    }
 
     new cdk.CfnOutput(this, "DbEndpoint", { value: this.databaseEndpoint });
     new cdk.CfnOutput(this, "DbSecretArn", { value: this.databaseSecretArn });

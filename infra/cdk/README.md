@@ -7,7 +7,7 @@ CDK app que despliega la infra de LegalChile PSL en AWS.
 | Stack | Recursos |
 |---|---|
 | `Legalmene-<stage>-Network` | VPC 3-AZ, NAT, subnets pública/privada/aislada, VPC endpoints (S3, ECR, Secrets, CW Logs) |
-| `Legalmene-<stage>-Data` | Aurora PostgreSQL Serverless v2 Multi-AZ + KMS + Secrets Manager |
+| `Legalmene-<stage>-Data` | Aurora PostgreSQL Serverless v2 Multi-AZ + KMS + Secrets Manager; OpenSearch opcional (`--context opensearch=true`: 1 nodo t3.small en dev, 2 m7g.large en 2 AZ en prod) |
 | `Legalmene-<stage>-Edge` | S3 documentos (versionado + tiering), S3 frontend, CloudFront + OAC |
 | `Legalmene-<stage>-Compute` | ECR repo, ECS Fargate + ALB, WAF (managed rules + rate limit), CloudWatch Logs, auto-scaling |
 
@@ -64,7 +64,6 @@ estimación de `docs/propuesta-arquitectura-legalchile.md` sección 8).
 ## Pendiente
 
 - ElastiCache Redis (sesiones, caché de catálogo)
-- OpenSearch (búsqueda full-text en documentos)
 - SES domain identity (el permiso ses:SendEmail de la tarea ya está; ver docs/runbook.md › Despliegue)
 - EventBridge + SQS para eventos async
 - Route53 + ACM para dominio custom

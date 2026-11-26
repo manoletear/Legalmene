@@ -1,3 +1,4 @@
+import { BusquedaModule } from "./modules/busqueda/busqueda.module";
 import { CamposAdicionalesModule } from "./modules/campos-adicionales/campos-adicionales.module";
 import { CorreccionesModule } from "./modules/correcciones/correcciones.module";
 import { CorreosModule } from "./modules/correos/correos.module";
@@ -59,6 +60,7 @@ import { PosesionesModule } from "./modules/posesiones/posesiones.module";
     ComitesModule,
     AgendaModule,
     CamposAdicionalesModule,
+    BusquedaModule,
     CorreosModule,
     CorreccionesModule,
     PagosModule,

@@ -1,3 +1,5 @@
+import { condicionIds, ordenIds } from "../busqueda/ids";
+import { OpenSearchService } from "../busqueda/opensearch.service";
 import {
   BadRequestException,
   ConflictException,
@@ -8,7 +10,7 @@ import {
 } from "@nestjs/common";
 import { CorreosService } from "../correos/correos.service";
 import { plantillaCambioCorreo } from "../correos/plantillas";
-import { and, eq, exists, ilike, or, sql, count, desc } from "drizzle-orm";
+import { and, asc, eq, exists, ilike, or, sql, count, desc } from "drizzle-orm";
 import type { AsignarPlan, BienAfiliado, CargaAfiliado } from "@legalmene/shared";
 import { DRIZZLE, Database } from "../../db/database.module";
 import {
@@ -31,12 +33,15 @@ export class AfiliadosService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     @Optional() @Inject(CorreosService) private readonly correos?: CorreosService,
+    @Optional() @Inject(OpenSearchService) private readonly buscador?: OpenSearchService,
   ) {}
 
   async buscar(filtro: FiltroAfiliadosDto) {
     // q: si parece RUT/email/término corto usa ILIKE (más predecible para
     // prefix match); si tiene 2+ palabras usa full-text search con ranking.
-    const useFts = filtro.q && /\s/.test(filtro.q.trim());
+    // Con OpenSearch, sus candidatos por relevancia (tolera tildes y errores de tipeo).
+    const idsTexto = filtro.q ? ((await this.buscador?.buscarIds("afiliados", filtro.q)) ?? null) : null;
+    const useFts = !idsTexto && filtro.q && /\s/.test(filtro.q.trim());
     const ftQuery = useFts ? sql`plainto_tsquery('spanish', ${filtro.q})` : null;
 
     const where = and(
@@ -61,7 +66,8 @@ export class AfiliadosService {
         : undefined,
       filtro.vigencia ? eq(afiliados.vigencia, filtro.vigencia) : undefined,
       filtro.bien ? sql`${afiliados.id} in (${condicionBien(filtro.bien)})` : undefined,
-      filtro.q && !useFts
+      idsTexto ? condicionIds(afiliados.id, idsTexto) : undefined,
+      filtro.q && !useFts && !idsTexto
         ? or(
             ilike(afiliados.rut, `%${filtro.q}%`),
             ilike(afiliados.nombres, `%${filtro.q}%`),
@@ -73,9 +79,11 @@ export class AfiliadosService {
     );
 
     const offset = (filtro.page - 1) * filtro.pageSize;
-    const orderBy = ftQuery
-      ? [desc(sql`ts_rank(search_vector, ${ftQuery})`)]
-      : [afiliados.apellidoPaterno, afiliados.nombres];
+    const orderBy = idsTexto?.length
+      ? [asc(ordenIds(afiliados.id, idsTexto))]
+      : ftQuery
+        ? [desc(sql`ts_rank(search_vector, ${ftQuery})`)]
+        : [afiliados.apellidoPaterno, afiliados.nombres];
 
     const [rows, [{ value: total }]] = await Promise.all([
       this.db
@@ -192,6 +200,7 @@ export class AfiliadosService {
     }
     const payload: NuevoAfiliado = { ...input, rut: rutFmt, vigencia: input.vigencia ?? "Activo" };
     const [row] = await this.db.insert(afiliados).values(payload).returning();
+    this.buscador?.indexarPronto("afiliados", [row.id]);
     return row;
   }
 
@@ -221,6 +230,7 @@ export class AfiliadosService {
         .enviar([antes], plantillaCambioCorreo({ cliente: row.nombres }), { plantilla: "cliente.cambio_correo", enviadoPorId: actorId ?? null })
         .catch(() => null);
     }
+    this.buscador?.indexarPronto("afiliados", [row.id]);
     return row;
   }
 

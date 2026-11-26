@@ -29,7 +29,7 @@ ejemplo y nunca deben quedar fijas en el código.
 | Infraestructura AWS (CDK) | 🟡 Escrita y sintetizada en CI (`infra/cdk`: Aurora con TLS, ECS, S3, bucket de auditoría con Object Lock, WAF); imagen Docker verificada en CI; no desplegada (falta cuenta AWS) |
 | Migración SQL Server → Postgres | ⏳ Pendiente |
 | WebPay producción | ⏳ Stub (esperar SDK Transbank) |
-| Auditoría / S3 / OpenSearch | ✅ Auditoría global y archivo anual a S3 con Object Lock; documentos en S3 con URLs firmadas. ⏳ OpenSearch sin implementar |
+| Auditoría / S3 / OpenSearch | ✅ Auditoría global y archivo anual a S3 con Object Lock; documentos en S3 con URLs firmadas. ✅ OpenSearch opcional (`modules/busqueda`; sin él, búsqueda en Postgres) |
 
 ## Stack
 
@@ -57,7 +57,7 @@ apps/
       modules/        # auth, planes, afiliados, atenciones, gestiones,
                       # comites, pagos, cargas-masivas, maestros, aranceles,
                       # coberturas, provisiones, exports, reportes,
-                      # posesiones, health
+                      # posesiones, busqueda, health
   web/                # Frontend Angular 19
     src/app/
       core/           # Interceptors, services compartidos
@@ -183,6 +183,12 @@ multi-rol) → `pagos` (WebPay) y `documentos` (metadata; binarios en S3) y `aud
 - **Búsquedas (Anexo §XI)**: usar `lm-criterios-busqueda` (`apps/web/src/app/shared`) y no pedir datos
   hasta "Buscar"; en la API, los criterios comunes son `CriteriosBusquedaSchema` (shared) y se aplican
   con `condicionAtencion()` (`common/busqueda/criterios.ts`) junto con `filtroAtenciones()`.
+- **Búsqueda de texto completo (`modules/busqueda`)**: OpenSearch es opcional (`OPENSEARCH_URL`; en AWS firma SigV4 con
+  `OPENSEARCH_AWS_REGION`). `OpenSearchService.buscarIds()` devuelve solo ids candidatos por relevancia (o `null` si no está o
+  falla, y entonces se usa el tsvector de Postgres); el filtro y el orden se aplican en la base con `condicionIds()`/`ordenIds()`
+  junto a `filtroAtenciones()`, nunca resultados directos del índice. Se indexa al crear/editar (`indexarPronto()`) y cada minuto
+  por marca (`busqueda_indexado`). Un campo nuevo en el índice exige cambiar `MAPEOS` y reindexar (Administración → Buscador,
+  `busqueda.administrar`).
 - **Cargas y bienes**: cuelgan de la relación titular–plan (`cargas_afiliado`, `bienes_afiliado`); se
   cargan por `POST /cargas-masivas/:entidad` (FLUJO/STOCK). Una atención para una carga lleva
   `carga_id`, validada en `AtencionesService.crear()` (mismo titular y plan, vigente hoy).

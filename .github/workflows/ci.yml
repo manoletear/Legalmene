@@ -97,8 +97,24 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      # Buscador de texto completo: solo lo usa la prueba de OpenSearch (OPENSEARCH_TEST_URL).
+      opensearch:
+        image: opensearchproject/opensearch:2.17.1
+        env:
+          discovery.type: single-node
+          DISABLE_SECURITY_PLUGIN: "true"
+          DISABLE_INSTALL_DEMO_CONFIG: "true"
+          OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+        ports:
+          - 9200:9200
+        options: >-
+          --health-cmd "curl -fs http://localhost:9200/_cluster/health"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
     env:
       DATABASE_URL: postgresql://legalmene:legalmene@localhost:5432/legalmene
+      OPENSEARCH_TEST_URL: http://localhost:9200
       AUTH_DISABLED: "true"
       STORAGE_BACKEND: local
       DOCUMENTS_LOCAL_DIR: ./data/docs
@@ -192,6 +208,7 @@ jobs:
         run: |
           npx cdk synth --quiet
           npx cdk synth --quiet --context stage=prod
+          npx cdk synth --quiet --context stage=prod --context opensearch=true
 
   docker-api:
     name: Imagen Docker de la API

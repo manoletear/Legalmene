@@ -115,7 +115,14 @@ correcciones) y en la auditoría. Úselas solo para corregir errores.
 **Administración → Webhooks:** integraciones que reciben eventos de atenciones. La URL debe ser pública
 (https) y el secreto de firma se muestra solo al crear o rotar.
 
-## 9. Configuración de producción (con el equipo técnico)
+## 9. Buscador
+
+**Administración → Buscador** (permiso `busqueda.administrar`): estado del buscador de texto completo de atenciones y
+afiliados (tolera tildes y errores de tipeo). Si no está configurado o no responde, las búsquedas siguen funcionando con la
+base de datos. "Reindexar todo" reconstruye los índices (tras crear el buscador o cambiar sus campos); los cambios del día a
+día se indexan solos al guardar y cada minuto.
+
+## 10. Configuración de producción (con el equipo técnico)
 
 Ver `runbook.md › Despliegue`. Antes de salir a producción:
 

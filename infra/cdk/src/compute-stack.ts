@@ -18,6 +18,8 @@ interface ComputeStackProps extends cdk.StackProps {
   databaseEndpoint: string;
   databasePort: string;
   documentsBucket: s3.IBucket;
+  searchEndpoint?: string;
+  searchDomainArn?: string;
 }
 
 const sinVacias = (env: Record<string, string>): Record<string, string> =>
@@ -63,6 +65,14 @@ export class ComputeStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
     });
     props.documentsBucket.grantReadWrite(taskRole);
+    if (props.searchDomainArn) {
+      taskRole.addToPolicy(
+        new iam.PolicyStatement({
+          actions: ["es:ESHttpGet", "es:ESHttpHead", "es:ESHttpPost", "es:ESHttpPut", "es:ESHttpDelete"],
+          resources: [props.searchDomainArn, `${props.searchDomainArn}/*`],
+        }),
+      );
+    }
 
     // Archivo de auditoría (Ley 19.628): bucket propio con Object Lock. La API solo puede
     // escribir objetos nuevos; nadie (ni la propia cuenta en COMPLIANCE) los borra antes de 5 años.
@@ -155,6 +165,9 @@ export class ComputeStack extends cdk.Stack {
           CORREO_SOLICITUD_FONDOS: ctx("correoSolicitudFondos"),
           CORREO_AUTORIZA_PROVISION: ctx("correoAutorizaProvision"),
           CORREO_OPERACIONES: ctx("correoOperaciones"),
+          // Buscador de texto completo (firmado con el rol de la tarea); sin él, búsqueda en Postgres.
+          OPENSEARCH_URL: props.searchEndpoint ?? "",
+          OPENSEARCH_AWS_REGION: props.searchEndpoint ? this.region : "",
         }),
         secrets: {
           DB_USERNAME: ecs.Secret.fromSecretsManager(databaseSecret, "username"),

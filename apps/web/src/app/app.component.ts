@@ -346,6 +346,7 @@ export class AppComponent implements OnInit {
         { label: "Campos adicionales", icon: "pi-list-check", route: "/admin/campos-adicionales", permisos: ["maestros.administrar"] },
         { label: "Formatos de exportación", icon: "pi-file-excel", route: "/admin/formatos-exportacion", permisos: ["exportar.formatos"] },
         { label: "Webhooks", icon: "pi-link", route: "/admin/webhooks", permisos: ["webhooks.ver"] },
+        { label: "Buscador", icon: "pi-search", route: "/admin/buscador", permisos: ["busqueda.administrar"] },
       ],
     },
   ];

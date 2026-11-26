@@ -29,6 +29,9 @@ importers:
       '@aws-sdk/client-ses':
         specifier: ^3.717.0
         version: 3.1056.0
+      '@aws-sdk/credential-provider-node':
+        specifier: ^3.717.0
+        version: 3.972.46
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.717.0
         version: 3.1056.0
@@ -62,6 +65,9 @@ importers:
       '@nestjs/throttler':
         specifier: ^6.4.0
         version: 6.5.0(@nestjs/common@10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(reflect-metadata@0.2.2)
+      '@opensearch-project/opensearch':
+        specifier: 3.5.1
+        version: 3.5.1
       cache-manager:
         specifier: ^5.7.6
         version: 5.7.6
@@ -2701,6 +2707,10 @@ packages:
     engines: {node: '>=8.0.0', npm: '>=5.0.0'}
     hasBin: true
 
+  '@opensearch-project/opensearch@3.5.1':
+    resolution: {integrity: sha512-6bf+HcuERzAtHZxrm6phjref54ABse39BpkDie/YO3AUFMCBrb3SK5okKSdT5n3+nDRuEEQLhQCl0RQV3s1qpA==}
+    engines: {node: '>=14', yarn: ^1.22.10}
+
   '@opentelemetry/api@1.9.1':
     resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
     engines: {node: '>=8.0.0'}
@@ -3099,7 +3109,9 @@ packages:
   '@smithy/core@3.24.5':
     resolution: {integrity: sha512-Kt8phUg45M15EjhYAbZ+fFikYneijLu9Liugz8ZsYz2i8j0hzGv27LWKpEHYRfvj+LyCOSijpcR/2i8RouV+cA==}
     engines: {node: '>=18.0.0'}
-    deprecated: Deprecated due to a bug in custom logger data redaction. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
+    deprecated: |-
+      Deprecated due to a bug in custom logger data redaction. Upgrade to the latest version. If you used a custom logger with this
+        version, review your logs and rotate any credentials or other secrets. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
 
   '@smithy/credential-provider-imds@4.3.5':
     resolution: {integrity: sha512-yiF8xHpdkaTfzLVqFzsP6WvNghEK+qZzLYWFD13L2SsFhbXwBGlxdocKF95qjr7s5lE5NRage+EJFK4mAsx88Q==}
@@ -3604,6 +3616,9 @@ packages:
     resolution: {integrity: sha512-QAvsE2XQMcyNOjMMqAS7eDADR9t6vcFcMQvhOmtLfDqgfJXSyTkHvzM5zgwZCdJ4FNqWr5Y/zXvL1Cv5ECKXwQ==}
     engines: {node: '>= 18.0.0'}
     hasBin: true
+
+  aws4@1.13.2:
+    resolution: {integrity: sha512-lHe62zvbTB5eEABUVi/AwVh0ZKY9rMMDhmm+eeyuuUQbQ3+J+fONVQOZyj+DdrvD4BY33uYniyRJ4UJIaSKAfw==}
 
   babel-loader@9.2.1:
     resolution: {integrity: sha512-fqe8naHt46e0yIdkjUZYqddSXfej3AHajX+CSO5X7oy0EmPc6o5Xh+RClNoHjnieWz9AW4kZxW9yyFMhVB1QLA==}
@@ -4838,6 +4853,10 @@ packages:
   hpack.js@2.1.6:
     resolution: {integrity: sha512-zJxVehUdMGIKsRaNt7apO2Gqp0BdqW5yaiGHXXmbpvxgBYVZnAql+BJb4RO5ad2MgpbZKn5G6nMnegrH1FcNYQ==}
 
+  hpagent@1.2.0:
+    resolution: {integrity: sha512-A91dYTeIB6NoXG+PxTQpCCDDnfHsW9kc06Lvpu1TEe9gnd6ZFeiBoRO9JvzEv6xK7EX97/dUE8g/vBMTqTS3CA==}
+    engines: {node: '>=14'}
+
   htmlparser2@10.1.0:
     resolution: {integrity: sha512-VTZkM9GWRAtEpveh7MSF6SjjrpNVNNVJfFup7xTY3UpFtm67foy9HDVXneLtFVt4pMz5kZtgNcvCniNFb1hlEQ==}
 
@@ -5227,6 +5246,10 @@ packages:
 
   json-stable-stringify-without-jsonify@1.0.1:
     resolution: {integrity: sha512-Bdboy+l7tA3OGW6FjyFHWkP5LuByj1Tk33Ljyq0axyzdk9//JSi2u3fP1QSmd1KNwq6VOKYGlAu87CisVir6Pw==}
+
+  json11@2.0.2:
+    resolution: {integrity: sha512-HIrd50UPYmP6sqLuLbFVm75g16o0oZrVfxrsY0EEys22klz8mRoWlX9KAEDOSOR9Q34rcxsyC8oDveGrCz5uLQ==}
+    hasBin: true
 
   json5@2.2.3:
     resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
@@ -6446,6 +6469,9 @@ packages:
     resolution: {integrity: sha512-eflK8wEtyOE6+hsaRVPxvUKYCpRgzLqDTb8krvAsRIwOGlHoSgYLgBXoubGgLd2fT41/OUYdb48v4k4WWHQurA==}
     engines: {node: '>= 10.13.0'}
 
+  secure-json-parse@2.7.0:
+    resolution: {integrity: sha512-6aU+Rwsezw7VR8/nyvKTx8QpWH9FrcYiXXlqC4z5d5XQBDRqtbfsRjnwGyqbi3gddNtWHuEk9OANUotL26qKUw==}
+
   secure-json-parse@4.1.0:
     resolution: {integrity: sha512-l4KnYfEyqYJxDwlNVyRfO2E4NTHfMKAWdUuA8J0yve2Dz/E/PdBepY03RvyJpssIpRFwJoCD55wA+mEDs6ByWA==}
 
@@ -7431,7 +7457,7 @@ snapshots:
     dependencies:
       '@ampproject/remapping': 2.3.0
       '@angular-devkit/architect': 0.1902.26(chokidar@4.0.3)
-      '@angular-devkit/build-webpack': 0.1902.26(chokidar@4.0.3)(webpack-dev-server@5.2.2(tslib@2.8.1)(webpack@5.105.0(esbuild@0.28.0)(postcss@8.5.12)))(webpack@5.105.0(esbuild@0.28.0)(postcss@8.5.12))
+      '@angular-devkit/build-webpack': 0.1902.26(chokidar@4.0.3)(webpack-dev-server@5.2.2(tslib@2.8.1)(webpack@5.105.0(postcss@8.5.12)))(webpack@5.105.0(esbuild@0.28.0)(postcss@8.5.12))
       '@angular-devkit/core': 19.2.26(chokidar@4.0.3)
       '@angular/build': 19.2.26(@angular/compiler-cli@19.2.23(@angular/compiler@19.2.23)(typescript@5.6.3))(@angular/compiler@19.2.23)(@angular/platform-server@19.2.23(@angular/common@19.2.23(@angular/core@19.2.23(rxjs@7.8.2)(zone.js@0.15.1))(rxjs@7.8.2))(@angular/compiler@19.2.23)(@angular/core@19.2.23(rxjs@7.8.2)(zone.js@0.15.1))(@angular/platform-browser@19.2.23(@angular/animations@19.2.23(@angular/common@19.2.23(@angular/core@19.2.23(rxjs@7.8.2)(zone.js@0.15.1))(rxjs@7.8.2))(@angular/core@19.2.23(rxjs@7.8.2)(zone.js@0.15.1)))(@angular/common@19.2.23(@angular/core@19.2.23(rxjs@7.8.2)(zone.js@0.15.1))(rxjs@7.8.2))(@angular/core@19.2.23(rxjs@7.8.2)(zone.js@0.15.1)))(rxjs@7.8.2))(@angular/ssr@19.2.26(i2rnxzedztlcb3f74oagwozidi))(@types/node@22.19.19)(chokidar@4.0.3)(jiti@1.21.7)(less@4.2.2)(postcss@8.5.12)(terser@5.39.0)(tsx@4.22.3)(typescript@5.6.3)
       '@angular/compiler-cli': 19.2.23(@angular/compiler@19.2.23)(typescript@5.6.3)
@@ -7482,8 +7508,8 @@ snapshots:
       tslib: 2.8.1
       typescript: 5.6.3
       webpack: 5.105.0(esbuild@0.28.0)(postcss@8.5.12)
-      webpack-dev-middleware: 7.4.2(tslib@2.8.1)(webpack@5.105.0(esbuild@0.28.0)(postcss@8.5.12))
-      webpack-dev-server: 5.2.2(tslib@2.8.1)(webpack@5.105.0(esbuild@0.28.0)(postcss@8.5.12))
+      webpack-dev-middleware: 7.4.2(tslib@2.8.1)(webpack@5.105.0(postcss@8.5.12))
+      webpack-dev-server: 5.2.2(tslib@2.8.1)(webpack@5.105.0(postcss@8.5.12))
       webpack-merge: 6.0.1
       webpack-subresource-integrity: 5.1.0(webpack@5.105.0(esbuild@0.28.0)(postcss@8.5.12))
     optionalDependencies:
@@ -7520,12 +7546,12 @@ snapshots:
       - webpack-cli
       - yaml
 
-  '@angular-devkit/build-webpack@0.1902.26(chokidar@4.0.3)(webpack-dev-server@5.2.2(tslib@2.8.1)(webpack@5.105.0(esbuild@0.28.0)(postcss@8.5.12)))(webpack@5.105.0(esbuild@0.28.0)(postcss@8.5.12))':
+  '@angular-devkit/build-webpack@0.1902.26(chokidar@4.0.3)(webpack-dev-server@5.2.2(tslib@2.8.1)(webpack@5.105.0(postcss@8.5.12)))(webpack@5.105.0(esbuild@0.28.0)(postcss@8.5.12))':
     dependencies:
       '@angular-devkit/architect': 0.1902.26(chokidar@4.0.3)
       rxjs: 7.8.1
       webpack: 5.105.0(esbuild@0.28.0)(postcss@8.5.12)
-      webpack-dev-server: 5.2.2(tslib@2.8.1)(webpack@5.105.0(esbuild@0.28.0)(postcss@8.5.12))
+      webpack-dev-server: 5.2.2(tslib@2.8.1)(webpack@5.105.0(postcss@8.5.12))
     transitivePeerDependencies:
       - chokidar
 
@@ -9951,6 +9977,17 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
+  '@opensearch-project/opensearch@3.5.1':
+    dependencies:
+      aws4: 1.13.2
+      debug: 4.4.3
+      hpagent: 1.2.0
+      json11: 2.0.2
+      ms: 2.1.3
+      secure-json-parse: 2.7.0
+    transitivePeerDependencies:
+      - supports-color
+
   '@opentelemetry/api@1.9.1': {}
 
   '@parcel/watcher-android-arm64@2.5.6':
@@ -10858,6 +10895,8 @@ snapshots:
       constructs: 10.6.0
 
   aws-cdk@2.1125.0: {}
+
+  aws4@1.13.2: {}
 
   babel-loader@9.2.1(@babel/core@7.26.10)(webpack@5.105.0(esbuild@0.28.0)(postcss@8.5.12)):
     dependencies:
@@ -12345,6 +12384,8 @@ snapshots:
       readable-stream: 2.3.8
       wbuf: 1.7.3
 
+  hpagent@1.2.0: {}
+
   htmlparser2@10.1.0:
     dependencies:
       domelementtype: 2.3.0
@@ -12742,6 +12783,8 @@ snapshots:
   json-schema-traverse@1.0.0: {}
 
   json-stable-stringify-without-jsonify@1.0.1: {}
+
+  json11@2.0.2: {}
 
   json5@2.2.3: {}
 
@@ -14059,6 +14102,8 @@ snapshots:
       ajv-formats: 2.1.1(ajv@8.20.0)
       ajv-keywords: 5.1.0(ajv@8.20.0)
 
+  secure-json-parse@2.7.0: {}
+
   secure-json-parse@4.1.0: {}
 
   select-hose@2.0.0: {}
@@ -14440,7 +14485,7 @@ snapshots:
     optionalDependencies:
       esbuild: 0.19.12
 
-  terser-webpack-plugin@5.6.1(esbuild@0.28.0)(postcss@8.5.12)(webpack@5.105.0(esbuild@0.28.0)(postcss@8.5.12)):
+  terser-webpack-plugin@5.6.1(esbuild@0.28.0)(postcss@8.5.12)(webpack@5.105.0(postcss@8.5.12)):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       jest-worker: 27.5.1
@@ -14862,7 +14907,7 @@ snapshots:
 
   webidl-conversions@3.0.1: {}
 
-  webpack-dev-middleware@7.4.2(tslib@2.8.1)(webpack@5.105.0(esbuild@0.28.0)(postcss@8.5.12)):
+  webpack-dev-middleware@7.4.2(tslib@2.8.1)(webpack@5.105.0(postcss@8.5.12)):
     dependencies:
       colorette: 2.0.20
       memfs: 4.57.2(tslib@2.8.1)
@@ -14875,7 +14920,7 @@ snapshots:
     transitivePeerDependencies:
       - tslib
 
-  webpack-dev-server@5.2.2(tslib@2.8.1)(webpack@5.105.0(esbuild@0.28.0)(postcss@8.5.12)):
+  webpack-dev-server@5.2.2(tslib@2.8.1)(webpack@5.105.0(postcss@8.5.12)):
     dependencies:
       '@types/bonjour': 3.5.13
       '@types/connect-history-api-fallback': 1.5.4
@@ -14903,7 +14948,7 @@ snapshots:
       serve-index: 1.9.2
       sockjs: 0.3.24
       spdy: 4.0.2
-      webpack-dev-middleware: 7.4.2(tslib@2.8.1)(webpack@5.105.0(esbuild@0.28.0)(postcss@8.5.12))
+      webpack-dev-middleware: 7.4.2(tslib@2.8.1)(webpack@5.105.0(postcss@8.5.12))
       ws: 8.21.0
     optionalDependencies:
       webpack: 5.105.0(esbuild@0.28.0)(postcss@8.5.12)
@@ -14953,7 +14998,7 @@ snapshots:
       neo-async: 2.6.2
       schema-utils: 4.3.3
       tapable: 2.3.3
-      terser-webpack-plugin: 5.6.1(esbuild@0.28.0)(postcss@8.5.12)(webpack@5.105.0(esbuild@0.28.0)(postcss@8.5.12))
+      terser-webpack-plugin: 5.6.1(esbuild@0.28.0)(postcss@8.5.12)(webpack@5.105.0(postcss@8.5.12))
       watchpack: 2.5.1
       webpack-sources: 3.5.0
     transitivePeerDependencies:

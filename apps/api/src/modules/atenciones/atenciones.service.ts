@@ -1,3 +1,5 @@
+import { condicionIds, ordenIds } from "../busqueda/ids";
+import { OpenSearchService } from "../busqueda/opensearch.service";
 import { valoresUf } from "../../db/schema/aranceles";
 import { plantillaPresentacionAbogado, plantillaCondicionesAtencion, plantillaRespuestaConsulta, plantillaSolicitudAntecedentes, plantillaTerminoAtencion } from "../correos/plantillas";
 import { CorreosService } from "../correos/correos.service";
@@ -102,12 +104,14 @@ export class AtencionesService {
     @Inject(PlantillasService) private readonly plantillas: PlantillasService,
     @Inject(ArancelesAtencionService) private readonly arancelesAtencion: ArancelesAtencionService,
     @Optional() @Inject(CorreosService) private readonly correos?: CorreosService,
+    @Optional() @Inject(OpenSearchService) private readonly buscador?: OpenSearchService,
   ) {}
 
   async buscar(filtro: FiltroAtencionesDto) {
-    // q usa full-text search (tsvector + spanish dict) con ranking;
-    // ordena por relevancia cuando hay query, sino por fechaApertura.
-    const ftQuery = filtro.q ? sql`plainto_tsquery('spanish', ${filtro.q})` : null;
+    // q: con OpenSearch, sus candidatos por relevancia (el alcance lo sigue aplicando la base);
+    // sin él, full-text de Postgres (tsvector + diccionario español). Sin q, por fecha de apertura.
+    const idsTexto = filtro.q ? ((await this.buscador?.buscarIds("atenciones", filtro.q)) ?? null) : null;
+    const ftQuery = filtro.q && !idsTexto ? sql`plainto_tsquery('spanish', ${filtro.q})` : null;
 
     const where = and(
       filtroAtenciones(),
@@ -116,12 +120,15 @@ export class AtencionesService {
       filtro.tipo ? eq(atenciones.tipo, filtro.tipo) : undefined,
       filtro.afiliadoId ? eq(atenciones.afiliadoId, filtro.afiliadoId) : undefined,
       ftQuery ? sql`"atenciones"."search_vector" @@ ${ftQuery}` : undefined,
+      idsTexto ? condicionIds(atenciones.id, idsTexto) : undefined,
     );
     const offset = (filtro.page - 1) * filtro.pageSize;
 
-    const orderBy = ftQuery
-      ? desc(sql`ts_rank("atenciones"."search_vector", ${ftQuery})`)
-      : desc(atenciones.fechaApertura);
+    const orderBy = idsTexto?.length
+      ? asc(ordenIds(atenciones.id, idsTexto))
+      : ftQuery
+        ? desc(sql`ts_rank("atenciones"."search_vector", ${ftQuery})`)
+        : desc(atenciones.fechaApertura);
 
     const [rows, [{ value: total }]] = await Promise.all([
       this.db
@@ -331,6 +338,7 @@ export class AtencionesService {
     }
 
     await this.webhooks.emitir(codPlan, "atencion.creada", { atencion: row });
+    this.buscador?.indexarPronto("atenciones", [row.id]);
     if (row.abogadoAsignadoId) await this.avisarAsignacion(row, actor?.id ?? null);
     // La jefatura de consultas queda informada de las consultas de su equipo (Anexo §VI l.667).
     if (row.tipo === "Consulta") {
@@ -437,6 +445,7 @@ export class AtencionesService {
         });
       }
     }
+    this.buscador?.indexarPronto("atenciones", [id]);
     return row;
   }
 
