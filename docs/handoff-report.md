@@ -230,7 +230,7 @@ docs/                 arquitectura, runbook, api-versioning
 - Login MSAL real contra tenant Entra ID
 - WebPay integración real (SDK Transbank)
 - Migración SQL Server → Aurora (DMS execution)
-- OpenSearch indexación documental
+- OpenSearch indexación documental (contenido de PDFs con Textract). El buscador de atenciones y afiliados ya existe (`modules/busqueda`, 26-11-2026)
 - App móvil
 
 ---

@@ -311,7 +311,7 @@ y el detalle requisito por requisito en `docs/cumplimiento-anexo-detalle.md`. El
 `docs/requerimientos-anexo-psl.md` §5. Pendientes técnicos:
 
 1. Integración real Transbank WebPay (reemplazar stub en `pagos.service.ts`).
-2. Correos en producción: activar SES (`SES_ENABLED`, `SES_FROM`) y las casillas `CORREO_*`; formularios oficiales al cliente (antecedentes, cuestionario de divorcio) e informe final en PDF.
+2. Correos en producción: activar SES (`SES_ENABLED`, `SES_FROM`) y las casillas `CORREO_*`; formularios oficiales al cliente (antecedentes, cuestionario de divorcio).
 3. Desplegar la infraestructura CDK (`infra/cdk`, ver `docs/runbook.md`): requiere la cuenta AWS, el dominio y el registro de la aplicación en Entra ID.
 4. Migración SQL Server 2008 → Aurora (AWS DMS + SCT) — ver plan en `docs/`.
 5. Formularios oficiales de posesión efectiva (discovery).

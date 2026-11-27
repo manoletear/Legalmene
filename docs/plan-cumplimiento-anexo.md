@@ -64,7 +64,7 @@ las reglas del Anexo. Conviene iniciar ya las gestiones con Transbank y el prove
 - [x] Aranceles: al enviar (a AJ), al aprobar (`aprueba.arancel@`), al rechazar con motivo (a AR), al registrar el pago (AR y jefatura). (§IX)
 - [x] Provisiones: solicitud (`solicitud.fondos@`), autorización (`autoriza.provision@`, EF, GAF), disponible (AR, AJ), recordatorio antes de 48 h, reversión (EF), entrega. (§X)
 - [x] Asignación de abogado y aviso a jefatura de entrevistas/correos/chats. (§VI l.667, §VIII l.980)
-- [ ] Cliente: presentación del abogado, formulario de antecedentes (y cuestionario de divorcio), inicio y término de gestiones, informe final. (§VI l.537, §VII, §VIII l.1125) — *hecho: presentación, solicitud de antecedentes, inicio/término de gestiones marcadas y correo de término. Falta: el formulario oficial y el cuestionario de divorcio (documentos del cliente) y el informe final en PDF.*
+- [ ] Cliente: presentación del abogado, formulario de antecedentes (y cuestionario de divorcio), inicio y término de gestiones, informe final. (§VI l.537, §VII, §VIII l.1125) — *hecho: presentación, solicitud de antecedentes, inicio/término de gestiones marcadas y correo de término. Informe final al cliente en PDF hecho (`informeFinal()`). Falta: el formulario oficial y el cuestionario de divorcio (documentos del cliente).*
 - [x] Resumen de cargas masivas a `operaciones@`, con RUT nuevos y eliminados. (§III l.308)
 - [x] Aviso al administrador de errores de funcionamiento. (§I l.66)
 
